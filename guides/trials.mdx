@@ -1,0 +1,409 @@
+---
+title: "Free Trials"
+description: "Offer free trial periods to convert customers with flexible trial configurations"
+---
+
+## Overview
+
+Free trials let potential customers experience your product before committing to payment. Autumn supports flexible trial configurations:
+
+- **Trial length** - Days, weeks, or months
+- **Feature access** - Full access or limited features
+- **Card requirement** - Require payment method upfront or not
+- **Auto-conversion** - Automatic upgrade to paid after trial
+- **Trial limits** - Control trial abuse with fingerprinting
+- **Multiple trials** - Allow or prevent repeat trials
+
+## Creating Products with Trials
+
+<Steps>
+  <Step title="Create a product">
+    Define your product first:
+
+    ```typescript
+    const product = await autumn.products.create({
+      name: "Pro Plan",
+      billing_interval: "monthly",
+      items: [
+        {
+          type: "fixed",
+          price: 2900 // $29/month after trial
+        },
+        {
+          type: "feature",
+          feature_id: "advanced_features",
+          included: true
+        }
+      ]
+    });
+    ```
+  </Step>
+
+  <Step title="Add trial configuration">
+    Include trial settings when creating the product:
+
+    ```typescript
+    const productWithTrial = await autumn.products.create({
+      name: "Pro Plan",
+      billing_interval: "monthly",
+      items: [/* ... */],
+      free_trial: {
+        length: 14,
+        duration: "day",
+        card_required: false,
+        unique_fingerprint: true
+      }
+    });
+    ```
+  </Step>
+
+  <Step title="Attach to customers">
+    When customers subscribe, they automatically enter the trial:
+
+    ```typescript
+    await autumn.attach({
+      customer_id: "customer_123",
+      product_id: productWithTrial.id
+    });
+    ```
+
+    The customer gets immediate access without payment for the trial duration.
+  </Step>
+</Steps>
+
+## Trial Configuration Options
+
+### Trial Length
+
+Set how long trials last:
+
+```typescript
+free_trial: {
+  length: 14,
+  duration: "day" // "day", "month", or "year"
+}
+```
+
+Common trial lengths:
+- **7 days** - Quick evaluation, good for simple products
+- **14 days** - Standard trial period
+- **30 days** - Extended trial for complex products
+- **3 months** - Enterprise or B2B annual contracts
+
+### Card Requirement
+
+Decide if you need payment info upfront:
+
+#### No Card Required
+
+```typescript
+free_trial: {
+  length: 14,
+  duration: "day",
+  card_required: false // Frictionless trial
+}
+```
+
+**Benefits:**
+- Higher conversion to trial
+- Lower friction for potential customers
+- Better for building email list
+
+**Drawbacks:**
+- Lower paid conversion rate
+- More trial abuse risk
+- Need to collect payment later
+
+#### Card Required
+
+```typescript
+free_trial: {
+  length: 14,
+  duration: "day",
+  card_required: true // Payment info upfront
+}
+```
+
+**Benefits:**
+- Higher paid conversion from trial
+- Automatic billing after trial
+- Qualified leads only
+
+**Drawbacks:**
+- Lower trial signup rate
+- More signup friction
+
+<Tip>
+For low-price products ($10-50/month), consider no card required. For higher-price products ($100+/month), card-required trials typically perform better.
+</Tip>
+
+## Trial Abuse Prevention
+
+Prevent users from repeatedly creating trials:
+
+```typescript
+free_trial: {
+  length: 14,
+  duration: "day",
+  card_required: false,
+  unique_fingerprint: true // Prevent repeat trials
+}
+```
+
+When enabled, Autumn tracks:
+- Email addresses
+- Device fingerprints
+- IP addresses
+- Payment methods
+
+Users who already had a trial cannot create another one.
+
+### Allowing Multiple Trials
+
+For scenarios where repeat trials make sense:
+
+```typescript
+const checkout = await autumn.checkout({
+  customer_id: "customer_123",
+  product_id: product.id,
+  multiple_trials_allowed: true
+});
+```
+
+Use cases:
+- Annual subscriptions (trial each year)
+- Different products (trial each product separately)
+- Re-engagement campaigns
+
+## Starting Trials
+
+### Auto-Start on Attach
+
+Default behavior - trial starts when customer attaches:
+
+```typescript
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: product.id
+});
+// Trial starts immediately
+```
+
+### Manual Trial Start
+
+Schedule trial to start at a specific time:
+
+```typescript
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: product.id,
+  trial_start: "2026-03-01T00:00:00Z"
+});
+```
+
+### Skip Trial
+
+Start paid subscription immediately:
+
+```typescript
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: product.id,
+  skip_trial: true
+});
+```
+
+## Trial Ending
+
+### Auto-Convert to Paid
+
+If card is on file, automatically charge when trial ends:
+
+```typescript
+free_trial: {
+  length: 14,
+  duration: "day",
+  card_required: true // Auto-converts to paid
+}
+```
+
+Autumn automatically:
+1. Ends the trial period
+2. Charges the customer
+3. Continues service without interruption
+4. Sends webhook events
+
+### Manual Conversion
+
+For trials without card:
+
+```typescript
+// Customer decides to subscribe
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: product.id,
+  payment_method_id: "pm_123"
+});
+```
+
+### Trial Expiration
+
+When trial ends without payment:
+
+```typescript
+const customer = await autumn.customers.get({
+  customer_id: "customer_123"
+});
+
+const trialedProduct = customer.products.find(
+  p => p.status === "expired" && p.had_trial
+);
+
+if (trialedProduct) {
+  // Send conversion email
+  await sendTrialExpiredEmail(customer);
+}
+```
+
+## Monitoring Trials
+
+### Check Trial Status
+
+```typescript
+const customer = await autumn.customers.get({
+  customer_id: "customer_123"
+});
+
+const trialProduct = customer.products.find(
+  p => p.status === "trialing"
+);
+
+if (trialProduct) {
+  const daysLeft = Math.ceil(
+    (new Date(trialProduct.trial_end) - new Date()) / (1000 * 60 * 60 * 24)
+  );
+  
+  console.log(`Trial ends in ${daysLeft} days`);
+}
+```
+
+### Trial Ending Soon
+
+Send reminders before trial expires:
+
+```typescript
+const trialProduct = customer.products.find(p => p.status === "trialing");
+
+if (trialProduct) {
+  const hoursLeft = (new Date(trialProduct.trial_end) - new Date()) / (1000 * 60 * 60);
+  
+  if (hoursLeft <= 24 && hoursLeft > 0) {
+    // Send 24-hour reminder
+    await sendTrialEndingEmail({
+      customer: customer,
+      hoursLeft: Math.ceil(hoursLeft)
+    });
+  }
+}
+```
+
+## Trial Conversion Optimization
+
+### Onboarding During Trial
+
+Guide users through key features:
+
+```typescript
+if (customer.products.some(p => p.status === "trialing")) {
+  return {
+    showOnboarding: true,
+    checklist: [
+      "Complete profile",
+      "Create first project",
+      "Invite team member",
+      "Try advanced feature"
+    ]
+  };
+}
+```
+
+### Trial Progress Indicators
+
+Show value created during trial:
+
+```typescript
+const trialMetrics = {
+  daysLeft: calculateDaysLeft(trialProduct.trial_end),
+  apiCallsUsed: customer.balances.find(b => b.feature_id === "api_calls").used,
+  projectsCreated: await getProjectCount(customer.id),
+  valueGenerated: calculateValue(customer)
+};
+```
+
+### Conversion Prompts
+
+Encourage upgrade during trial:
+
+```typescript
+const percentComplete = (daysUsed / totalTrialDays) * 100;
+
+if (percentComplete > 50) {
+  // Show upgrade prompt
+  return {
+    showUpgradePrompt: true,
+    message: "You're loving the Pro features! Lock in your discount today.",
+    discount: "20% off first 3 months"
+  };
+}
+```
+
+## Trial Extension
+
+Extend trial period for engaged users:
+
+```typescript
+// Extend by updating trial end date
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: product.id,
+  trial_end: "2026-04-01T00:00:00Z" // New end date
+});
+```
+
+<Warning>
+Only extend trials for legitimate reasons (onboarding issues, feature requests, etc.). Don't use as a sales tactic.
+</Warning>
+
+## Best Practices
+
+<Card title="Optimize trial length" icon="calendar">
+  14 days is the sweet spot for most SaaS products. Too short and users don't engage, too long and they forget.
+</Card>
+
+<Card title="Activate users early" icon="rocket">
+  Focus on getting users to experience value in the first 24-48 hours. This is the biggest predictor of conversion.
+</Card>
+
+<Card title="Send strategic reminders" icon="envelope">
+  Email on day 1, day 3, day 7, and 1 day before expiration. Focus on value, not pressure.
+</Card>
+
+<Card title="Show progress" icon="chart-line">
+  Display trial time remaining and achievements. Create urgency while demonstrating value.
+</Card>
+
+<Card title="Remove friction" icon="door-open">
+  Make it easy to convert. Pre-fill payment info if collected, offer seamless upgrade path.
+</Card>
+
+<Card title="Test different lengths" icon="flask">
+  A/B test 7 vs 14 vs 30 day trials to find what works for your product and audience.
+</Card>
+
+## Related Resources
+
+- [Subscriptions Guide](/guides/subscriptions)
+- [Products and Plans Concept](/concepts/products-and-plans)
+- [Customers Concept](/concepts/customers)
+- [Attach API](/api/attach)
+- [Checkout API](/api/checkout)

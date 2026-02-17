@@ -1,0 +1,600 @@
+---
+title: "Python SDK"
+description: "Python client for backend integration with Autumn"
+---
+
+<Warning>
+  The Python SDK is currently under development. The examples below show the planned API design. For now, please use the REST API directly or the TypeScript SDK.
+</Warning>
+
+## Installation
+
+The Python SDK will be available via pip:
+
+<CodeGroup>
+```bash pip
+pip install autumn-python
+```
+
+```bash poetry
+poetry add autumn-python
+```
+</CodeGroup>
+
+## Quick Start
+
+### Initialize the Client
+
+Create an Autumn client instance:
+
+```python main.py
+from autumn import Autumn
+import os
+
+autumn = Autumn(
+    secret_key=os.environ.get("AUTUMN_SECRET_KEY"),
+    base_url="https://api.useautumn.com/v1"  # Optional
+)
+```
+
+### Configuration
+
+<ParamField path="secret_key" type="str" required>
+  Your Autumn secret key for authentication
+</ParamField>
+
+<ParamField path="base_url" type="str" default="https://api.useautumn.com/v1">
+  The API base URL for self-hosted instances
+</ParamField>
+
+### Environment Setup
+
+```bash .env
+AUTUMN_SECRET_KEY=am_sk_test_...
+```
+
+## Core Operations
+
+### Attach (Subscribe Customers)
+
+Subscribe customers to products:
+
+```python billing.py
+from autumn import Autumn
+
+autumn = Autumn(secret_key=os.environ.get("AUTUMN_SECRET_KEY"))
+
+# Subscribe a customer to a product
+result = autumn.attach(
+    customer_id="user_123",
+    product_id="pro_plan",
+    success_url="https://yourapp.com/success",
+    cancel_url="https://yourapp.com/pricing"
+)
+
+if result.data.url:
+    # Redirect to Stripe Checkout
+    print(f"Checkout URL: {result.data.url}")
+else:
+    # Subscription updated
+    print("Subscription activated")
+```
+
+### Check (Verify Access)
+
+Check feature access:
+
+```python access.py
+result = autumn.check(
+    customer_id="user_123",
+    feature_id="api_calls"
+)
+
+if not result.data.allowed:
+    raise PermissionError("Feature access denied")
+
+# Proceed with the operation
+perform_feature_action()
+```
+
+### Check with Usage
+
+Get detailed usage information:
+
+```python
+result = autumn.check(
+    customer_id="user_123",
+    feature_id="api_calls",
+    include_usage=True
+)
+
+print(f"Used: {result.data.used} / {result.data.limit}")
+print(f"Remaining: {result.data.remaining}")
+
+if not result.data.allowed:
+    return {"error": "Limit reached", "upgrade_url": "/pricing"}
+```
+
+### Track (Record Usage)
+
+Track feature consumption:
+
+```python usage.py
+# Track single unit
+autumn.track(
+    customer_id="user_123",
+    feature_id="api_calls",
+    value=1
+)
+
+# Track multiple units
+autumn.track(
+    customer_id="user_123",
+    feature_id="storage_gb",
+    value=2.5
+)
+```
+
+### Check and Track Pattern
+
+```python
+def make_api_call(customer_id: str):
+    # Check access
+    check_result = autumn.check(
+        customer_id=customer_id,
+        feature_id="api_calls"
+    )
+    
+    if not check_result.data.allowed:
+        raise Exception("API limit reached")
+    
+    # Perform operation
+    result = perform_api_operation()
+    
+    # Track usage
+    autumn.track(
+        customer_id=customer_id,
+        feature_id="api_calls",
+        value=1
+    )
+    
+    return result
+```
+
+## Customer Management
+
+### Create Customer
+
+```python
+autumn.customers.create(
+    id="user_123",
+    email="user@example.com",
+    name="John Doe"
+)
+```
+
+### Get Customer
+
+```python
+result = autumn.customers.get(customer_id="user_123")
+print(f"Customer: {result.data.customer}")
+print(f"Active products: {result.data.products}")
+```
+
+### Update Customer
+
+```python
+autumn.customers.update(
+    customer_id="user_123",
+    name="Jane Doe",
+    email="jane@example.com"
+)
+```
+
+### List Customers
+
+```python
+result = autumn.customers.list(limit=100, offset=0)
+
+print(f"Total: {result.data.total}")
+for customer in result.data.list:
+    print(f"{customer.name} - {customer.email}")
+```
+
+## Product Operations
+
+### List Products
+
+```python
+result = autumn.products.list()
+
+for product in result.data.list:
+    print(f"{product.name}: ${product.price}")
+```
+
+### List Products for Customer
+
+```python
+result = autumn.products.list(customer_id="user_123")
+
+button_text = {
+    "active": "Current Plan",
+    "upgrade": "Upgrade",
+    "downgrade": "Downgrade",
+    "scheduled": "Scheduled"
+}
+
+for product in result.data.list:
+    text = button_text.get(product.scenario, "Subscribe")
+    print(f"{product.name}: {text}")
+```
+
+### Get Product
+
+```python
+result = autumn.products.get(product_id="pro_plan")
+print(result.data.product)
+```
+
+## Checkout Flow
+
+### Generate Checkout
+
+```python
+result = autumn.checkout(
+    customer_id="user_123",
+    product_id="pro_plan"
+)
+
+if result.data.url:
+    # New customer - redirect to Stripe
+    return {"stripe_url": result.data.url}
+
+# Returning customer - show preview
+return {
+    "preview": {
+        "product": result.data.product,
+        "total": result.data.total,
+        "currency": result.data.currency
+    }
+}
+```
+
+## Cancellation
+
+```python
+autumn.cancel(
+    customer_id="user_123",
+    product_id="pro_plan"
+)
+```
+
+## Advanced Features
+
+### Entity Management
+
+```python
+# Create entity
+autumn.entities.create(
+    customer_id="org_123",
+    entity_definition_id="workspace",
+    entity_id="workspace_456",
+    name="Marketing Team"
+)
+
+# List entities
+result = autumn.entities.list(customer_id="org_123")
+
+# Delete entity
+autumn.entities.delete(
+    customer_id="org_123",
+    entity_id="workspace_456"
+)
+```
+
+### Balance Management
+
+```python
+# Add credits
+autumn.balances.create(
+    customer_id="user_123",
+    feature_id="credits",
+    value=1000
+)
+
+# Update balance
+autumn.balances.update(
+    customer_id="user_123",
+    feature_id="credits",
+    value=500
+)
+
+# Check balance
+result = autumn.check(
+    customer_id="user_123",
+    feature_id="credits",
+    include_usage=True
+)
+print(f"Credits remaining: {result.data.remaining}")
+```
+
+### Invoice Management
+
+```python
+# List invoices
+result = autumn.invoices.list(customer_id="user_123")
+
+for invoice in result.data.list:
+    print(f"{invoice.date}: {invoice.amount} {invoice.currency}")
+
+# Get invoice
+invoice = autumn.invoices.get(invoice_id="inv_123")
+```
+
+### Billing Portal
+
+```python
+result = autumn.customers.billing_portal(
+    customer_id="user_123",
+    return_url="https://yourapp.com/settings"
+)
+
+return {"portal_url": result.data.url}
+```
+
+## Type Hints
+
+The SDK will include full type hints:
+
+```python
+from autumn import Autumn
+from autumn.types import CheckParams, CheckResult, Customer, Product
+
+params: CheckParams = {
+    "customer_id": "user_123",
+    "feature_id": "api_calls"
+}
+
+result: CheckResult = autumn.check(**params)
+```
+
+## Error Handling
+
+```python
+from autumn import Autumn, AutumnError
+
+try:
+    autumn.attach(
+        customer_id="user_123",
+        product_id="pro_plan"
+    )
+except AutumnError as e:
+    if e.code == "not_found":
+        print("Product not found")
+    elif e.code == "payment_required":
+        print("Payment method required")
+    else:
+        print(f"Error: {e.message}")
+```
+
+## FastAPI Integration
+
+Example middleware for FastAPI:
+
+```python middleware.py
+from fastapi import Request, HTTPException
+from autumn import Autumn
+import os
+
+autumn = Autumn(secret_key=os.environ.get("AUTUMN_SECRET_KEY"))
+
+async def require_feature(feature_id: str):
+    async def dependency(request: Request):
+        customer_id = request.state.user.id  # From auth middleware
+        
+        result = autumn.check(
+            customer_id=customer_id,
+            feature_id=feature_id
+        )
+        
+        if not result.data.allowed:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "Feature access denied"}
+            )
+        
+        return result.data
+    
+    return dependency
+```
+
+Usage:
+
+```python routes.py
+from fastapi import APIRouter, Depends
+
+router = APIRouter()
+
+@router.post("/api/generate")
+async def generate(
+    access = Depends(require_feature("ai_generation"))
+):
+    result = await generate_with_ai()
+    
+    # Track usage
+    autumn.track(
+        customer_id=request.state.user.id,
+        feature_id="ai_generation",
+        value=1
+    )
+    
+    return result
+```
+
+## Django Integration
+
+Example decorator for Django views:
+
+```python decorators.py
+from functools import wraps
+from django.http import JsonResponse
+from autumn import Autumn
+import os
+
+autumn = Autumn(secret_key=os.environ.get("AUTUMN_SECRET_KEY"))
+
+def require_feature(feature_id):
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            customer_id = request.user.id
+            
+            result = autumn.check(
+                customer_id=customer_id,
+                feature_id=feature_id
+            )
+            
+            if not result.data.allowed:
+                return JsonResponse(
+                    {"error": "Feature access denied"},
+                    status=403
+                )
+            
+            return view_func(request, *args, **kwargs)
+        return wrapper
+    return decorator
+```
+
+Usage:
+
+```python views.py
+from django.http import JsonResponse
+from .decorators import require_feature
+
+@require_feature("api_calls")
+def api_endpoint(request):
+    # Feature access verified
+    result = perform_operation()
+    
+    autumn.track(
+        customer_id=request.user.id,
+        feature_id="api_calls",
+        value=1
+    )
+    
+    return JsonResponse(result)
+```
+
+## Using the REST API Directly
+
+Until the Python SDK is released, you can use the REST API with requests:
+
+```python
+import requests
+import os
+
+BASE_URL = "https://api.useautumn.com/v1"
+HEADERS = {
+    "Authorization": f"Bearer {os.environ.get('AUTUMN_SECRET_KEY')}",
+    "Content-Type": "application/json"
+}
+
+# Check feature access
+response = requests.post(
+    f"{BASE_URL}/check",
+    headers=HEADERS,
+    json={
+        "customer_id": "user_123",
+        "feature_id": "api_calls"
+    }
+)
+
+data = response.json()
+if not data["allowed"]:
+    raise Exception("Feature access denied")
+
+# Track usage
+requests.post(
+    f"{BASE_URL}/track",
+    headers=HEADERS,
+    json={
+        "customer_id": "user_123",
+        "feature_id": "api_calls",
+        "value": 1
+    }
+)
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Environment Variables">
+    Always store API keys in environment variables:
+    
+    ```python
+    import os
+    from autumn import Autumn
+    
+    autumn = Autumn(secret_key=os.environ.get("AUTUMN_SECRET_KEY"))
+    ```
+  </Accordion>
+
+  <Accordion title="Implement Retry Logic">
+    Add retry logic for transient failures:
+    
+    ```python
+    import time
+    
+    def check_with_retry(params, retries=3):
+        for i in range(retries):
+            try:
+                return autumn.check(**params)
+            except Exception as e:
+                if i == retries - 1:
+                    raise
+                time.sleep(1 * (i + 1))
+    ```
+  </Accordion>
+
+  <Accordion title="Cache Feature Checks">
+    Use caching to reduce API calls:
+    
+    ```python
+    from functools import lru_cache
+    import time
+    
+    @lru_cache(maxsize=1000)
+    def check_cached(customer_id: str, feature_id: str, timestamp: int):
+        return autumn.check(
+            customer_id=customer_id,
+            feature_id=feature_id
+        )
+    
+    # Use current minute as cache key
+    def check_with_cache(customer_id: str, feature_id: str):
+        cache_key = int(time.time() / 60)  # Cache for 1 minute
+        return check_cached(customer_id, feature_id, cache_key)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="REST API Reference" icon="book" href="/api/attach">
+    View the REST API documentation
+  </Card>
+  <Card title="TypeScript SDK" icon="node" href="/sdks/typescript">
+    Use the TypeScript SDK meanwhile
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Set up webhooks for events
+  </Card>
+  <Card title="React SDK" icon="react" href="/sdks/react">
+    Check out the React SDK
+  </Card>
+</CardGroup>
+
+<Info>
+  Want to contribute to the Python SDK? Check out our [GitHub repository](https://github.com/useautumn/autumn) or join our [Discord](https://discord.gg/53emPtY9tA).
+</Info>

@@ -1,0 +1,537 @@
+---
+title: "Customers"
+description: "Learn how customers are structured and managed in Autumn"
+---
+
+## Overview
+
+**Customers** represent the end users or organizations that subscribe to your products. Each customer can have:
+
+- Multiple subscriptions (products)
+- Usage tracking across features
+- Custom metadata and attributes
+- Multiple entities (for multi-tenant scenarios)
+- Integration with external payment processors
+
+## Customer Structure
+
+Every customer has these core attributes:
+
+<ParamField path="id" type="string">
+  Unique identifier for the customer (e.g., `cus_123`, user UUID)
+</ParamField>
+
+<ParamField path="name" type="string">
+  Customer's full name or organization name
+</ParamField>
+
+<ParamField path="email" type="string">
+  Customer's email address
+</ParamField>
+
+<ParamField path="metadata" type="object">
+  Custom key-value pairs for additional data
+</ParamField>
+
+<ParamField path="fingerprint" type="string">
+  Optional device or session identifier for tracking
+</ParamField>
+
+<ParamField path="send_email_receipts" type="boolean" default="false">
+  Whether to send email receipts for transactions
+</ParamField>
+
+## Creating Customers
+
+Customers can be created explicitly or automatically:
+
+### Explicit Creation
+
+Create customers before they subscribe:
+
+```typescript Example: Create Customer
+await autumn.customers.create({
+  id: "user_abc123",
+  name: "Jane Smith",
+  email: "jane@example.com",
+  metadata: {
+    source: "web_signup",
+    plan_interest: "pro"
+  }
+});
+```
+
+### Automatic Creation
+
+Customers are created automatically when you:
+- Attach a product: `autumn.attach()`
+- Create a checkout: `autumn.checkout.create()`
+- Track usage: `autumn.track()` (with `customer_id`)
+
+<Info>
+Automatic creation uses the `customer_id` you provide in API calls.
+</Info>
+
+## Customer Identification
+
+### Using Custom IDs
+
+Use your own user IDs as customer identifiers:
+
+```typescript Example: Your User IDs
+await autumn.attach({
+  customer_id: "user_12345",  // Your internal ID
+  product_id: "pro"
+});
+```
+
+### Email-Only Identification
+
+For customers without IDs, use email:
+
+```typescript Example: Email as ID
+await autumn.customers.create({
+  email: "jane@example.com",
+  // id is optional when email is provided
+});
+```
+
+<Warning>
+Only one customer per organization and environment can have a null `id` with the same email address.
+</Warning>
+
+## Customer Metadata
+
+Store custom data on customers:
+
+<ParamField path="metadata" type="object">
+  Flexible key-value storage for any custom data
+</ParamField>
+
+```typescript Example: Rich Metadata
+await autumn.customers.create({
+  id: "user_123",
+  email: "jane@example.com",
+  metadata: {
+    company: "Acme Corp",
+    industry: "SaaS",
+    employee_count: 50,
+    signup_date: "2024-01-15",
+    utm_source: "google",
+    utm_campaign: "spring_2024"
+  }
+});
+```
+
+<Note>
+Metadata is useful for segmentation, analytics, and personalization.
+</Note>
+
+## Customer Products
+
+Customers can have multiple active products (subscriptions):
+
+```typescript Example: Multiple Subscriptions
+// Main product
+await autumn.attach({
+  customer_id: "user_123",
+  product_id: "pro"
+});
+
+// Add-on product
+await autumn.attach({
+  customer_id: "user_123",
+  product_id: "extra-storage"
+});
+```
+
+Each customer-product relationship creates a `customer_product` with:
+
+<ParamField path="status" type="string">
+  Subscription status: `active`, `trialing`, `past_due`, `canceled`
+</ParamField>
+
+<ParamField path="starts_at" type="number">
+  Unix timestamp when subscription started
+</ParamField>
+
+<ParamField path="canceled_at" type="number">
+  Unix timestamp when subscription was canceled (if applicable)
+</ParamField>
+
+<ParamField path="trial_ends_at" type="number">
+  Unix timestamp when trial period ends (if in trial)
+</ParamField>
+
+<ParamField path="quantity" type="number" default="1">
+  Quantity of the product (for per-seat pricing)
+</ParamField>
+
+## External Processors
+
+Integrate customers with payment processors:
+
+<ParamField path="processor" type="object">
+  Legacy single processor configuration
+  
+  <Expandable title="properties">
+    <ParamField path="type" type="string">
+      Processor type: `stripe`
+    </ParamField>
+    <ParamField path="id" type="string">
+      External customer ID in the processor
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="processors" type="object">
+  Multi-processor support for future integrations
+</ParamField>
+
+```typescript Example: Stripe Integration
+await autumn.customers.create({
+  id: "user_123",
+  email: "jane@example.com",
+  processor: {
+    type: "stripe",
+    id: "cus_stripe123"
+  }
+});
+```
+
+<Info>
+When a customer has a processor integration, payments are automatically handled through that processor.
+</Info>
+
+## Customer Entities
+
+Customers can have multiple entities for multi-tenant scenarios:
+
+```typescript Example: Customer with Teams
+// Customer represents the user
+await autumn.customers.create({
+  id: "user_123",
+  email: "jane@example.com"
+});
+
+// Entities represent their teams
+await autumn.entities.create({
+  customer_id: "user_123",
+  id: "team_acme",
+  name: "Acme Corp Team"
+});
+
+await autumn.entities.create({
+  customer_id: "user_123",
+  id: "team_personal",
+  name: "Personal Projects"
+});
+```
+
+See [Entities](/concepts/entities) for detailed information.
+
+## Environment Separation
+
+Customers are isolated by environment:
+
+<ParamField path="env" type="string" required>
+  Environment identifier (`development`, `production`, etc.)
+</ParamField>
+
+```typescript Example: Environment Isolation
+// Development customer
+await autumn.customers.create({
+  id: "user_123",
+  email: "test@example.com"
+}, { env: "development" });
+
+// Production customer (separate)
+await autumn.customers.create({
+  id: "user_123",
+  email: "jane@example.com"
+}, { env: "production" });
+```
+
+<Warning>
+Customers with the same `id` but different `env` values are completely separate records.
+</Warning>
+
+## Customer Uniqueness
+
+Customers are unique by:
+
+1. **Organization + ID + Environment**: Standard uniqueness constraint
+2. **Organization + Environment + Email** (when `id` is null): For email-only customers
+
+```typescript Uniqueness Examples
+// ✅ Valid: Different environments
+{ id: "user_123", email: "jane@example.com", env: "development" }
+{ id: "user_123", email: "jane@example.com", env: "production" }
+
+// ✅ Valid: Different IDs
+{ id: "user_123", email: "jane@example.com", env: "production" }
+{ id: "user_456", email: "jane@example.com", env: "production" }
+
+// ❌ Invalid: Duplicate
+{ id: "user_123", email: "jane@example.com", env: "production" }
+{ id: "user_123", email: "other@example.com", env: "production" }
+```
+
+## Retrieving Customer Data
+
+Fetch customer information with expanded relations:
+
+```typescript Example: Get Customer with Products
+const customer = await autumn.customers.get({
+  customer_id: "user_123",
+  expand: ["products", "entities", "invoices"]
+});
+
+console.log(customer);
+// {
+//   id: "user_123",
+//   email: "jane@example.com",
+//   products: [
+//     { id: "pro", status: "active", ... }
+//   ],
+//   entities: [
+//     { id: "team_acme", name: "Acme Corp Team" }
+//   ],
+//   invoices: [...]
+// }
+```
+
+### Available Expansions
+
+<ParamField path="expand" type="array">
+  Related data to include:
+  - `products`: Customer's subscriptions
+  - `entities`: Customer's entities
+  - `invoices`: Billing history
+  - `usage`: Feature usage data
+</ParamField>
+
+## Billing Portal
+
+Generate a self-service billing portal URL for customers:
+
+```typescript Example: Billing Portal
+const { url } = await autumn.customers.billingPortal({
+  customer_id: "user_123",
+  return_url: "https://yourapp.com/settings"
+});
+
+// Redirect customer to portal
+window.location.href = url;
+```
+
+The billing portal allows customers to:
+- View and download invoices
+- Update payment methods
+- Manage subscriptions
+- View usage and limits
+
+## Customer Lifecycle
+
+### 1. Creation
+
+```typescript
+await autumn.customers.create({
+  id: "user_123",
+  email: "jane@example.com"
+});
+```
+
+### 2. Subscription
+
+```typescript
+await autumn.attach({
+  customer_id: "user_123",
+  product_id: "pro"
+});
+```
+
+### 3. Usage Tracking
+
+```typescript
+await autumn.track({
+  customer_id: "user_123",
+  event_name: "api_call"
+});
+```
+
+### 4. Updates
+
+```typescript
+await autumn.customers.update({
+  customer_id: "user_123",
+  name: "Jane Smith-Jones",
+  metadata: {
+    ...existingMetadata,
+    company: "New Company Inc"
+  }
+});
+```
+
+### 5. Cancellation
+
+```typescript
+await autumn.cancel({
+  customer_id: "user_123",
+  product_id: "pro"
+});
+```
+
+### 6. Deletion
+
+```typescript
+await autumn.customers.delete({
+  customer_id: "user_123"
+});
+```
+
+<Warning>
+Deleting a customer removes all associated data including subscriptions, usage history, and entities. This action cannot be undone.
+</Warning>
+
+## Common Patterns
+
+### B2C: Individual Users
+
+```typescript
+await autumn.customers.create({
+  id: auth.user.id,  // Your user ID
+  email: auth.user.email,
+  name: auth.user.fullName
+});
+```
+
+### B2B: Organizations
+
+```typescript
+await autumn.customers.create({
+  id: organization.id,
+  email: organization.billingEmail,
+  name: organization.name,
+  metadata: {
+    industry: organization.industry,
+    size: organization.employeeCount
+  }
+});
+```
+
+### Multi-Tenant: User + Teams
+
+```typescript
+// User is the customer
+await autumn.customers.create({
+  id: user.id,
+  email: user.email,
+  name: user.name
+});
+
+// Each team is an entity
+for (const team of user.teams) {
+  await autumn.entities.create({
+    customer_id: user.id,
+    id: team.id,
+    name: team.name
+  });
+}
+```
+
+### Trial User
+
+```typescript
+await autumn.attach({
+  customer_id: "user_123",
+  product_id: "pro",
+  trial_days: 14
+});
+
+// Check trial status
+const customer = await autumn.customers.get({
+  customer_id: "user_123",
+  expand: ["products"]
+});
+
+const subscription = customer.products[0];
+if (subscription.status === "trialing") {
+  const daysLeft = Math.ceil(
+    (subscription.trial_ends_at * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
+  );
+  console.log(`Trial ends in ${daysLeft} days`);
+}
+```
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Can I change a customer's ID after creation?">
+    No, customer IDs are immutable. If you need to change an ID:
+    1. Create a new customer with the desired ID
+    2. Migrate subscriptions and data
+    3. Delete the old customer
+    
+    Consider using external IDs in metadata if you need flexibility.
+  </Accordion>
+
+  <Accordion title="What happens if I create a customer with an existing email?">
+    If you provide different `id` values, both customers can exist:
+    ```typescript
+    // Both valid - different IDs
+    { id: "user_123", email: "jane@example.com" }
+    { id: "user_456", email: "jane@example.com" }
+    ```
+    
+    If `id` is null, only one customer per email is allowed.
+  </Accordion>
+
+  <Accordion title="How do I handle customer merges?">
+    To merge two customers:
+    1. Choose the primary customer ID
+    2. Migrate subscriptions from secondary to primary
+    3. Combine metadata as needed
+    4. Update your application's user mapping
+    5. Delete the secondary customer
+    
+    This must be done carefully to preserve billing history.
+  </Accordion>
+
+  <Accordion title="Can customers have multiple payment methods?">
+    Payment methods are managed through the external processor (e.g., Stripe). Use the billing portal to let customers manage their payment methods:
+    ```typescript
+    const { url } = await autumn.customers.billingPortal({
+      customer_id: "user_123"
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="How do I track which customer created which entity?">
+    Entities automatically reference their parent customer:
+    ```typescript
+    const entity = await autumn.entities.get({
+      entity_id: "team_abc"
+    });
+    
+    console.log(entity.customer_id); // "user_123"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Entities" icon="sitemap" href="/concepts/entities">
+    Multi-tenant usage tracking
+  </Card>
+  <Card title="Create Customer" icon="plus" href="/api/customers/create">
+    Create a customer via API
+  </Card>
+  <Card title="Attach Product" icon="link" href="/api/attach">
+    Subscribe a customer to a product
+  </Card>
+  <Card title="Billing Portal" icon="credit-card" href="/api/customers/billing-portal">
+    Generate self-service portal links
+  </Card>
+</CardGroup>

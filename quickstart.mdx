@@ -1,80 +1,259 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get Autumn running locally in under 5 minutes
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, make sure you have the following installed:
 
-### Step 1: Set up your local environment
+- [Bun](https://bun.sh) - Fast JavaScript runtime and package manager
+- [Docker](https://www.docker.com/get-started) - For running services with Docker Compose
+- [Git](https://git-scm.com/) - For cloning the repository
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## Installation
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the Autumn repository from GitHub:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    git clone https://github.com/useautumn/autumn.git
+    cd autumn
+    ```
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Install Dependencies">
+    Install all project dependencies using Bun:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    bun install
+    ```
 
-### Step 3: Go live
+    This will install dependencies for all workspaces including:
+    - `server` - Backend API server
+    - `vite` - Frontend dashboard
+    - `shared` - Shared types and schemas
+    - `apps/checkout` - Checkout page
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Run Setup Script">
+    Run the interactive setup script to configure your environment:
 
-## Next steps
+    ```bash
+    bun setup
+    ```
 
-Now that you have your docs running, explore these key features:
+    The setup script will:
+    - Generate secure authentication secrets (BETTER_AUTH_SECRET, ENCRYPTION_IV, ENCRYPTION_PASSWORD)
+    - Create a unique localtunnel subdomain for Stripe webhooks
+    - Guide you through database setup options:
+      - **Set up Supabase (Cloud)** - Automatically create and configure a Supabase database (recommended)
+      - **Paste your own DATABASE_URL** - Use your existing PostgreSQL instance
+      - **Configure later** - Skip database setup for now
+    - Generate `server/.env` and `vite/.env` files with your configuration
+
+    <Note>
+      If you choose Supabase setup, the script will prompt you to login and optionally create a new organization if needed. Your database credentials will be automatically configured.
+    </Note>
+  </Step>
+
+  <Step title="Generate and Migrate Database">
+    Create the database schema and run migrations:
+
+    ```bash
+    bun db:generate && bun db:migrate
+    ```
+
+    This generates Drizzle ORM types and creates all necessary tables in your PostgreSQL database.
+  </Step>
+
+  <Step title="Start Autumn">
+    Launch all services using Docker Compose:
+
+    <CodeGroup>
+      ```bash Windows
+      docker compose -f docker-compose.dev.yml up
+      ```
+
+      ```bash macOS/Linux
+      docker compose -f docker-compose.unix.yml up
+      ```
+    </CodeGroup>
+
+    This starts the following services:
+    - **Valkey** (Redis-compatible) on port 6379 - In-memory data store for caching and rate limiting
+    - **Vite Frontend** on port 3000 - Dashboard UI
+    - **Server** on port 8080 - API backend
+    - **Workers** - BullMQ background job processors
+    - **Localtunnel** - Exposes your local server for Stripe webhooks
+
+    <Tip>
+      The first build may take a few minutes. Subsequent starts will be much faster.
+    </Tip>
+  </Step>
+
+  <Step title="Access the Dashboard">
+    Open your browser and navigate to:
+
+    ```
+    http://localhost:3000
+    ```
+
+    You'll see the Autumn sign-in page.
+  </Step>
+
+  <Step title="Sign In">
+    Enter your email address at the sign-in page. Since you're running locally without email configuration, your OTP (one-time password) will appear in your terminal console.
+
+    <Warning>
+      In production, configure Resend or Google OAuth in `server/.env` to enable proper email delivery:
+      
+      ```bash server/.env
+      # Resend for email OTP
+      RESEND_API_KEY=your_resend_api_key
+      RESEND_DOMAIN=your_domain.com
+      
+      # Google OAuth (optional)
+      GOOGLE_CLIENT_ID=your_google_client_id
+      GOOGLE_CLIENT_SECRET=your_google_client_secret
+      ```
+    </Warning>
+
+    Copy the OTP from your terminal and paste it into the sign-in form.
+  </Step>
+</Steps>
+
+## What's Next?
+
+Congratulations! You now have Autumn running locally. Here's what to do next:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Connect Stripe" icon="stripe">
+    Navigate to Settings in the dashboard and connect your Stripe account to start processing payments.
+  </Card>
+  
+  <Card title="Create Your First Product" icon="box" href="/concepts/products-and-plans">
+    Learn how to create products and pricing plans in Autumn.
+  </Card>
+  
+  <Card title="Integrate the SDK" icon="code" href="/sdks/introduction">
+    Add Autumn to your application using our React, TypeScript, or Python SDKs.
+  </Card>
+  
+  <Card title="Explore the API" icon="terminal" href="/api/attach">
+    Check out the API reference to understand all available endpoints.
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Understanding the Stack
+
+Autumn is built as a monorepo using Bun workspaces:
+
+```
+autumn/
+├── server/          # Hono backend API
+├── vite/            # React + Vite dashboard
+├── shared/          # Shared types, schemas, and utilities
+├── apps/
+│   └── checkout/    # Embeddable checkout pages
+└── scripts/         # Setup and utility scripts
+```
+
+### Key Technologies
+
+- **Bun** - Runtime, package manager, and test runner
+- **Hono** - Lightweight web framework for the API
+- **React + Vite** - Frontend dashboard
+- **Drizzle ORM** - Type-safe database queries
+- **PostgreSQL** - Primary database
+- **Valkey (Redis)** - Caching and real-time usage metering
+- **BullMQ** - Background job processing
+- **Stripe** - Payment processing
+- **Docker** - Containerization and local development
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="SyntaxError: Unexpected end of JSON input">
+    This error can occur when running `bun setup` multiple times. It's a [known issue](https://github.com/drizzle-team/drizzle-orm/issues/4529) with Drizzle ORM migrations.
+
+    **Solution:**
+    1. Connect to your database
+    2. Drop all existing tables
+    3. Run the setup script again:
+       ```bash
+       bun setup
+       bun db:generate && bun db:migrate
+       ```
+  </Accordion>
+
+  <Accordion title="Database Connection Failed">
+    If you can't connect to your database:
+
+    1. Verify your `DATABASE_URL` in `server/.env` is correct
+    2. Ensure your PostgreSQL instance is running
+    3. Check that your database allows connections from your IP
+    4. For Supabase users, verify you're using the connection pooler URL (port 5432)
+  </Accordion>
+
+  <Accordion title="Port Already in Use">
+    If you see errors about ports 3000, 8080, or 6379 already being in use:
+
+    ```bash
+    # Find and kill processes using these ports
+    lsof -ti:8080 -ti:3000 -ti:6379 | xargs kill -9
+    ```
+
+    Or use the convenient npm script:
+    ```bash
+    bun run q
+    ```
+  </Accordion>
+
+  <Accordion title="Docker Build Issues">
+    If Docker builds are failing:
+
+    1. Ensure Docker Desktop is running
+    2. Clear Docker cache:
+       ```bash
+       docker system prune -a
+       ```
+    3. Try building individual services:
+       ```bash
+       docker compose -f docker-compose.dev.yml build --no-cache
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## Development Workflow
+
+Once you have Autumn running, all services support hot reloading:
+
+- Edit files in `vite/` - Frontend automatically reloads
+- Edit files in `server/` - Backend automatically restarts
+- Edit files in `shared/` - Changes propagate to dependent services
+
+<Tip>
+  The Docker Compose setup uses volume mounts for hot reloading. If changes aren't being detected on Windows, the `docker-compose.dev.yml` includes polling configuration.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Core Concepts" icon="book" href="/concepts/products-and-plans">
+    Learn about products, plans, features, and customers
+  </Card>
+  
+  <Card title="Self-Hosting Guide" icon="server" href="/self-hosting">
+    Deploy Autumn to production
+  </Card>
+  
+  <Card title="Usage-Based Billing" icon="chart-line" href="/guides/usage-based-billing">
+    Implement metered features and usage tracking
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/attach">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>

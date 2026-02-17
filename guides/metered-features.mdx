@@ -1,0 +1,391 @@
+---
+title: "Metered Features"
+description: "Track feature usage, enforce limits, and gate access based on customer entitlements"
+---
+
+## Overview
+
+Metered features allow you to track and control access to specific capabilities in your product. Use metered features to:
+
+- **Enforce usage limits** - Restrict access when customers hit their plan limits
+- **Track consumption** - Monitor how customers use different features
+- **Gate premium features** - Control access based on subscription tier
+- **Implement soft limits** - Warn before blocking usage
+- **Bill for overages** - Charge for usage beyond included allowances
+
+## Understanding Metered Features
+
+A metered feature has:
+
+- **Feature definition** - What you're tracking (API calls, seats, storage, etc.)
+- **Allowance** - How much the customer can use
+- **Current usage** - How much they've consumed
+- **Enforcement** - What happens when they exceed the limit
+
+```typescript
+{
+  feature_id: "api_calls",
+  granted: 10000,     // Plan includes 10k calls
+  used: 7500,         // Customer has used 7.5k
+  remaining: 2500     // 2.5k calls left
+}
+```
+
+## Creating a Metered Feature
+
+<Steps>
+  <Step title="Define the feature">
+    Create a feature that represents what you want to meter:
+
+    ```typescript
+    const feature = await autumn.features.create({
+      name: "API Calls",
+      key: "api_calls",
+      type: "metered",
+      metadata: {
+        description: "Monthly API request allowance"
+      }
+    });
+    ```
+
+    <Info>Learn more about [Features](/concepts/features)</Info>
+  </Step>
+
+  <Step title="Add to a product">
+    Include the feature in your product with an allowance:
+
+    ```typescript
+    const product = await autumn.products.create({
+      name: "Starter Plan",
+      billing_interval: "monthly",
+      items: [
+        {
+          type: "fixed",
+          price: 2900 // $29/month
+        },
+        {
+          type: "feature",
+          feature_id: feature.id,
+          allowance: 10000 // 10k API calls included
+        }
+      ]
+    });
+    ```
+  </Step>
+
+  <Step title="Subscribe customers">
+    When customers attach the product, they automatically get the feature allowance:
+
+    ```typescript
+    await autumn.attach({
+      customer_id: "customer_123",
+      product_id: product.id
+    });
+    ```
+  </Step>
+</Steps>
+
+## Tracking Feature Usage
+
+Use the `/track` endpoint to record usage:
+
+```typescript
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1 // Increment by 1
+});
+```
+
+Autumn automatically:
+- Deducts from the customer's allowance
+- Returns updated balance information
+- Enforces limits based on your configuration
+
+<Info>Learn more about the [Track API](/api/track)</Info>
+
+## Checking Feature Access
+
+Before granting access to a feature, check if the customer has it:
+
+```typescript
+const customer = await autumn.customers.get({
+  customer_id: "customer_123"
+});
+
+const hasFeature = customer.products.some(product => 
+  product.features.some(f => f.id === "premium_analytics")
+);
+
+if (!hasFeature) {
+  throw new Error("Upgrade to access premium analytics");
+}
+```
+
+For metered features, also check remaining balance:
+
+```typescript
+const balance = customer.balances.find(
+  b => b.feature_id === "api_calls"
+);
+
+if (balance.remaining === 0) {
+  throw new Error("API call limit reached. Upgrade your plan.");
+}
+```
+
+## Enforcing Limits
+
+### Soft Limits (Default)
+
+By default, usage tracking continues even after the allowance is exhausted:
+
+```typescript
+const response = await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1,
+  overage_behavior: "cap" // Default - allow overages
+});
+
+if (response.balance.remaining < 0) {
+  // Customer is over their limit
+  console.log("You've exceeded your monthly allowance");
+  // But the request still succeeded
+}
+```
+
+### Hard Limits
+
+To block usage when the limit is reached:
+
+```typescript
+try {
+  await autumn.track({
+    customer_id: "customer_123",
+    feature_id: "api_calls",
+    value: 1,
+    overage_behavior: "reject" // Block when limit reached
+  });
+} catch (error) {
+  if (error.code === "insufficient_balance") {
+    // Handle limit exceeded
+    return {
+      error: "API call limit reached",
+      message: "Upgrade your plan to continue"
+    };
+  }
+}
+```
+
+<Warning>
+When using `overage_behavior: "reject"`, make sure to handle the error gracefully in your application.
+</Warning>
+
+## Feature Gating Patterns
+
+### Boolean Features (Premium Unlocks)
+
+For features that are simply on/off:
+
+```typescript
+// Create a boolean feature
+const premiumFeature = await autumn.features.create({
+  name: "Advanced Analytics",
+  key: "advanced_analytics",
+  type: "boolean"
+});
+
+// Include in premium product
+const premiumProduct = await autumn.products.create({
+  name: "Premium Plan",
+  items: [
+    {
+      type: "feature",
+      feature_id: premiumFeature.id,
+      included: true // Feature is included
+    }
+  ]
+});
+
+// Check access
+function hasAdvancedAnalytics(customer) {
+  return customer.products.some(p => 
+    p.features.some(f => f.key === "advanced_analytics")
+  );
+}
+```
+
+### Seat-Based Features
+
+For team members or concurrent users:
+
+```typescript
+const seatsFeature = await autumn.features.create({
+  name: "Team Seats",
+  key: "seats",
+  type: "metered"
+});
+
+const teamProduct = await autumn.products.create({
+  name: "Team Plan",
+  items: [
+    {
+      type: "feature",
+      feature_id: seatsFeature.id,
+      allowance: 5 // 5 seats included
+    }
+  ]
+});
+
+// Track when adding team members
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "seats",
+  value: 1,
+  overage_behavior: "reject" // Block adding more than allowed
+});
+```
+
+### Storage/Quota Features
+
+For resources that accumulate:
+
+```typescript
+const storageFeature = await autumn.features.create({
+  name: "Storage",
+  key: "storage_gb",
+  type: "metered"
+});
+
+// Report absolute storage usage
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "storage_gb",
+  value: 150, // Currently using 150 GB
+  set_usage: true // Set absolute value, don't increment
+});
+```
+
+## Usage Warnings and Thresholds
+
+Notify customers before they hit their limits:
+
+```typescript
+const response = await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1
+});
+
+const percentUsed = (response.balance.used / response.balance.granted) * 100;
+
+if (percentUsed >= 90) {
+  // Send warning email/notification
+  await sendUsageWarning({
+    customer: "customer_123",
+    feature: "API Calls",
+    remaining: response.balance.remaining,
+    message: "You've used 90% of your monthly API calls"
+  });
+}
+
+if (percentUsed >= 100) {
+  // Send limit reached notification
+  await sendLimitReached({
+    customer: "customer_123",
+    feature: "API Calls",
+    message: "You've reached your monthly API call limit"
+  });
+}
+```
+
+## Resetting Feature Usage
+
+Feature allowances typically reset monthly with the subscription:
+
+```typescript
+const product = await autumn.products.create({
+  name: "Monthly Plan",
+  billing_interval: "monthly",
+  items: [
+    {
+      type: "feature",
+      feature_id: "api_calls",
+      allowance: 10000,
+      reset_period: "monthly" // Resets each month
+    }
+  ]
+});
+```
+
+For custom reset schedules:
+
+```typescript
+await autumn.balances.update({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  current_balance: 10000, // Reset to full allowance
+  next_reset_at: "2026-03-01T00:00:00Z" // Custom reset date
+});
+```
+
+## Multi-Entity Features
+
+Track usage per entity (e.g., per workspace or organization):
+
+```typescript
+// Track usage for specific entity
+await autumn.track({
+  customer_id: "customer_123",
+  entity_id: "workspace_abc",
+  feature_id: "api_calls",
+  value: 1
+});
+
+// Each entity has its own balance
+const customer = await autumn.customers.get({
+  customer_id: "customer_123"
+});
+
+// Filter balances by entity
+const workspaceBalance = customer.balances.find(
+  b => b.feature_id === "api_calls" && b.entity_id === "workspace_abc"
+);
+```
+
+<Info>Learn more about [Entities](/concepts/entities)</Info>
+
+## Best Practices
+
+<Card title="Track in real-time" icon="clock">
+  Record usage immediately when it happens, not in batches. This ensures accurate enforcement and better customer experience.
+</Card>
+
+<Card title="Implement gradual warnings" icon="triangle-exclamation">
+  Alert customers at 50%, 75%, 90%, and 100% of their limit so they're never surprised.
+</Card>
+
+<Card title="Make limits visible" icon="eye">
+  Show current usage and limits in your UI so customers always know where they stand.
+</Card>
+
+<Card title="Provide easy upgrades" icon="arrow-up">
+  When customers hit limits, make it seamless to upgrade to a higher tier.
+</Card>
+
+<Card title="Test limit enforcement" icon="vial">
+  Verify that hard limits actually block usage and soft limits handle overages correctly.
+</Card>
+
+<Card title="Log blocked requests" icon="clipboard">
+  Track when customers are blocked by limits to understand upgrade friction.
+</Card>
+
+## Related Resources
+
+- [Usage-Based Billing Guide](/guides/usage-based-billing)
+- [Credits Guide](/guides/credits)
+- [Track API](/api/track)
+- [Features Concept](/concepts/features)
+- [Customers Concept](/concepts/customers)

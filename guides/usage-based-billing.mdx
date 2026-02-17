@@ -1,0 +1,288 @@
+---
+title: "Usage-Based Billing"
+description: "Implement usage-based pricing models with metered billing and pay-as-you-go features"
+---
+
+## Overview
+
+Usage-based billing allows you to charge customers based on their actual consumption of your service. Autumn supports multiple usage billing models:
+
+- **Pay-as-you-go** - Charge per unit consumed
+- **Tiered pricing** - Different rates for different usage levels
+- **Package pricing** - Fixed price for usage buckets
+- **In arrears** - Bill for usage at the end of the billing period
+- **In advance** - Charge upfront, track usage against prepaid balance
+
+## Setting Up Usage-Based Pricing
+
+<Steps>
+  <Step title="Create a feature">
+    Features represent the billable metric you want to track (API calls, storage, compute time, etc.).
+
+    ```typescript
+    const feature = await autumn.features.create({
+      name: "API Calls",
+      key: "api_calls",
+      type: "metered"
+    });
+    ```
+
+    <Info>Learn more about [Features](/concepts/features)</Info>
+  </Step>
+
+  <Step title="Create a product with usage pricing">
+    Define how you want to charge for usage:
+
+    ```typescript
+    const product = await autumn.products.create({
+      name: "Pay As You Go",
+      items: [
+        {
+          type: "usage",
+          feature_id: feature.id,
+          billing_type: "in_arrear",
+          price_per_unit: 10, // $0.10 per call
+          tiers: [
+            {
+              up_to: 1000,
+              unit_amount: 10 // $0.10 per call
+            },
+            {
+              up_to: 10000,
+              unit_amount: 8 // $0.08 per call
+            },
+            {
+              up_to: null, // unlimited
+              unit_amount: 5 // $0.05 per call
+            }
+          ]
+        }
+      ]
+    });
+    ```
+
+    <Info>Learn more about [Pricing Models](/concepts/pricing-models)</Info>
+  </Step>
+
+  <Step title="Attach the product to customers">
+    Subscribe customers to your usage-based product:
+
+    ```typescript
+    await autumn.attach({
+      customer_id: "customer_123",
+      product_id: product.id
+    });
+    ```
+  </Step>
+
+  <Step title="Track usage">
+    Report usage as it occurs using the `/track` endpoint:
+
+    ```typescript
+    await autumn.track({
+      customer_id: "customer_123",
+      feature_id: feature.id,
+      value: 1 // Increment by 1 API call
+    });
+    ```
+
+    <Info>Learn more about the [Track API](/api/track)</Info>
+  </Step>
+</Steps>
+
+## Usage Billing Models
+
+### In Arrears (Postpaid)
+
+Charge customers for usage at the end of each billing period:
+
+```typescript
+{
+  type: "usage",
+  feature_id: "api_calls",
+  billing_type: "in_arrear",
+  price_per_unit: 10 // $0.10 per call
+}
+```
+
+Usage accumulates throughout the month and is billed when the subscription renews.
+
+### In Advance (Prepaid)
+
+Charge customers upfront, then track usage against their prepaid balance:
+
+```typescript
+{
+  type: "usage",
+  feature_id: "api_calls",
+  billing_type: "in_advance",
+  price: 5000, // $50.00 upfront
+  allowance: 1000 // 1000 API calls included
+}
+```
+
+Customers pay $50 upfront for 1000 API calls. Track usage with `/track` to decrement their balance.
+
+### Prorated In Arrears
+
+For continuously used resources like seats or storage:
+
+```typescript
+{
+  type: "usage",
+  feature_id: "storage_gb",
+  billing_type: "in_arrear_prorated",
+  price_per_unit: 100 // $1.00 per GB per month
+}
+```
+
+When usage changes mid-cycle, prorated charges are calculated automatically.
+
+## Tracking Usage
+
+### Incrementing Usage
+
+The most common pattern - add to the customer's usage:
+
+```typescript
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1
+});
+```
+
+### Setting Absolute Values
+
+For metrics like storage where you report the current total:
+
+```typescript
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "storage_gb",
+  value: 150, // Customer now using 150 GB
+  set_usage: true
+});
+```
+
+### Batch Tracking
+
+For high-volume scenarios, batch your tracking calls:
+
+```typescript
+// Track multiple events in a short time window
+await Promise.all([
+  autumn.track({ customer_id: "customer_123", feature_id: "api_calls", value: 5 }),
+  autumn.track({ customer_id: "customer_123", feature_id: "api_calls", value: 3 }),
+  autumn.track({ customer_id: "customer_123", feature_id: "api_calls", value: 2 })
+]);
+```
+
+<Warning>
+For high-frequency tracking (>100 requests/second per customer), consider aggregating usage locally and reporting in larger batches.
+</Warning>
+
+### Idempotency
+
+Use idempotency keys to safely retry tracking calls:
+
+```typescript
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1,
+  idempotency_key: "unique_event_id_123"
+});
+```
+
+## Monitoring Usage
+
+Check a customer's current usage:
+
+```typescript
+const customer = await autumn.customers.get({
+  customer_id: "customer_123"
+});
+
+// Find the balance for a specific feature
+const apiCallsBalance = customer.balances.find(
+  b => b.feature_id === "api_calls"
+);
+
+console.log({
+  used: apiCallsBalance.used,
+  remaining: apiCallsBalance.remaining,
+  granted: apiCallsBalance.granted
+});
+```
+
+## Handling Overages
+
+Control what happens when customers exceed their allowance:
+
+### Cap Overage (Default)
+
+Continue tracking usage for billing purposes:
+
+```typescript
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1,
+  overage_behavior: "cap" // Track overage, charge later
+});
+```
+
+### Reject Overage
+
+Block usage when the allowance is exhausted:
+
+```typescript
+try {
+  await autumn.track({
+    customer_id: "customer_123",
+    feature_id: "api_calls",
+    value: 1,
+    overage_behavior: "reject"
+  });
+} catch (error) {
+  if (error.code === "insufficient_balance") {
+    // Handle no remaining balance
+    console.log("Customer has exceeded their API call limit");
+  }
+}
+```
+
+<Tip>
+Use `/check` to verify balance before performing expensive operations.
+</Tip>
+
+## Best Practices
+
+<Card title="Track usage in real-time" icon="clock">
+  Report usage as it happens, not in batches at the end of the day. This ensures accurate billing and better customer experience.
+</Card>
+
+<Card title="Use feature keys consistently" icon="key">
+  Use the same feature_id across all tracking calls for a given metric. Inconsistent tracking causes billing errors.
+</Card>
+
+<Card title="Implement usage alerts" icon="bell">
+  Notify customers when they approach their usage limits to avoid surprise bills or service interruptions.
+</Card>
+
+<Card title="Provide usage visibility" icon="chart-line">
+  Show customers their current usage in your dashboard so they can monitor consumption in real-time.
+</Card>
+
+<Card title="Test with small values" icon="flask">
+  Start with low-volume testing to ensure your tracking is working correctly before scaling to production traffic.
+</Card>
+
+## Related Resources
+
+- [Metered Features Guide](/guides/metered-features)
+- [Credits Guide](/guides/credits)
+- [Track API](/api/track)
+- [Features Concept](/concepts/features)
+- [Pricing Models](/concepts/pricing-models)

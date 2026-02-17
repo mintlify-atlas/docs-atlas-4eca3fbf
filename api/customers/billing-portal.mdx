@@ -1,0 +1,232 @@
+---
+title: "Create Billing Portal Session"
+description: "Generate a Stripe billing portal URL for customer self-service"
+---
+
+## Overview
+
+Create a Stripe billing portal session URL that allows customers to manage their own subscriptions, payment methods, and view invoices. This provides a secure, Stripe-hosted interface for customer self-service.
+
+<Note>
+  This endpoint requires Stripe integration. The customer must have a Stripe ID to access the billing portal.
+</Note>
+
+## Endpoint
+
+```
+POST /customers/{customer_id}/billing_portal
+```
+
+## Authentication
+
+This endpoint requires authentication. Include your API key in the `Authorization` header:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request
+
+### Path Parameters
+
+<ParamField path="customer_id" type="string" required>
+  The customer's unique identifier. The customer must have a linked Stripe account.
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="return_url" type="string">
+  URL to redirect the customer to when they click the back button in the billing portal. If not provided in the body, this query parameter value will be used.
+</ParamField>
+
+### Body Parameters
+
+<ParamField body="configuration_id" type="string">
+  Stripe billing portal configuration ID. This allows you to customize the portal's appearance and functionality.
+  
+  You can create and manage portal configurations in your [Stripe Dashboard](https://dashboard.stripe.com/settings/billing/portal). If not provided, Autumn will use the default portal configuration.
+</ParamField>
+
+<ParamField body="return_url" type="string">
+  URL to redirect the customer to when they click the back button in the billing portal. This overrides the query parameter if both are provided.
+  
+  Example: `https://yourdomain.com/account/billing`
+</ParamField>
+
+## Response
+
+### Success Response (200)
+
+<ResponseField name="customer_id" type="string | null">
+  The customer's unique identifier (echoed from the request).
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The Stripe billing portal session URL. Redirect your customer to this URL to allow them to manage their billing information.
+  
+  **Important**: This URL expires after a short period (typically 1 hour). Generate a new URL each time a customer wants to access the portal.
+</ResponseField>
+
+## Examples
+
+### Request Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/customers/user_123/billing_portal \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "return_url": "https://yourdomain.com/account/billing",
+    "configuration_id": "bpc_123abc"
+  }'
+```
+
+```typescript TypeScript
+import { AutumnClient } from '@useautumn/autumn-js';
+
+const autumn = new AutumnClient({
+  apiKey: 'YOUR_API_KEY'
+});
+
+const session = await autumn.customers.createBillingPortal('user_123', {
+  return_url: 'https://yourdomain.com/account/billing',
+  configuration_id: 'bpc_123abc' // Optional
+});
+
+// Redirect the customer to the portal
+window.location.href = session.url;
+```
+
+```python Python
+from autumn import AutumnClient
+
+autumn = AutumnClient(api_key='YOUR_API_KEY')
+
+session = autumn.customers.create_billing_portal(
+    'user_123',
+    return_url='https://yourdomain.com/account/billing',
+    configuration_id='bpc_123abc'  # Optional
+)
+
+# Redirect the customer to the portal
+print(f"Portal URL: {session['url']}")
+```
+
+</CodeGroup>
+
+### Response Example
+
+```json
+{
+  "customer_id": "user_123",
+  "url": "https://billing.stripe.com/session/live_abc123xyz"
+}
+```
+
+## Error Handling
+
+### Common Errors
+
+- **400 Bad Request**: Customer does not have a Stripe ID
+  ```json
+  {
+    "error": "Customer has no Stripe ID",
+    "customer_id": "user_123"
+  }
+  ```
+
+- **401 Unauthorized**: Invalid or missing API key
+
+- **404 Not Found**: Customer with the specified ID does not exist
+  ```json
+  {
+    "error": "Customer not found",
+    "customer_id": "user_123"
+  }
+  ```
+
+- **500 Internal Server Error**: Stripe API error or configuration issue
+
+### Handling Missing Stripe Integration
+
+If a customer doesn't have a Stripe ID, you'll need to create one first:
+
+```typescript
+try {
+  const session = await autumn.customers.createBillingPortal('user_123', {
+    return_url: 'https://yourdomain.com/account'
+  });
+  window.location.href = session.url;
+} catch (error) {
+  if (error.message.includes('no Stripe ID')) {
+    // Create Stripe customer or show appropriate message
+    console.error('Customer needs to set up payment method first');
+  }
+}
+```
+
+## Use Cases
+
+### Customer Account Management
+
+Add a "Manage Billing" button to your application:
+
+```typescript
+const handleManageBilling = async () => {
+  try {
+    const session = await autumn.customers.createBillingPortal(customerId, {
+      return_url: window.location.href // Return to current page
+    });
+    window.location.href = session.url;
+  } catch (error) {
+    console.error('Failed to open billing portal:', error);
+  }
+};
+```
+
+### Portal Configuration
+
+Create different portal configurations in Stripe for different use cases:
+
+```typescript
+// Premium customer configuration (allow subscription changes)
+const premiumSession = await autumn.customers.createBillingPortal('premium_user', {
+  configuration_id: 'bpc_premium_config',
+  return_url: 'https://yourdomain.com/account'
+});
+
+// Basic customer configuration (payment methods only)
+const basicSession = await autumn.customers.createBillingPortal('basic_user', {
+  configuration_id: 'bpc_basic_config',
+  return_url: 'https://yourdomain.com/account'
+});
+```
+
+### Features Available in Billing Portal
+
+The Stripe billing portal allows customers to:
+
+- **Update payment methods** - Add, remove, or set default payment methods
+- **View invoices** - Download past invoices and receipts
+- **Manage subscriptions** - Upgrade, downgrade, or cancel subscriptions (if enabled in configuration)
+- **Update billing email** - Change the email address for billing communications
+
+### Portal Configuration Options
+
+In your Stripe Dashboard, you can configure:
+
+- Which features customers can access
+- Whether customers can cancel subscriptions
+- Whether customers can update subscriptions
+- Custom branding and colors
+- Default payment method types
+
+## Related Resources
+
+- [Stripe Billing Portal Documentation](https://stripe.com/docs/billing/subscriptions/integrating-customer-portal) - Stripe's official documentation
+- [Customers Concept](/concepts/customers) - Learn about customer management
+- [Get Customer](/api/customers/get) - Retrieve customer information
+- [Subscriptions Guide](/guides/subscriptions) - Managing customer subscriptions
+- [Dashboard Customers](/dashboard/customers) - Manage customers in the dashboard

@@ -1,0 +1,528 @@
+---
+title: "Entities"
+description: "Enable multi-tenant usage tracking and subscriptions with entities"
+---
+
+## Overview
+
+**Entities** enable multi-tenant scenarios where a single customer manages multiple isolated units. Common use cases include:
+
+- **Teams or workspaces**: A user managing multiple team workspaces
+- **Projects**: A customer with separate projects, each with its own usage
+- **Organizations**: A parent account with multiple sub-organizations
+- **Environments**: Separate dev, staging, and production environments
+
+Entities allow you to:
+- Track usage independently for each entity
+- Subscribe entities to different products
+- Enforce separate limits and quotas
+- Generate entity-specific invoices
+
+## Entity Structure
+
+Every entity belongs to a customer and has these attributes:
+
+<ParamField path="id" type="string">
+  Unique identifier for the entity (e.g., `team_abc`, `project_123`)
+</ParamField>
+
+<ParamField path="customer_id" type="string" required>
+  ID of the customer who owns this entity
+</ParamField>
+
+<ParamField path="name" type="string">
+  Human-readable name for the entity
+</ParamField>
+
+<ParamField path="feature_id" type="string">
+  Optional feature association for entity-scoped features
+</ParamField>
+
+<ParamField path="deleted" type="boolean" default="false">
+  Whether the entity has been soft-deleted
+</ParamField>
+
+## Creating Entities
+
+Create entities under existing customers:
+
+```typescript Example: Create Team Entity
+await autumn.entities.create({
+  customer_id: "user_123",
+  id: "team_acme",
+  name: "Acme Corp Team"
+});
+```
+
+### Automatic Creation
+
+Entities can be created automatically when tracking usage:
+
+```typescript Example: Auto-Create Entity
+await autumn.track({
+  customer_id: "user_123",
+  entity_id: "team_new",  // Entity created if it doesn't exist
+  event_name: "api_call"
+});
+```
+
+<Info>
+Automatic creation uses the `entity_id` you provide in API calls.
+</Info>
+
+## Entity-Customer Relationship
+
+Entities always belong to exactly one customer:
+
+```typescript Example: Customer with Multiple Entities
+// Customer (the user)
+await autumn.customers.create({
+  id: "user_123",
+  email: "jane@example.com"
+});
+
+// Entity 1 (personal workspace)
+await autumn.entities.create({
+  customer_id: "user_123",
+  id: "workspace_personal",
+  name: "Personal"
+});
+
+// Entity 2 (company workspace)
+await autumn.entities.create({
+  customer_id: "user_123",
+  id: "workspace_acme",
+  name: "Acme Corp"
+});
+```
+
+<Note>
+All entities under the same customer share the same billing account.
+</Note>
+
+## Entity Uniqueness
+
+Entities are unique by:
+- **Organization + Environment + Customer + ID**
+
+```typescript Uniqueness Examples
+// ✅ Valid: Same ID, different customers
+{ customer_id: "user_123", id: "team_abc" }
+{ customer_id: "user_456", id: "team_abc" }
+
+// ✅ Valid: Same customer, different IDs
+{ customer_id: "user_123", id: "team_abc" }
+{ customer_id: "user_123", id: "team_xyz" }
+
+// ❌ Invalid: Duplicate
+{ customer_id: "user_123", id: "team_abc" }
+{ customer_id: "user_123", id: "team_abc" }
+```
+
+## Entity-Scoped Usage Tracking
+
+Track usage at the entity level instead of customer level:
+
+```typescript Example: Track Entity Usage
+// Track API calls for a specific team
+await autumn.track({
+  customer_id: "user_123",
+  entity_id: "team_acme",
+  event_name: "api_call",
+  properties: {
+    endpoint: "/users"
+  }
+});
+```
+
+This usage is:
+- Tracked separately for `team_acme`
+- Isolated from other entities
+- Enforced against entity-specific limits
+
+### Checking Entity Access
+
+Verify feature access for specific entities:
+
+```typescript Example: Check Entity Feature Access
+const { allowed, usage } = await autumn.check({
+  customer_id: "user_123",
+  entity_id: "team_acme",
+  feature_id: "api-calls"
+});
+
+if (!allowed) {
+  throw new Error("Team has exceeded API call limit");
+}
+```
+
+## Entity-Scoped Subscriptions
+
+Subscribe individual entities to products:
+
+```typescript Example: Subscribe Entity to Product
+await autumn.attach({
+  customer_id: "user_123",
+  entity_id: "team_acme",
+  product_id: "team-pro"
+});
+```
+
+This allows:
+- Different products per entity
+- Independent billing cycles
+- Entity-specific entitlements
+
+```typescript Example: Multiple Entity Subscriptions
+// Personal workspace on free plan
+await autumn.attach({
+  customer_id: "user_123",
+  entity_id: "workspace_personal",
+  product_id: "free"
+});
+
+// Company workspace on pro plan
+await autumn.attach({
+  customer_id: "user_123",
+  entity_id: "workspace_acme",
+  product_id: "pro"
+});
+```
+
+<Note>
+All subscriptions are billed to the same customer, but usage and limits are tracked separately per entity.
+</Note>
+
+## Entity-Scoped Features
+
+Some features can be scoped specifically to entities:
+
+<ParamField path="feature_id" type="string">
+  Associates this entity with a specific feature for tracking
+</ParamField>
+
+```typescript Example: Entity with Feature Scope
+await autumn.entities.create({
+  customer_id: "user_123",
+  id: "workspace_acme",
+  name: "Acme Workspace",
+  feature_id: "workspace-storage"
+});
+```
+
+This is useful when:
+- Different entities consume different feature types
+- You want granular tracking per entity type
+- Entities have feature-specific configurations
+
+## Soft Deletion
+
+Entities can be soft-deleted instead of permanently removed:
+
+<ParamField path="deleted" type="boolean" default="false">
+  Marks the entity as deleted without removing data
+</ParamField>
+
+```typescript Example: Soft Delete Entity
+await autumn.entities.update({
+  entity_id: "team_old",
+  deleted: true
+});
+```
+
+Soft-deleted entities:
+- Stop accepting new usage events
+- Preserve historical usage data
+- Can be restored by setting `deleted: false`
+- Are hidden from entity listings
+
+<Warning>
+Soft-deleted entities still count toward database storage until permanently deleted.
+</Warning>
+
+## Environment Separation
+
+Entities are isolated by environment:
+
+<ParamField path="env" type="string" required>
+  Environment identifier (`development`, `production`, etc.)
+</ParamField>
+
+```typescript Example: Environment Isolation
+// Development entity
+await autumn.entities.create({
+  customer_id: "user_123",
+  id: "team_test",
+  name: "Test Team"
+}, { env: "development" });
+
+// Production entity (separate)
+await autumn.entities.create({
+  customer_id: "user_123",
+  id: "team_test",
+  name: "Test Team"
+}, { env: "production" });
+```
+
+## Common Patterns
+
+### Team-Based SaaS
+
+```typescript Example: User with Teams
+// User creates account
+await autumn.customers.create({
+  id: "user_123",
+  email: "jane@example.com"
+});
+
+// User creates first team
+await autumn.entities.create({
+  customer_id: "user_123",
+  id: "team_acme",
+  name: "Acme Corp"
+});
+
+// Subscribe team to pro plan
+await autumn.attach({
+  customer_id: "user_123",
+  entity_id: "team_acme",
+  product_id: "team-pro"
+});
+
+// Track usage for the team
+await autumn.track({
+  customer_id: "user_123",
+  entity_id: "team_acme",
+  event_name: "api_call"
+});
+```
+
+### Project-Based Billing
+
+```typescript Example: Separate Projects
+// Each project gets independent usage tracking
+for (const project of customer.projects) {
+  await autumn.entities.create({
+    customer_id: customer.id,
+    id: project.id,
+    name: project.name
+  });
+  
+  // Track storage per project
+  await autumn.track({
+    customer_id: customer.id,
+    entity_id: project.id,
+    event_name: "storage_used",
+    properties: {
+      bytes: project.storageBytes
+    }
+  });
+}
+```
+
+### Environment-Based Usage
+
+```typescript Example: Dev/Staging/Prod Entities
+const environments = ["dev", "staging", "prod"];
+
+for (const env of environments) {
+  await autumn.entities.create({
+    customer_id: "customer_abc",
+    id: `env_${env}`,
+    name: `${env.toUpperCase()} Environment`
+  });
+  
+  // Subscribe prod to paid plan
+  if (env === "prod") {
+    await autumn.attach({
+      customer_id: "customer_abc",
+      entity_id: `env_${env}`,
+      product_id: "production-plan"
+    });
+  }
+}
+```
+
+### Workspace Sharing
+
+```typescript Example: Shared Workspaces
+// Primary user owns the workspace
+await autumn.entities.create({
+  customer_id: "user_owner",
+  id: "workspace_shared",
+  name: "Shared Workspace"
+});
+
+// Other users track usage to the same entity
+await autumn.track({
+  customer_id: "user_owner",    // Owner's customer ID
+  entity_id: "workspace_shared",
+  event_name: "api_call",
+  properties: {
+    user_id: "user_member_1"    // Who made the call
+  }
+});
+```
+
+<Note>
+Entities are owned by one customer, but you can track which users perform actions using event properties.
+</Note>
+
+## Retrieving Entity Data
+
+Fetch entity information with expanded relations:
+
+```typescript Example: Get Entity with Usage
+const entity = await autumn.entities.get({
+  entity_id: "team_acme",
+  expand: ["customer", "products", "usage"]
+});
+
+console.log(entity);
+// {
+//   id: "team_acme",
+//   name: "Acme Corp",
+//   customer_id: "user_123",
+//   customer: { ... },
+//   products: [ ... ],
+//   usage: { ... }
+// }
+```
+
+## Migration from Customer-Only to Entities
+
+If you're adding multi-tenancy to an existing system:
+
+```typescript Example: Migration Strategy
+// Before: Customer-level tracking
+await autumn.track({
+  customer_id: "user_123",
+  event_name: "api_call"
+});
+
+// After: Entity-level tracking
+// 1. Create default entity for existing customers
+for (const customer of existingCustomers) {
+  await autumn.entities.create({
+    customer_id: customer.id,
+    id: `${customer.id}_default`,
+    name: "Default Workspace"
+  });
+  
+  // 2. Migrate subscription to entity
+  await autumn.attach({
+    customer_id: customer.id,
+    entity_id: `${customer.id}_default`,
+    product_id: customer.currentProductId
+  });
+}
+
+// 3. Update tracking calls to include entity_id
+await autumn.track({
+  customer_id: "user_123",
+  entity_id: "user_123_default",
+  event_name: "api_call"
+});
+```
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Can entities exist without a customer?">
+    No, entities must always belong to a customer. The customer owns the billing relationship, while entities provide usage isolation.
+  </Accordion>
+
+  <Accordion title="Can I transfer an entity to a different customer?">
+    Not directly. To transfer ownership:
+    1. Create a new entity under the target customer
+    2. Migrate data and subscriptions
+    3. Soft-delete the old entity
+    
+    This requires careful handling of billing and usage history.
+  </Accordion>
+
+  <Accordion title="How do I track usage for users within a team entity?">
+    Use event properties to track which user performed actions:
+    ```typescript
+    await autumn.track({
+      customer_id: "user_owner",
+      entity_id: "team_acme",
+      event_name: "api_call",
+      properties: {
+        user_id: "user_member_1",
+        user_email: "member@example.com"
+      }
+    });
+    ```
+    
+    The usage counts toward the entity's limits, but you can analyze per-user activity via event properties.
+  </Accordion>
+
+  <Accordion title="What's the difference between customer-level and entity-level subscriptions?">
+    **Customer-level**: One subscription for all usage across the customer account
+    ```typescript
+    await autumn.attach({
+      customer_id: "user_123",
+      product_id: "pro"
+    });
+    ```
+    
+    **Entity-level**: Separate subscriptions and limits per entity
+    ```typescript
+    await autumn.attach({
+      customer_id: "user_123",
+      entity_id: "team_acme",
+      product_id: "pro"
+    });
+    ```
+    
+    Choose entity-level when you need isolated usage tracking and billing per entity.
+  </Accordion>
+
+  <Accordion title="Can entities have different products within the same customer?">
+    Yes! This is a core use case:
+    ```typescript
+    // Free workspace
+    await autumn.attach({
+      customer_id: "user_123",
+      entity_id: "workspace_personal",
+      product_id: "free"
+    });
+    
+    // Pro workspace
+    await autumn.attach({
+      customer_id: "user_123",
+      entity_id: "workspace_company",
+      product_id: "pro"
+    });
+    ```
+    
+    All subscriptions are billed to the same customer.
+  </Accordion>
+
+  <Accordion title="How do I list all entities for a customer?">
+    Use the List Entities API with a customer filter:
+    ```typescript
+    const entities = await autumn.entities.list({
+      customer_id: "user_123"
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Customers" icon="user" href="/concepts/customers">
+    Learn about customer structure
+  </Card>
+  <Card title="Create Entity" icon="plus" href="/api/entities/create">
+    Create an entity via API
+  </Card>
+  <Card title="Track Usage" icon="chart-line" href="/api/track">
+    Track entity-scoped usage
+  </Card>
+  <Card title="Check Access" icon="shield-check" href="/api/check">
+    Verify entity feature access
+  </Card>
+</CardGroup>

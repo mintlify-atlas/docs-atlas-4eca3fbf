@@ -1,0 +1,171 @@
+---
+title: "Update Balance"
+api: "POST /balances/update"
+description: "Update or set the balance for a specific feature for a customer"
+---
+
+Update an existing balance (customer entitlement) for a feature. You can modify the current balance, granted balance, usage, or reset schedule.
+
+## Request
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer whose balance you want to update.
+</ParamField>
+
+<ParamField body="feature_id" type="string" required>
+  The ID of the feature to update the balance for.
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  The ID of the entity to update balance for. Use this when working with entity-scoped balances.
+</ParamField>
+
+<ParamField body="current_balance" type="number">
+  The new balance value to set. This directly sets the balance to the specified amount. Cannot be used with `add_to_balance`.
+</ParamField>
+
+<ParamField body="add_to_balance" type="number">
+  Amount to add to the current balance. Use positive values to increase the balance or negative values to decrease it. Cannot be used with `current_balance`.
+</ParamField>
+
+<ParamField body="granted_balance" type="number">
+  Update the granted balance. This represents the total balance allocated (before any usage). Requires `current_balance` to also be specified.
+</ParamField>
+
+<ParamField body="usage" type="number">
+  Set the usage value directly. This represents how much of the balance has been consumed.
+</ParamField>
+
+<ParamField body="interval" type="string">
+  The reset interval for the balance. One of: `daily`, `weekly`, `monthly`, `yearly`. Used to identify which balance to update when multiple intervals exist.
+</ParamField>
+
+<ParamField body="customer_entitlement_id" type="string">
+  The specific customer entitlement ID to update. Use this when you want to target a specific balance directly.
+</ParamField>
+
+<ParamField body="next_reset_at" type="number">
+  Unix timestamp (milliseconds) for when the balance should next reset. Requires `customer_entitlement_id` to be specified.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Returns `true` if the balance was updated successfully.
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```typescript TypeScript
+// Set balance to a specific value
+const response = await fetch('https://api.autumn.com/v1/balances/update', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    customer_id: 'cus_123',
+    feature_id: 'credits',
+    current_balance: 500
+  })
+});
+
+const data = await response.json();
+console.log(data.success); // true
+
+// Add to existing balance
+const addResponse = await fetch('https://api.autumn.com/v1/balances/update', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    customer_id: 'cus_123',
+    feature_id: 'credits',
+    add_to_balance: 100  // Adds 100 to current balance
+  })
+});
+```
+
+```python Python
+import requests
+
+# Set balance to a specific value
+response = requests.post(
+    'https://api.autumn.com/v1/balances/update',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'customer_id': 'cus_123',
+        'feature_id': 'credits',
+        'current_balance': 500
+    }
+)
+
+data = response.json()
+print(data['success'])  # True
+
+# Add to existing balance
+add_response = requests.post(
+    'https://api.autumn.com/v1/balances/update',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'customer_id': 'cus_123',
+        'feature_id': 'credits',
+        'add_to_balance': 100  # Adds 100 to current balance
+    }
+)
+```
+
+```bash cURL
+# Set balance to a specific value
+curl -X POST "https://api.autumn.com/v1/balances/update" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "credits",
+    "current_balance": 500
+  }'
+
+# Add to existing balance
+curl -X POST "https://api.autumn.com/v1/balances/update" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "credits",
+    "add_to_balance": 100
+  }'
+```
+</CodeGroup>
+
+## Error Handling
+
+<ResponseField name="400" type="error">
+  **Bad Request** - Invalid parameters. Common causes:
+  - Both `current_balance` and `add_to_balance` specified
+  - `granted_balance` specified without `current_balance`
+  - `next_reset_at` specified without `customer_entitlement_id`
+  - Missing required fields (customer_id, feature_id)
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  **Unauthorized** - Invalid or missing API key.
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  **Not Found** - The specified customer, feature, or balance does not exist.
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  **Internal Server Error** - An unexpected error occurred on the server.
+</ResponseField>

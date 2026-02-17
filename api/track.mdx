@@ -1,0 +1,321 @@
+---
+title: 'Track Event'
+api: 'POST /track'
+description: 'Record usage events for metered features and track customer activity'
+---
+
+## Overview
+
+The track endpoint records usage events for metered features and enables usage-based billing. Each call increments usage counters and deducts from the customer's balance according to their plan limits.
+
+## Authentication
+
+This endpoint requires API key authentication. Include your API key in the request header:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer tracking usage.
+
+  ```json
+  "cus_123"
+  ```
+</ParamField>
+
+<ParamField body="feature_id" type="string">
+  The ID of the feature to track usage for. Required if `event_name` is not provided. Use this for direct feature tracking.
+
+  ```json
+  "api_calls"
+  ```
+</ParamField>
+
+<ParamField body="event_name" type="string">
+  An event name can be used in place of `feature_id`. This can be used if multiple features are tracked in the same event. See [event-based tracking](/guides/usage-based-billing#using-event-names) for more details.
+
+  ```json
+  "api.request.sent"
+  ```
+</ParamField>
+
+<ParamField body="value" type="number">
+  The amount of usage to record. Defaults to `1`. Can be negative to increase the balance (e.g., when removing a seat).
+
+  ```json
+  5
+  ```
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  If using entity balances (e.g., seats), the entity ID to track usage for.
+
+  ```json
+  "entity_123"
+  ```
+</ParamField>
+
+<ParamField body="properties" type="object">
+  Additional properties to attach to this usage event. Useful for analytics and filtering.
+
+  ```json
+  {
+    "endpoint": "/api/users",
+    "method": "POST",
+    "region": "us-east-1"
+  }
+  ```
+</ParamField>
+
+<ParamField body="idempotency_key" type="string">
+  Unique key to prevent duplicate event recording. Use this to safely retry requests without creating duplicate usage records.
+
+  ```json
+  "evt_abc123xyz789"
+  ```
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Additional customer properties. These will be used to create or update the customer if they don't exist or their properties are not already set.
+
+  <Expandable title="Customer Data Properties">
+    <ParamField body="name" type="string">
+      Customer's full name
+    </ParamField>
+    <ParamField body="email" type="string">
+      Customer's email address
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="overage_behavior" type="string">
+  How to handle usage when balance is insufficient.
+  
+  - `cap` - Limits usage to available balance
+  - `reject` - Prevents the usage entirely and returns an error
+
+  ```json
+  "cap"
+  ```
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="skip_cache" type="boolean">
+  If true, bypasses the cache and writes directly to the database.
+
+  ```
+  ?skip_cache=true
+  ```
+</ParamField>
+
+<ParamField query="expand" type="string[]">
+  Additional data to include in the response. Supports `balance.feature` to include full feature details.
+
+  ```
+  ?expand=balance.feature
+  ```
+</ParamField>
+
+## Response
+
+<ResponseField name="customer_id" type="string">
+  The ID of the customer.
+</ResponseField>
+
+<ResponseField name="entity_id" type="string" optional>
+  The entity ID if one was provided in the request.
+</ResponseField>
+
+<ResponseField name="event_name" type="string" optional>
+  The name of the event that was tracked.
+</ResponseField>
+
+<ResponseField name="value" type="number">
+  The amount of usage that was recorded.
+</ResponseField>
+
+<ResponseField name="balance" type="object">
+  The customer's updated balance for this feature after recording the usage.
+
+  <Expandable title="Balance Object">
+    <ResponseField name="feature_id" type="string">
+      The ID of the feature.
+    </ResponseField>
+
+    <ResponseField name="unlimited" type="boolean">
+      Whether the customer has unlimited access to this feature.
+    </ResponseField>
+
+    <ResponseField name="granted_balance" type="number">
+      The total balance granted from their subscription plans.
+    </ResponseField>
+
+    <ResponseField name="purchased_balance" type="number">
+      Additional balance purchased beyond the granted amount.
+    </ResponseField>
+
+    <ResponseField name="current_balance" type="number">
+      The remaining balance available after this usage event.
+    </ResponseField>
+
+    <ResponseField name="usage" type="number">
+      The total amount of the feature that has been consumed.
+    </ResponseField>
+
+    <ResponseField name="overage_allowed" type="boolean">
+      Whether the customer can exceed their granted balance.
+    </ResponseField>
+
+    <ResponseField name="max_purchase" type="number" optional>
+      Maximum amount that can be purchased. `null` if unlimited.
+    </ResponseField>
+
+    <ResponseField name="reset" type="object" optional>
+      Information about when the balance resets.
+
+      <Expandable title="Reset Object">
+        <ResponseField name="interval" type="string">
+          Reset interval: `day`, `week`, `month`, `year`, or `multiple`.
+        </ResponseField>
+
+        <ResponseField name="interval_count" type="number" optional>
+          Number of intervals (e.g., 2 for bi-weekly).
+        </ResponseField>
+
+        <ResponseField name="resets_at" type="number" optional>
+          Unix timestamp (ms) when the balance will next reset.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="plan_id" type="string" optional>
+      The ID of the plan providing this balance.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="balances" type="object" optional>
+  If tracking an event that affects multiple features, this contains a map of feature IDs to their updated balances.
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.useautumn.com/track \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "api_calls",
+    "value": 1,
+    "properties": {
+      "endpoint": "/api/users",
+      "method": "POST"
+    }
+  }'
+```
+
+```typescript TypeScript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
+
+const result = await autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'api_calls',
+  value: 1,
+  properties: {
+    endpoint: '/api/users',
+    method: 'POST'
+  }
+});
+
+console.log(`Remaining balance: ${result.balance.current_balance}`);
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key='YOUR_API_KEY')
+
+result = autumn.track(
+  customer_id='cus_123',
+  feature_id='api_calls',
+  value=1,
+  properties={
+    'endpoint': '/api/users',
+    'method': 'POST'
+  }
+)
+
+print(f"Remaining balance: {result['balance']['current_balance']}")
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "customer_id": "cus_123",
+  "value": 1,
+  "balance": {
+    "feature_id": "api_calls",
+    "unlimited": false,
+    "granted_balance": 10000,
+    "purchased_balance": 0,
+    "current_balance": 7499,
+    "usage": 2501,
+    "overage_allowed": true,
+    "max_purchase": null,
+    "reset": {
+      "interval": "month",
+      "resets_at": 1717200000000
+    },
+    "plan_id": "pro_plan"
+  }
+}
+```
+
+## Error Responses
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="code" type="string">
+      Error code identifying the type of error.
+      
+      Common error codes:
+      - `customer_not_found` - The specified customer does not exist
+      - `feature_not_found` - The specified feature does not exist
+      - `insufficient_balance` - Customer doesn't have enough balance (when `overage_behavior: "reject"`)
+      - `duplicate_event` - Event with this idempotency key was already processed
+      - `invalid_parameters` - Missing or invalid request parameters
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Human-readable error message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Idempotency
+
+Use the `idempotency_key` parameter to safely retry track requests. If you send multiple requests with the same idempotency key, only the first request will be processed. Subsequent requests will return the result of the first request.
+
+```json
+{
+  "customer_id": "cus_123",
+  "feature_id": "api_calls",
+  "value": 1,
+  "idempotency_key": "evt_unique_identifier_123"
+}
+```
+
+## Related Endpoints
+
+- [Check](/api/check) - Verify customer access before usage
+- [Events List](/api/events/list) - Query historical usage events
+- [Balances List](/api/balances/list) - Get all balances for a customer

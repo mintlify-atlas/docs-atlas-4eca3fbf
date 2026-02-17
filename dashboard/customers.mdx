@@ -1,0 +1,308 @@
+---
+title: "Customers"
+description: "View and manage customer subscriptions, usage, and billing"
+---
+
+The Customers section provides a comprehensive view of your customer base, including subscriptions, feature usage, events, and billing history.
+
+## Customer List
+
+The customer list displays all customers in your organization with key information:
+
+- **Name/Email** - Customer identification
+- **Status** - Active, trialing, past due, or canceled
+- **Products** - Current subscriptions
+- **Feature usage** - Usage bars for metered features
+- **Balance** - Credit balances for prepaid features
+
+### Filtering Customers
+
+Filter the customer list by:
+
+- **Status** - Active, trialing, past due, canceled
+- **Version** - Customers on specific plan versions
+- **Search** - Find by name, email, or customer ID
+
+### Column Visibility
+
+Customize which columns are visible:
+
+1. Click the column visibility button (eye icon)
+2. Toggle columns on/off
+3. Group columns by category:
+   - Basic information
+   - Subscription details
+   - Feature usage metrics
+   - Balance information
+
+<Tip>
+  Your column visibility preferences are saved and persist across sessions.
+</Tip>
+
+## Customer Details
+
+Click on a customer to view their complete profile:
+
+### Subscriptions
+
+View all active and past subscriptions:
+
+- **Plan name** - Current subscription plan
+- **Status** - Active, trialing, past due, canceled
+- **Billing cycle** - Next billing date and amount
+- **Trial end** - When trial period expires (if applicable)
+
+**Actions:**
+- **Attach product** - Add a new subscription
+- **Update plan** - Change to a different plan
+- **Cancel subscription** - End the subscription
+- **Manage billing** - Open customer billing portal
+
+### Feature Usage
+
+Monitor usage for all metered features:
+
+- **Usage bars** - Visual representation of usage vs. limit
+- **Percentage** - Percentage of limit consumed
+- **Reset date** - When usage resets to zero
+- **Configuration** - View feature settings for this customer
+
+**Usage display:**
+```
+█████████░░░░░░░░░░░ 45% (450/1000 API calls)
+Resets: Feb 1, 2024
+```
+
+<Note>
+  Usage bars turn red when approaching or exceeding limits, making it easy to identify customers who may need plan upgrades.
+</Note>
+
+### Balances
+
+Track credit balances for prepaid features:
+
+#### Numeric Balances
+
+Prepaid credits that decrement with usage:
+
+- **Current balance** - Remaining credits
+- **Granted** - Manually added credits
+- **Rollover** - Credits carried from previous period
+
+**Actions:**
+- **Add credits** - Manually grant additional credits
+- **Set balance** - Override current balance
+
+#### Boolean Balances
+
+Feature access flags:
+
+- **Enabled** - Customer has access
+- **Source** - How access was granted (plan, manual override)
+
+### Usage Analytics
+
+Analyze customer event history:
+
+**Event table:**
+- **Event name** - Type of event tracked
+- **Timestamp** - When the event occurred
+- **Usage** - Quantity consumed
+- **Properties** - Custom event metadata
+
+**Usage chart:**
+- Visualize event frequency over time
+- Filter by time range (7 days, 30 days)
+- View top 5 event types
+- Identify usage patterns and trends
+
+<Tip>
+  Click on an event row to view the complete event payload including all properties and metadata.
+</Tip>
+
+### Invoices
+
+Access customer billing history:
+
+- **Invoice number** - Unique invoice identifier
+- **Date** - When invoice was created
+- **Amount** - Total charged
+- **Status** - Paid, pending, or failed
+- **Products** - Plans included in invoice
+
+**Actions:**
+- Click an invoice to view in Stripe
+- Access hosted invoice URL
+- View payment details
+
+## Creating Customers
+
+Create customers directly in the dashboard:
+
+1. Click **Create customer** in the customer list
+2. Enter customer details:
+   - **Email** - Customer email address (required)
+   - **Name** - Customer display name
+   - **Metadata** - Custom key-value pairs
+3. Optionally attach a product immediately
+
+<Note>
+  In most cases, customers are created automatically when they sign up through your application using the Autumn SDK.
+</Note>
+
+## Managing Subscriptions
+
+### Attaching Products
+
+Add a subscription to a customer:
+
+1. Click **Attach product** on customer page
+2. Select a plan from the list
+3. Configure options:
+   - **Start date** - When subscription begins
+   - **Trial end** - Override default trial period
+   - **Proration** - How to handle mid-cycle charges
+4. Customize features if needed:
+   - Override usage limits
+   - Adjust included usage
+   - Set custom pricing
+5. Click **Attach** to create subscription
+
+### Updating Plans
+
+Change a customer's subscription:
+
+1. Click **Update** on the subscription card
+2. Select new plan
+3. Configure proration:
+   - **Immediate** - Change takes effect now
+   - **Next cycle** - Change at renewal
+   - **Custom date** - Schedule for specific date
+4. Review pricing changes
+5. Confirm update
+
+<Warning>
+  Mid-cycle plan changes may result in prorated charges or credits. Review the proration preview before confirming.
+</Warning>
+
+### Canceling Subscriptions
+
+End a customer subscription:
+
+1. Click **Cancel** on the subscription card
+2. Choose cancellation timing:
+   - **Immediately** - Cancel now
+   - **At period end** - Cancel at next renewal
+3. Confirm cancellation
+
+<Tip>
+  Canceling at period end allows customers to use the service through the paid period.
+</Tip>
+
+## Entities
+
+Manage multi-tenant customers with entities:
+
+- View all entities for a customer
+- Create new entities (workspaces, projects, teams)
+- Track usage per entity
+- Apply feature limits per entity
+
+**Use cases:**
+- SaaS platforms with workspace-based pricing
+- Development tools with per-project limits
+- Team collaboration tools with per-team quotas
+
+<Card title="Learn about entities" icon="building" href="/concepts/entities">
+  Understand entity-based usage tracking
+</Card>
+
+## Customer Actions
+
+Additional actions available from the customer page:
+
+### Billing Portal
+
+Generate a secure link for customers to manage their own billing:
+
+1. Click **Billing portal** in customer actions
+2. Copy the generated URL
+3. Send to customer or redirect from your app
+
+**Customers can:**
+- Update payment methods
+- View invoices
+- Download receipts
+- Update billing information
+
+### Metadata
+
+Store custom data with customers:
+
+- Add key-value pairs for custom attributes
+- Use in webhooks and API responses
+- Query customers by metadata
+
+### Delete Customer
+
+Permanently remove a customer:
+
+1. Cancel all active subscriptions first
+2. Click **Delete** in customer actions
+3. Confirm deletion
+
+<Warning>
+  Customer deletion is permanent and cannot be undone. All usage history and billing data will be removed.
+</Warning>
+
+## Pagination and Performance
+
+The customer list supports pagination for large datasets:
+
+- **Page size** - Choose 25, 50, 100, or 250 customers per page
+- **Navigation** - Use page numbers or next/previous buttons
+- **Search** - Filter results without losing page position
+
+<Note>
+  The customer list is virtualized for performance, allowing you to scroll through thousands of customers smoothly.
+</Note>
+
+## Best Practices
+
+### Customer Management
+
+- Use customer names instead of IDs for better readability
+- Add metadata for custom segmentation
+- Monitor usage regularly to identify upgrade opportunities
+- Set up webhooks for automated workflows
+
+### Subscription Changes
+
+- Review proration settings before making changes
+- Communicate plan changes to customers
+- Use scheduled changes for renewals to avoid mid-cycle charges
+- Test changes in sandbox environment first
+
+### Usage Monitoring
+
+- Watch for customers approaching limits
+- Proactively reach out to offer upgrades
+- Use the analytics chart to identify growth trends
+- Monitor events to detect unusual usage patterns
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Customers Concept" icon="user" href="/concepts/customers">
+    Learn about customer data model
+  </Card>
+  <Card title="Subscriptions Guide" icon="repeat" href="/guides/subscriptions">
+    Managing customer subscriptions
+  </Card>
+  <Card title="Usage Tracking" icon="chart-line" href="/guides/metered-features">
+    Track and limit feature usage
+  </Card>
+  <Card title="API: Get Customer" icon="code" href="/api/customers/get">
+    Retrieve customer data via API
+  </Card>
+</CardGroup>

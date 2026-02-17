@@ -1,0 +1,339 @@
+---
+title: "Products and Plans"
+description: "Learn about products, plans, and how to structure your pricing"
+---
+
+## Overview
+
+Products are the core building blocks of your monetization strategy in Autumn. A **product** represents a subscription tier, plan, or offering that customers can purchase. Each product contains:
+
+- **Prices**: The billing amounts and intervals
+- **Entitlements**: Feature access and allowances
+- **Free Trials**: Optional trial periods
+- **Metadata**: Custom attributes and configurations
+
+## Product Structure
+
+Every product in Autumn has the following key attributes:
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the product (e.g., `pro`, `enterprise`)
+</ParamField>
+
+<ParamField path="name" type="string">
+  Human-readable name displayed to customers
+</ParamField>
+
+<ParamField path="description" type="string">
+  Detailed description of the product offering
+</ParamField>
+
+<ParamField path="is_add_on" type="boolean" default="false">
+  Whether this product is an add-on to another product
+</ParamField>
+
+<ParamField path="is_default" type="boolean" default="false">
+  Whether this is the default product for new customers
+</ParamField>
+
+<ParamField path="group" type="string">
+  Optional grouping for organizing related products
+</ParamField>
+
+## Product Types
+
+### Standard Products
+
+Standard products are standalone subscription tiers that customers can purchase independently.
+
+```json Example: Standard Product
+{
+  "id": "pro",
+  "name": "Pro Plan",
+  "description": "For growing teams",
+  "is_add_on": false,
+  "is_default": false
+}
+```
+
+### Add-On Products
+
+Add-on products extend existing subscriptions with additional features or capacity.
+
+```json Example: Add-On Product
+{
+  "id": "extra-storage",
+  "name": "Additional Storage",
+  "description": "100GB of extra storage",
+  "is_add_on": true,
+  "is_default": false
+}
+```
+
+<Note>
+Add-on products can be attached to customer subscriptions alongside their main product.
+</Note>
+
+## Product Components
+
+### Prices
+
+Each product can have multiple prices associated with it. Prices define:
+
+- **Amount**: The cost to charge
+- **Interval**: Billing frequency (monthly, yearly, one-time)
+- **Type**: Fixed or usage-based
+
+See [Pricing Models](/concepts/pricing-models) for detailed information.
+
+### Entitlements
+
+Entitlements define what features and allowances customers receive when they subscribe to a product. Each entitlement links:
+
+- A **feature** to the product
+- An **allowance** (quota or limit)
+- A **reset interval** for the allowance
+
+See [Features](/concepts/features) for more details.
+
+### Free Trials
+
+Products can include optional free trial periods:
+
+```typescript Example: Product with Trial
+{
+  "id": "pro",
+  "name": "Pro Plan",
+  "free_trial": {
+    "duration": 14,
+    "unit": "days"
+  }
+}
+```
+
+## Product Versions
+
+Products support versioning to handle plan changes over time:
+
+<ParamField path="version" type="number" default="1">
+  Version number for the product configuration
+</ParamField>
+
+<ParamField path="base_variant_id" type="string">
+  Reference to the base product this version extends
+</ParamField>
+
+<Info>
+Versioning allows you to migrate customers gradually while maintaining backward compatibility.
+</Info>
+
+## Product Groups
+
+Use the `group` field to organize related products:
+
+```json Example: Product Groups
+[
+  {
+    "id": "starter",
+    "name": "Starter",
+    "group": "saas-plans"
+  },
+  {
+    "id": "pro",
+    "name": "Pro",
+    "group": "saas-plans"
+  },
+  {
+    "id": "api-addon",
+    "name": "API Access",
+    "group": "addons"
+  }
+]
+```
+
+## External Processors
+
+Products can be synchronized with external payment processors:
+
+<ParamField path="processor" type="object">
+  External processor configuration (e.g., Stripe, RevenueCat)
+  
+  <Expandable title="properties">
+    <ParamField path="type" type="string">
+      Processor type (e.g., `stripe`, `revenuecat`)
+    </ParamField>
+    <ParamField path="id" type="string">
+      External product ID in the processor
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+```json Example: Stripe Integration
+{
+  "id": "pro",
+  "name": "Pro Plan",
+  "processor": {
+    "type": "stripe",
+    "id": "prod_abc123"
+  }
+}
+```
+
+## Environment Separation
+
+Products are environment-specific, allowing you to maintain separate configurations for development and production:
+
+<ParamField path="env" type="string" required>
+  Environment identifier (`development`, `production`, etc.)
+</ParamField>
+
+<Warning>
+Products with the same `id` but different `env` values are treated as separate products.
+</Warning>
+
+## Archiving Products
+
+Instead of deleting products, you can archive them:
+
+<ParamField path="archived" type="boolean" default="false">
+  Whether the product is archived and hidden from listings
+</ParamField>
+
+Archived products:
+- Remain accessible for existing subscriptions
+- Are hidden from new customer checkouts
+- Preserve historical data and analytics
+
+## Common Patterns
+
+### Three-Tier SaaS Pricing
+
+```json
+[
+  {
+    "id": "starter",
+    "name": "Starter",
+    "description": "Perfect for individuals",
+    "is_default": true
+  },
+  {
+    "id": "pro",
+    "name": "Pro",
+    "description": "For growing teams"
+  },
+  {
+    "id": "enterprise",
+    "name": "Enterprise",
+    "description": "For large organizations"
+  }
+]
+```
+
+### Usage-Based Product
+
+```json
+{
+  "id": "api-access",
+  "name": "API Access",
+  "description": "Pay per API call",
+  "prices": [
+    {
+      "type": "usage",
+      "billing_type": "end_of_period",
+      "feature_id": "api-calls"
+    }
+  ]
+}
+```
+
+### Freemium with Add-Ons
+
+```json
+[
+  {
+    "id": "free",
+    "name": "Free",
+    "is_default": true,
+    "prices": [
+      {
+        "type": "fixed",
+        "amount": 0,
+        "interval": "month"
+      }
+    ]
+  },
+  {
+    "id": "extra-seats",
+    "name": "Additional Seats",
+    "is_add_on": true
+  }
+]
+```
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Can I change a product's price after customers have subscribed?">
+    Yes, but existing subscriptions will maintain their original price. To change prices:
+    1. Create a new price on the product
+    2. Set it as the default for new subscriptions
+    3. Optionally migrate existing customers
+  </Accordion>
+
+  <Accordion title="How do I handle grandfathered pricing?">
+    Use product versioning to maintain legacy pricing:
+    1. Create a new version of the product
+    2. Update the `version` field
+    3. Keep the old version for existing customers
+    
+    Existing subscriptions will continue using the old version.
+  </Accordion>
+
+  <Accordion title="What's the difference between products and plans?">
+    In Autumn, **products** and **plans** are the same concept. The terms are used interchangeably to describe subscription tiers or offerings.
+  </Accordion>
+
+  <Accordion title="Can a customer have multiple products?">
+    Yes! Customers can have:
+    - One main product subscription
+    - Multiple add-on products
+    - Subscriptions to different products for different entities
+    
+    See [Customers](/concepts/customers) for more details.
+  </Accordion>
+
+  <Accordion title="How do I create a custom enterprise plan?">
+    Create a product with custom pricing:
+    ```json
+    {
+      "id": "enterprise-custom",
+      "name": "Enterprise Custom",
+      "prices": [
+        {
+          "is_custom": true,
+          "amount": 50000,
+          "interval": "year"
+        }
+      ]
+    }
+    ```
+    Use the `is_custom` flag to identify custom pricing.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Features" icon="puzzle-piece" href="/concepts/features">
+    Learn how features define product capabilities
+  </Card>
+  <Card title="Pricing Models" icon="dollar-sign" href="/concepts/pricing-models">
+    Explore fixed and usage-based pricing
+  </Card>
+  <Card title="Create Product" icon="plus" href="/api/products/create">
+    Create a product via API
+  </Card>
+  <Card title="List Products" icon="list" href="/api/products/list">
+    Retrieve all products
+  </Card>
+</CardGroup>

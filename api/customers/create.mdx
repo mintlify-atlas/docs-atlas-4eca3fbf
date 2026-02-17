@@ -1,0 +1,268 @@
+---
+title: "Create Customer"
+description: "Create a new customer in your account"
+---
+
+## Overview
+
+Create a new customer to track subscriptions, usage, and billing. Customers can be identified by your own ID or by email. This endpoint is idempotent - if a customer with the same ID already exists, it returns the existing customer.
+
+## Endpoint
+
+```
+POST /customers
+```
+
+## Authentication
+
+This endpoint requires authentication. Include your API key in the `Authorization` header:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request
+
+### Query Parameters
+
+<ParamField query="expand" type="string[]">
+  Array of fields to expand in the response. Options:
+  - `invoices` - Include customer invoices
+  - `entities` - Include related entities
+  - `trials_used` - Include trial usage history
+  - `rewards` - Include referral rewards
+  - `referrals` - Include referrals made by this customer
+  - `payment_method` - Include payment method details
+  
+  Example: `?expand=invoices,entities`
+</ParamField>
+
+### Body Parameters
+
+<ParamField body="id" type="string | null">
+  Your unique identifier for the customer. Can be `null` if you provide an email address. When `null`, Autumn will use the email as the primary identifier.
+  
+  **Note:** Either `id` or `email` must be provided.
+</ParamField>
+
+<ParamField body="name" type="string">
+  Customer's full name.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Customer's email address. Must be a valid email format. Required if `id` is `null`.
+</ParamField>
+
+<ParamField body="fingerprint" type="string">
+  A unique device or hardware identifier (e.g., MAC address, device serial number) used to detect duplicate customers and prevent trial abuse.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  Custom key-value pairs to store additional information about the customer. Useful for storing your own internal IDs, user roles, or other custom data.
+  
+  Example: `{ "internal_id": "12345", "role": "admin" }`
+</ParamField>
+
+<ParamField body="stripe_id" type="string">
+  If you already have a Stripe customer ID, provide it here to link the existing Stripe customer to this Autumn customer.
+</ParamField>
+
+<ParamField body="create_in_stripe" type="boolean">
+  Whether to automatically create this customer in Stripe. If `true` and no `stripe_id` is provided, Autumn will create a new Stripe customer.
+</ParamField>
+
+<ParamField body="auto_enable_plan_id" type="string">
+  ID of a free plan to automatically enable for this customer upon creation. Useful for giving all new customers access to a free tier.
+</ParamField>
+
+<ParamField body="send_email_receipts" type="boolean">
+  Whether to send email receipts to this customer for payments and invoices.
+</ParamField>
+
+## Response
+
+### Success Response (200)
+
+Returns the full customer object including subscriptions and balances.
+
+<ResponseField name="id" type="string | null">
+  Your unique identifier for the customer.
+</ResponseField>
+
+<ResponseField name="name" type="string | null">
+  Customer's name.
+</ResponseField>
+
+<ResponseField name="email" type="string | null">
+  Customer's email address.
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp when the customer was created.
+</ResponseField>
+
+<ResponseField name="fingerprint" type="string | null">
+  Unique device identifier.
+</ResponseField>
+
+<ResponseField name="stripe_id" type="string | null">
+  Stripe customer ID.
+</ResponseField>
+
+<ResponseField name="env" type="enum">
+  Environment: `production` or `development`.
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Custom metadata attached to the customer.
+</ResponseField>
+
+<ResponseField name="send_email_receipts" type="boolean">
+  Whether email receipts are enabled for this customer.
+</ResponseField>
+
+<ResponseField name="subscriptions" type="array">
+  Array of active subscription objects for this customer.
+</ResponseField>
+
+<ResponseField name="scheduled_subscriptions" type="array">
+  Array of future scheduled subscriptions that will become active at a specified time.
+</ResponseField>
+
+<ResponseField name="balances" type="object">
+  Credit balances by feature ID. Keys are feature IDs, values are balance objects containing current balance and usage information.
+</ResponseField>
+
+## Examples
+
+### Request Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/customers \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "user_123",
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "fingerprint": "device_abc123",
+    "metadata": {
+      "company": "Tech Startup Inc",
+      "role": "admin"
+    },
+    "create_in_stripe": true,
+    "send_email_receipts": true
+  }'
+```
+
+```typescript TypeScript
+import { AutumnClient } from '@useautumn/autumn-js';
+
+const autumn = new AutumnClient({
+  apiKey: 'YOUR_API_KEY'
+});
+
+const customer = await autumn.customers.create({
+  id: 'user_123',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+  fingerprint: 'device_abc123',
+  metadata: {
+    company: 'Tech Startup Inc',
+    role: 'admin'
+  },
+  create_in_stripe: true,
+  send_email_receipts: true
+});
+
+console.log(`Customer created: ${customer.id}`);
+```
+
+```python Python
+from autumn import AutumnClient
+
+autumn = AutumnClient(api_key='YOUR_API_KEY')
+
+customer = autumn.customers.create(
+    id='user_123',
+    name='Jane Smith',
+    email='jane@example.com',
+    fingerprint='device_abc123',
+    metadata={
+        'company': 'Tech Startup Inc',
+        'role': 'admin'
+    },
+    create_in_stripe=True,
+    send_email_receipts=True
+)
+
+print(f"Customer created: {customer['id']}")
+```
+
+</CodeGroup>
+
+### Response Example
+
+```json
+{
+  "id": "user_123",
+  "name": "Jane Smith",
+  "email": "jane@example.com",
+  "created_at": 1672531200,
+  "fingerprint": "device_abc123",
+  "stripe_id": "cus_stripe_xyz",
+  "env": "production",
+  "metadata": {
+    "company": "Tech Startup Inc",
+    "role": "admin"
+  },
+  "send_email_receipts": true,
+  "subscriptions": [],
+  "scheduled_subscriptions": [],
+  "balances": {}
+}
+```
+
+## Error Handling
+
+### Common Errors
+
+- **400 Bad Request**: Invalid request parameters (e.g., invalid email format, missing required fields)
+- **401 Unauthorized**: Invalid or missing API key
+- **409 Conflict**: Customer with this email already exists with a different ID
+- **500 Internal Server Error**: Something went wrong on the server
+
+### Special Behaviors
+
+**Idempotent Creation**: If you create a customer with an ID that already exists, the existing customer is returned without modification.
+
+```typescript
+// First call creates the customer
+const customer1 = await autumn.customers.create({ id: 'user_123', email: 'test@example.com' });
+
+// Second call returns the existing customer
+const customer2 = await autumn.customers.create({ id: 'user_123', email: 'test@example.com' });
+
+// customer1.id === customer2.id
+```
+
+**Email-Only Customers**: When `id` is `null`, the email becomes the primary identifier. If a customer already exists with that email and a `null` ID, the existing customer is returned.
+
+```typescript
+const customer = await autumn.customers.create({
+  id: null,
+  email: 'customer@example.com'
+});
+```
+
+**Linking Existing Email**: If you provide an ID and an email that already exists with a `null` ID, Autumn will update that customer's ID to the one provided.
+
+## Related Resources
+
+- [Customers Concept](/concepts/customers) - Learn about customer management
+- [List Customers](/api/customers/list) - Retrieve all customers
+- [Get Customer](/api/customers/get) - Retrieve a specific customer
+- [Update Customer](/api/customers/update) - Update customer information
+- [Attach Plan](/api/attach) - Attach a subscription plan to a customer

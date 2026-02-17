@@ -1,0 +1,184 @@
+---
+title: 'Delete Product'
+api: 'DELETE /plans/{plan_id}'
+---
+
+Delete a product (plan). Products can only be deleted if no customers are currently attached to them.
+
+## Path Parameters
+
+<ParamField path="plan_id" type="string" required>
+  The unique identifier of the product to delete.
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="all_versions" type="boolean" default={false}>
+  If `true`, deletes all versions of the product. If `false`, only deletes the latest version.
+</ParamField>
+
+## Response
+
+Returns a success response if the product was deleted.
+
+<ResponseField name="success" type="boolean">
+  Always `true` if the deletion succeeded
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl --request DELETE \
+  --url https://api.autumn.com/v1/plans/pro \
+  --header 'Authorization: Bearer <token>'
+```
+
+```bash cURL (All Versions)
+curl --request DELETE \
+  --url 'https://api.autumn.com/v1/plans/pro?all_versions=true' \
+  --header 'Authorization: Bearer <token>'
+```
+
+```javascript Node.js
+const response = await fetch('https://api.autumn.com/v1/plans/pro', {
+  method: 'DELETE',
+  headers: {
+    'Authorization': 'Bearer <token>'
+  }
+});
+
+const result = await response.json();
+```
+
+```javascript Node.js (All Versions)
+const response = await fetch(
+  'https://api.autumn.com/v1/plans/pro?all_versions=true',
+  {
+    method: 'DELETE',
+    headers: {
+      'Authorization': 'Bearer <token>'
+    }
+  }
+);
+
+const result = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.delete(
+    'https://api.autumn.com/v1/plans/pro',
+    headers={'Authorization': 'Bearer <token>'}
+)
+
+result = response.json()
+```
+
+```python Python (All Versions)
+import requests
+
+response = requests.delete(
+    'https://api.autumn.com/v1/plans/pro',
+    headers={'Authorization': 'Bearer <token>'},
+    params={'all_versions': True}
+)
+
+result = response.json()
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json Response
+{
+  "success": true
+}
+```
+
+</ResponseExample>
+
+## Error Responses
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="message" type="string">
+      Human-readable error message
+    </ResponseField>
+    
+    <ResponseField name="code" type="string">
+      Machine-readable error code
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Common Errors
+
+- **400 Bad Request**: Product has active customers and cannot be deleted
+  ```json
+  {
+    "message": "Product pro has 5 customers (expired or active) on it and therefore cannot be deleted",
+    "code": "product_has_customers"
+  }
+  ```
+- **404 Not Found**: No product exists with the provided ID
+- **401 Unauthorized**: Invalid or missing API key
+- **403 Forbidden**: API key doesn't have permission to delete products
+- **500 Internal Server Error**: Something went wrong on Autumn's end
+
+## Deletion Behavior
+
+### Single Version Deletion (default)
+
+When `all_versions=false` or not provided:
+- Only the latest version is deleted
+- Older versions remain intact
+- Customers on older versions are unaffected
+- Fails if the latest version has any customers (active or expired)
+
+### All Versions Deletion
+
+When `all_versions=true`:
+- All versions of the product are deleted
+- The product ID becomes available for reuse
+- Fails if ANY version has customers (active or expired)
+- This is permanent and cannot be undone
+
+## Pre-Deletion Checklist
+
+Before deleting a product, ensure:
+
+1. No active customers are subscribed to any version
+2. No expired/cancelled subscriptions exist on any version
+3. You have removed or migrated all customer associations
+
+<Tip>
+To check if a product has customers before deletion, use `GET /plans/{plan_id}/has_customers` or check the dashboard.
+</Tip>
+
+## Notes
+
+- Deletion is permanent and cannot be undone
+- Products with historical customer data cannot be deleted - consider archiving instead
+- To hide a product without deleting it, use the update endpoint with `archived: true`
+- Deleting a product also deletes its associated prices and entitlements
+- See [Products & Plans](/concepts/products-and-plans) for more information
+
+## Alternative: Archiving
+
+If you want to hide a product but preserve it for existing customers:
+
+```bash
+curl --request POST \
+  --url https://api.autumn.com/v1/plans/pro \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{"archived": true}'
+```
+
+Archived products:
+- Are hidden from the dashboard and API list by default
+- Remain active for existing customers
+- Can be unarchived later
+- Don't accept new customers

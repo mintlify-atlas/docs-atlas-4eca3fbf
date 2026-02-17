@@ -1,0 +1,485 @@
+---
+title: "React SDK"
+description: "React hooks and components for client-side Autumn integration"
+---
+
+## Installation
+
+Install the Autumn JavaScript SDK which includes React support:
+
+<CodeGroup>
+```bash npm
+npm install autumn-js
+```
+
+```bash yarn
+yarn add autumn-js
+```
+
+```bash pnpm
+pnpm add autumn-js
+```
+
+```bash bun
+bun add autumn-js
+```
+</CodeGroup>
+
+## Setup
+
+### 1. Add the Provider
+
+Wrap your application with `AutumnProvider` to enable React hooks:
+
+```tsx App.tsx
+import { AutumnProvider } from 'autumn-js/react';
+
+function App() {
+  return (
+    <AutumnProvider
+      backendUrl="https://api.useautumn.com/v1"
+      publicKey="am_pk_test_..."
+    >
+      {/* Your app components */}
+    </AutumnProvider>
+  );
+}
+```
+
+### Provider Props
+
+<ParamField path="backendUrl" type="string" required>
+  Your Autumn API URL. Use `https://api.useautumn.com/v1` for production or your self-hosted URL.
+</ParamField>
+
+<ParamField path="publicKey" type="string">
+  Your Autumn public key for client-side authentication. Optional if using credential-based auth.
+</ParamField>
+
+<ParamField path="includeCredentials" type="boolean" default="false">
+  Set to `true` if using session-based authentication instead of API keys.
+</ParamField>
+
+### 2. Environment Variables
+
+Store your public key in environment variables:
+
+```bash .env
+VITE_AUTUMN_PUBLIC_KEY=am_pk_test_...
+VITE_AUTUMN_API_URL=https://api.useautumn.com/v1
+```
+
+Then reference in your provider:
+
+```tsx
+<AutumnProvider
+  backendUrl={import.meta.env.VITE_AUTUMN_API_URL}
+  publicKey={import.meta.env.VITE_AUTUMN_PUBLIC_KEY}
+>
+```
+
+## Using the Hook
+
+Access Autumn functions using the `useAutumn` hook:
+
+```tsx
+import { useAutumn } from 'autumn-js/react';
+
+function MyComponent() {
+  const { attach, check, track } = useAutumn();
+  
+  // Use attach, check, and track functions
+}
+```
+
+## Core Operations
+
+### Attach (Subscribe to Plans)
+
+Handle product subscriptions and upgrades:
+
+```tsx PricingCard.tsx
+import { useAutumn } from 'autumn-js/react';
+import { useState } from 'react';
+
+function PricingCard({ productId, customerId }) {
+  const { attach } = useAutumn();
+  const [loading, setLoading] = useState(false);
+
+  const handleSubscribe = async () => {
+    setLoading(true);
+    try {
+      const { data } = await attach({
+        customerId,
+        productId,
+        successUrl: window.location.origin + '/success',
+        cancelUrl: window.location.origin + '/pricing'
+      });
+      
+      // For new customers, data.url contains Stripe Checkout URL
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error) {
+      console.error('Subscription failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={handleSubscribe} disabled={loading}>
+      {loading ? 'Processing...' : 'Subscribe'}
+    </button>
+  );
+}
+```
+
+### Check (Verify Access)
+
+Check if a customer can access a feature:
+
+```tsx FeatureGate.tsx
+import { useAutumn } from 'autumn-js/react';
+import { useEffect, useState } from 'react';
+
+function FeatureGate({ customerId, featureId, children }) {
+  const { check } = useAutumn();
+  const [hasAccess, setHasAccess] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkAccess = async () => {
+      try {
+        const { data } = await check({ customerId, featureId });
+        setHasAccess(data.allowed);
+      } catch (error) {
+        console.error('Access check failed:', error);
+        setHasAccess(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAccess();
+  }, [customerId, featureId]);
+
+  if (loading) return <div>Checking access...</div>;
+  if (!hasAccess) return <div>Upgrade to access this feature</div>;
+  
+  return <>{children}</>;
+}
+```
+
+### Check with Usage Information
+
+Get remaining usage limits:
+
+```tsx UsageDisplay.tsx
+import { useAutumn } from 'autumn-js/react';
+import { useEffect, useState } from 'react';
+
+function UsageDisplay({ customerId, featureId }) {
+  const { check } = useAutumn();
+  const [usage, setUsage] = useState(null);
+
+  useEffect(() => {
+    const fetchUsage = async () => {
+      const { data } = await check({ 
+        customerId, 
+        featureId,
+        includeUsage: true 
+      });
+      
+      setUsage({
+        allowed: data.allowed,
+        remaining: data.remaining,
+        limit: data.limit,
+        used: data.used
+      });
+    };
+
+    fetchUsage();
+  }, [customerId, featureId]);
+
+  if (!usage) return null;
+
+  return (
+    <div>
+      <p>Used: {usage.used} / {usage.limit}</p>
+      <p>Remaining: {usage.remaining}</p>
+      {!usage.allowed && <p>Limit reached!</p>}
+    </div>
+  );
+}
+```
+
+### Track (Record Usage)
+
+Track feature consumption:
+
+```tsx ApiCallButton.tsx
+import { useAutumn } from 'autumn-js/react';
+
+function ApiCallButton({ customerId }) {
+  const { check, track } = useAutumn();
+
+  const handleApiCall = async () => {
+    // Check if customer has access
+    const { data } = await check({
+      customerId,
+      featureId: 'api_calls'
+    });
+
+    if (!data.allowed) {
+      alert('API limit reached. Please upgrade your plan.');
+      return;
+    }
+
+    // Perform the API call
+    await performApiOperation();
+
+    // Track the usage
+    await track({
+      customerId,
+      featureId: 'api_calls',
+      value: 1
+    });
+  };
+
+  return <button onClick={handleApiCall}>Make API Call</button>;
+}
+```
+
+## Advanced Patterns
+
+### Custom Hook for Feature Access
+
+Create a reusable hook for feature checks:
+
+```tsx useFeatureAccess.ts
+import { useAutumn } from 'autumn-js/react';
+import { useEffect, useState } from 'react';
+
+interface FeatureAccess {
+  allowed: boolean;
+  remaining?: number;
+  used?: number;
+  limit?: number;
+  loading: boolean;
+}
+
+export function useFeatureAccess(
+  customerId: string,
+  featureId: string
+): FeatureAccess {
+  const { check } = useAutumn();
+  const [access, setAccess] = useState<FeatureAccess>({
+    allowed: false,
+    loading: true
+  });
+
+  useEffect(() => {
+    const checkAccess = async () => {
+      try {
+        const { data } = await check({
+          customerId,
+          featureId,
+          includeUsage: true
+        });
+        
+        setAccess({
+          allowed: data.allowed,
+          remaining: data.remaining,
+          used: data.used,
+          limit: data.limit,
+          loading: false
+        });
+      } catch (error) {
+        setAccess({ allowed: false, loading: false });
+      }
+    };
+
+    checkAccess();
+  }, [customerId, featureId, check]);
+
+  return access;
+}
+```
+
+Usage:
+
+```tsx
+function MyComponent({ customerId }) {
+  const { allowed, remaining, loading } = useFeatureAccess(
+    customerId,
+    'api_calls'
+  );
+
+  if (loading) return <div>Loading...</div>;
+  
+  return (
+    <div>
+      {allowed ? (
+        <p>You have {remaining} API calls remaining</p>
+      ) : (
+        <p>Upgrade to continue using this feature</p>
+      )}
+    </div>
+  );
+}
+```
+
+### Checkout with Preview
+
+Show pricing preview before confirming subscription:
+
+```tsx CheckoutFlow.tsx
+import { useAutumn } from 'autumn-js/react';
+import { useState } from 'react';
+
+function CheckoutFlow({ customerId, productId }) {
+  const { checkout, attach } = useAutumn();
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleCheckout = async () => {
+    setLoading(true);
+    try {
+      const { data } = await checkout({ customerId, productId });
+      
+      if (data.url) {
+        // New customer - redirect to Stripe
+        window.location.href = data.url;
+      } else {
+        // Returning customer - show preview
+        setPreview(data);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      await attach({ customerId, productId });
+      // Subscription updated
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (preview) {
+    return (
+      <div>
+        <h3>Confirm Subscription Change</h3>
+        <p>Plan: {preview.product.name}</p>
+        <p>Price: {preview.total} {preview.currency}</p>
+        <button onClick={handleConfirm} disabled={loading}>
+          Confirm
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button onClick={handleCheckout} disabled={loading}>
+      {loading ? 'Processing...' : 'Subscribe'}
+    </button>
+  );
+}
+```
+
+## Type Safety
+
+The React SDK is fully typed with TypeScript:
+
+```tsx
+import type { CheckResult, AttachResult } from 'autumn-js';
+
+const { data }: { data: CheckResult } = await check({
+  customerId: 'user_123',
+  featureId: 'api_calls'
+});
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Environment Variables">
+    Never hardcode API keys. Always use environment variables:
+    
+    ```tsx
+    <AutumnProvider
+      publicKey={import.meta.env.VITE_AUTUMN_PUBLIC_KEY}
+      backendUrl={import.meta.env.VITE_AUTUMN_API_URL}
+    >
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Loading States">
+    Always show loading states while API calls are in progress:
+    
+    ```tsx
+    const [loading, setLoading] = useState(false);
+    
+    const handleAction = async () => {
+      setLoading(true);
+      try {
+        await autumn.track(...);
+      } finally {
+        setLoading(false);
+      }
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="Implement Error Handling">
+    Wrap SDK calls in try-catch blocks:
+    
+    ```tsx
+    try {
+      const { data } = await check({ customerId, featureId });
+    } catch (error) {
+      console.error('Check failed:', error);
+      // Show user-friendly error message
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Cache Feature Checks">
+    Use React Query or SWR to cache feature access checks:
+    
+    ```tsx
+    import { useQuery } from '@tanstack/react-query';
+    
+    function useFeatureCheck(customerId: string, featureId: string) {
+      const { check } = useAutumn();
+      
+      return useQuery({
+        queryKey: ['feature', customerId, featureId],
+        queryFn: () => check({ customerId, featureId }),
+        staleTime: 60000 // Cache for 1 minute
+      });
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Attach API" icon="link" href="/api/attach">
+    Learn more about the attach operation
+  </Card>
+  <Card title="Check API" icon="shield-check" href="/api/check">
+    Explore feature access checks
+  </Card>
+  <Card title="Track API" icon="chart-line" href="/api/track">
+    Learn about usage tracking
+  </Card>
+  <Card title="TypeScript SDK" icon="node" href="/sdks/typescript">
+    View the TypeScript/Node.js SDK
+  </Card>
+</CardGroup>

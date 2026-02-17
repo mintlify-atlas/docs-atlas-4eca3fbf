@@ -1,0 +1,170 @@
+---
+title: 'Get Feature'
+description: 'Retrieve a specific feature by ID'
+api: 'GET /v1/features/{feature_id}'
+---
+
+Retrieves detailed information about a specific feature.
+
+## Path Parameters
+
+<ParamField path="feature_id" type="string" required>
+  The unique identifier of the feature to retrieve.
+  
+  Example: `api_calls`
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string" required>
+  The unique identifier for the feature.
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  The human-readable name of the feature.
+</ResponseField>
+
+<ResponseField name="type" type="enum" required>
+  The type of the feature:
+  - `boolean` - Simple on/off feature flag
+  - `metered` - Usage-based feature with consumption tracking
+  - `credit_system` - Credit-based feature that unifies multiple metered features
+</ResponseField>
+
+<ResponseField name="consumable" type="boolean" required>
+  Whether the feature is consumable. Consumable features are depleted with usage (e.g., API calls, tokens). Non-consumable features are allocated (e.g., seats, projects).
+</ResponseField>
+
+<ResponseField name="display" type="object">
+  Display names for the feature in your user interface.
+  
+  <Expandable title="Display">
+    <ResponseField name="singular" type="string">
+      Singular form of the feature name (e.g., "credit", "seat").
+    </ResponseField>
+    
+    <ResponseField name="plural" type="string">
+      Plural form of the feature name (e.g., "credits", "seats").
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="event_names" type="array">
+  Array of event names that trigger usage tracking for this feature. When you call `/track` with one of these event names, usage will be recorded for this feature.
+</ResponseField>
+
+<ResponseField name="credit_schema" type="array">
+  Credit conversion schema. Only present for `credit_system` type features.
+  
+  <Expandable title="Credit Schema Item">
+    <ResponseField name="metered_feature_id" type="string" required>
+      The ID of the metered feature that consumes credits.
+    </ResponseField>
+    
+    <ResponseField name="credit_cost" type="number" required>
+      The number of credits consumed per unit of the metered feature.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="archived" type="boolean" required>
+  Whether the feature is archived. Archived features are hidden from the dashboard and list endpoints.
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://api.useautumn.com/v1/features/api_calls \
+  -H "Authorization: Bearer YOUR_SECRET_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.useautumn.com/v1/features/api_calls', {
+  headers: {
+    'Authorization': 'Bearer YOUR_SECRET_KEY'
+  }
+});
+
+const feature = await response.json();
+console.log(feature);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.useautumn.com/v1/features/api_calls',
+    headers={'Authorization': 'Bearer YOUR_SECRET_KEY'}
+)
+
+feature = response.json()
+print(feature)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 - Success (Metered)
+{
+  "id": "api_calls",
+  "name": "API Calls",
+  "type": "metered",
+  "consumable": true,
+  "display": {
+    "singular": "API call",
+    "plural": "API calls"
+  },
+  "event_names": ["api.call"],
+  "archived": false
+}
+```
+
+```json 200 - Success (Credit System)
+{
+  "id": "credits",
+  "name": "AI Credits",
+  "type": "credit_system",
+  "consumable": true,
+  "display": {
+    "singular": "credit",
+    "plural": "credits"
+  },
+  "credit_schema": [
+    {
+      "metered_feature_id": "gpt4_tokens",
+      "credit_cost": 10
+    },
+    {
+      "metered_feature_id": "gpt3_tokens",
+      "credit_cost": 1
+    }
+  ],
+  "archived": false
+}
+```
+
+```json 404 - Not Found
+{
+  "error": {
+    "message": "Feature with id 'api_calls' not found",
+    "code": "feature_not_found"
+  }
+}
+```
+
+```json 401 - Unauthorized
+{
+  "error": {
+    "message": "Invalid API key",
+    "code": "unauthorized"
+  }
+}
+```
+</ResponseExample>
+
+## Error Codes
+
+| Status Code | Error Code | Description |
+|------------|------------|-------------|
+| 401 | `unauthorized` | Invalid or missing API key |
+| 403 | `forbidden` | Insufficient permissions |
+| 404 | `feature_not_found` | The feature does not exist |
+| 500 | `internal_error` | An unexpected error occurred |

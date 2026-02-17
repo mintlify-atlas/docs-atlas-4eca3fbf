@@ -1,0 +1,138 @@
+---
+title: "List Balances"
+api: "GET /balances/list"
+description: "Retrieve all balances for a specific customer"
+---
+
+Retrieve all balances (customer entitlements) for a customer that are not tied to a specific product. These are standalone feature balances that can be granted independently.
+
+## Request
+
+<ParamField query="customer_id" type="string" required>
+  The unique identifier of the customer whose balances you want to retrieve.
+</ParamField>
+
+## Response
+
+<ResponseField name="balances" type="array">
+  An array of balance objects for the customer.
+
+  <Expandable title="Balance Object">
+    <ResponseField name="id" type="string">
+      Unique identifier for the customer entitlement (balance).
+    </ResponseField>
+
+    <ResponseField name="internal_customer_id" type="string">
+      Internal customer identifier.
+    </ResponseField>
+
+    <ResponseField name="entitlement_id" type="string">
+      The entitlement ID this balance belongs to.
+    </ResponseField>
+
+    <ResponseField name="granted_balance" type="number">
+      The total balance granted to the customer.
+    </ResponseField>
+
+    <ResponseField name="current_balance" type="number">
+      The current remaining balance.
+    </ResponseField>
+
+    <ResponseField name="unlimited" type="boolean">
+      Whether this balance is unlimited.
+    </ResponseField>
+
+    <ResponseField name="next_reset_at" type="number | null">
+      Unix timestamp (milliseconds) when the balance will next reset, or null if no reset is scheduled.
+    </ResponseField>
+
+    <ResponseField name="entitlement" type="object">
+      The entitlement details.
+
+      <Expandable title="Entitlement Object">
+        <ResponseField name="id" type="string">
+          Unique identifier for the entitlement.
+        </ResponseField>
+
+        <ResponseField name="feature" type="object">
+          The feature details.
+
+          <Expandable title="Feature Object">
+            <ResponseField name="id" type="string">
+              The feature ID.
+            </ResponseField>
+
+            <ResponseField name="name" type="string">
+              The feature name.
+            </ResponseField>
+
+            <ResponseField name="type" type="string">
+              The feature type (e.g., "metered", "boolean").
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="customer_product" type="object | null">
+      Associated customer product information, or null if not tied to a product.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```typescript TypeScript
+const response = await fetch('https://api.autumn.com/v1/balances/list?customer_id=cus_123', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  }
+});
+
+const data = await response.json();
+console.log(data.balances);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.autumn.com/v1/balances/list',
+    params={'customer_id': 'cus_123'},
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    }
+)
+
+data = response.json()
+print(data['balances'])
+```
+
+```bash cURL
+curl -X GET "https://api.autumn.com/v1/balances/list?customer_id=cus_123" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json"
+```
+</CodeGroup>
+
+## Error Handling
+
+<ResponseField name="400" type="error">
+  **Bad Request** - The customer_id parameter is missing or invalid.
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  **Unauthorized** - Invalid or missing API key.
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  **Not Found** - Customer with the specified ID does not exist.
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  **Internal Server Error** - An unexpected error occurred on the server.
+</ResponseField>

@@ -1,0 +1,123 @@
+---
+title: "List Invoices"
+api: "GET /customers/{customer_id}"
+description: "Retrieve invoices for a customer by expanding the customer object"
+---
+
+Retrieve all invoices for a customer by fetching the customer object with the `expand=invoices` parameter. Invoices are stored and managed through Stripe and contain billing information for subscriptions and purchases.
+
+## Request
+
+<ParamField path="customer_id" type="string" required>
+  The unique identifier of the customer whose invoices you want to retrieve.
+</ParamField>
+
+<ParamField query="expand" type="string" required>
+  Set to `invoices` to include the invoices array in the customer response.
+</ParamField>
+
+## Response
+
+Returns a customer object with an expanded `invoices` field containing an array of invoice objects.
+
+<ResponseField name="invoices" type="array">
+  An array of invoice objects for the customer.
+
+  <Expandable title="Invoice Object">
+    <ResponseField name="plan_ids" type="array">
+      Array of plan IDs included in this invoice.
+    </ResponseField>
+
+    <ResponseField name="stripe_id" type="string">
+      The Stripe invoice ID. Use this to retrieve the full invoice from Stripe.
+    </ResponseField>
+
+    <ResponseField name="status" type="string">
+      The status of the invoice. Common values: `draft`, `open`, `paid`, `void`, `uncollectible`.
+    </ResponseField>
+
+    <ResponseField name="total" type="number">
+      The total amount of the invoice in the smallest currency unit (e.g., cents for USD).
+    </ResponseField>
+
+    <ResponseField name="currency" type="string">
+      The three-letter ISO currency code (e.g., `usd`, `eur`).
+    </ResponseField>
+
+    <ResponseField name="created_at" type="number">
+      Unix timestamp (milliseconds) when the invoice was created.
+    </ResponseField>
+
+    <ResponseField name="hosted_invoice_url" type="string | null">
+      URL to the Stripe-hosted invoice page where customers can view and pay the invoice, or null if not available.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```typescript TypeScript
+const response = await fetch('https://api.autumn.com/v1/customers/cus_123?expand=invoices', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  }
+});
+
+const customer = await response.json();
+console.log(customer.invoices);
+
+// Access invoice details
+customer.invoices.forEach(invoice => {
+  console.log(`Invoice ${invoice.stripe_id}: $${invoice.total / 100} ${invoice.currency}`);
+  console.log(`Status: ${invoice.status}`);
+});
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.autumn.com/v1/customers/cus_123',
+    params={'expand': 'invoices'},
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    }
+)
+
+customer = response.json()
+print(customer['invoices'])
+
+# Access invoice details
+for invoice in customer['invoices']:
+    print(f"Invoice {invoice['stripe_id']}: ${invoice['total'] / 100} {invoice['currency']}")
+    print(f"Status: {invoice['status']}")
+```
+
+```bash cURL
+curl -X GET "https://api.autumn.com/v1/customers/cus_123?expand=invoices" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json"
+```
+</CodeGroup>
+
+## Error Handling
+
+<ResponseField name="400" type="error">
+  **Bad Request** - Invalid parameters or missing customer_id.
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  **Unauthorized** - Invalid or missing API key.
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  **Not Found** - Customer with the specified ID does not exist.
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  **Internal Server Error** - An unexpected error occurred on the server.
+</ResponseField>

@@ -1,0 +1,370 @@
+---
+title: "Analytics"
+description: "Monitor usage events and analyze feature consumption patterns"
+---
+
+The Analytics section helps you understand how customers are using your product by tracking events and visualizing usage patterns over time.
+
+## Events Overview
+
+Events represent actions tracked in your application through the `track` API:
+
+```typescript
+// Track a usage event
+await autumn.track({
+  customerId: "cus_123",
+  featureKey: "api-calls",
+  usage: 1,
+  properties: {
+    endpoint: "/api/users",
+    method: "GET",
+    responseTime: 245
+  }
+});
+```
+
+Each event contains:
+- **Event name** - Feature key or custom event identifier
+- **Customer ID** - Who performed the action
+- **Timestamp** - When the event occurred
+- **Usage** - Quantity consumed (for metered features)
+- **Properties** - Custom metadata about the event
+
+## Events Page
+
+Access the Events page from the main sidebar to view organization-wide event data:
+
+### Event List
+
+View recent events across all customers:
+
+- **Event name** - Type of event tracked
+- **Customer** - Customer who triggered the event
+- **Timestamp** - When the event occurred
+- **Usage** - Quantity tracked
+- **Properties** - Custom event metadata
+
+### Time Range Selection
+
+Filter events by time period:
+
+- **Last 7 days** - Recent usage
+- **Last 30 days** - Monthly trends
+- **Custom range** - Specific date range
+
+<Tip>
+  Use shorter time ranges (7 days) for real-time monitoring and longer ranges (30 days) for trend analysis.
+</Tip>
+
+### Event Details
+
+Click on any event to view the complete payload:
+
+```json
+{
+  "id": "evt_abc123",
+  "event_name": "api-calls",
+  "customer_id": "cus_123",
+  "timestamp": "2024-02-17T10:30:00Z",
+  "usage": 1,
+  "properties": {
+    "endpoint": "/api/users",
+    "method": "GET",
+    "responseTime": 245,
+    "statusCode": 200
+  },
+  "entity_id": "ent_workspace_456"
+}
+```
+
+## Customer Analytics
+
+Each customer page includes a dedicated Usage section with event analytics:
+
+### Event Table
+
+View events for a specific customer:
+
+- Filter by time range (7 days, 30 days)
+- See all tracked events chronologically
+- View event properties inline
+- Export data for external analysis
+
+**Dynamic columns:**
+
+The table automatically generates columns from event properties:
+
+- **Base columns** - Event name, timestamp, usage
+- **Property columns** - Custom properties appear as additional columns
+- **Column visibility** - Show/hide columns based on your needs
+
+<Note>
+  Property columns are generated dynamically based on the events in the selected time range. Common properties across multiple events appear as dedicated columns.
+</Note>
+
+### Usage Chart
+
+Visualize event frequency over time:
+
+- **Line chart** - Shows event count per day
+- **Multiple series** - Up to 5 event types displayed
+- **Hover details** - View exact counts for each day
+- **Time range sync** - Chart updates with table filters
+
+**Chart features:**
+- Color-coded lines for each event type
+- Automatic scaling based on data range
+- Responsive design for mobile and desktop
+- Interactive tooltips with detailed breakdowns
+
+<Tip>
+  Use the chart to identify usage spikes, growth trends, and potential issues. Sudden drops may indicate integration problems or customer churn.
+</Tip>
+
+## Event Properties
+
+Enhance events with custom properties for deeper insights:
+
+### Standard Properties
+
+Common properties for all events:
+
+- **customer_id** - Who triggered the event (required)
+- **feature_key** - What was used (required for metered features)
+- **usage** - Quantity consumed (defaults to 1)
+- **timestamp** - When it occurred (defaults to now)
+- **entity_id** - Which workspace/project (for multi-tenant apps)
+
+### Custom Properties
+
+Add any JSON-serializable data:
+
+```typescript
+// Track an API call with detailed properties
+await autumn.track({
+  customerId: "cus_123",
+  featureKey: "api-calls",
+  usage: 1,
+  properties: {
+    // Request details
+    endpoint: "/api/users",
+    method: "GET",
+    
+    // Performance metrics
+    responseTime: 245,
+    cacheHit: true,
+    
+    // User context
+    userId: "usr_456",
+    ipAddress: "192.168.1.1",
+    
+    // Business data
+    plan: "pro",
+    billingRegion: "us-east"
+  }
+});
+```
+
+**Best practices for properties:**
+- Use consistent naming conventions (camelCase or snake_case)
+- Keep property names descriptive but concise
+- Avoid deeply nested objects
+- Don't include sensitive data (passwords, tokens, etc.)
+- Use numbers for metrics that you may want to aggregate
+
+<Warning>
+  Event properties are stored as-is and cannot be modified after the event is created. Ensure you're not logging sensitive information.
+</Warning>
+
+## Aggregated Analytics
+
+Autumn automatically aggregates events for performance:
+
+### Pre-aggregated Data
+
+For timeseries charts, Autumn uses pre-computed aggregations:
+
+- **Daily rollups** - Event counts per day
+- **Feature breakdowns** - Usage by feature type
+- **Customer segments** - Aggregates by customer groups
+
+**Benefits:**
+- Fast chart rendering
+- Reduced database load
+- Historical data always available
+
+### Raw Events
+
+For detailed analysis, access raw event data:
+
+- **Event table** - Shows individual events
+- **Full properties** - All custom metadata
+- **Exact timestamps** - Precise timing information
+
+<Note>
+  Raw events are retained based on your plan. Contact support to increase retention period or export historical data.
+</Note>
+
+## Use Cases
+
+### Monitor API Usage
+
+Track API calls and identify heavy users:
+
+```typescript
+// Track every API request
+await autumn.track({
+  customerId: req.customerId,
+  featureKey: "api-calls",
+  usage: 1,
+  properties: {
+    endpoint: req.path,
+    method: req.method,
+    statusCode: res.statusCode,
+    responseTime: res.duration
+  }
+});
+```
+
+**Dashboard benefits:**
+- See which endpoints are most popular
+- Identify customers approaching limits
+- Detect unusual usage patterns
+- Optimize infrastructure based on trends
+
+### Track Feature Adoption
+
+Measure how customers use different features:
+
+```typescript
+// Track feature usage
+await autumn.track({
+  customerId: user.id,
+  featureKey: "exports",
+  usage: 1,
+  properties: {
+    format: "csv",
+    rowCount: 1500,
+    fileSize: 245000
+  }
+});
+```
+
+**Dashboard benefits:**
+- See which features are most valuable
+- Identify underutilized features
+- Validate product roadmap decisions
+- Calculate feature ROI
+
+### Analyze User Behavior
+
+Understand customer workflows:
+
+```typescript
+// Track user actions
+await autumn.track({
+  customerId: user.id,
+  featureKey: "document-created",
+  usage: 1,
+  properties: {
+    template: "invoice",
+    collaborators: 3,
+    automationEnabled: true
+  }
+});
+```
+
+**Dashboard benefits:**
+- Identify power users
+- Understand common workflows
+- Detect friction points
+- Personalize onboarding
+
+## Event Filtering
+
+Filter events to focus on specific data:
+
+### By Customer
+
+View events for a single customer:
+- Navigate to customer page
+- Scroll to Usage Analytics section
+- Events are automatically filtered
+
+### By Time Range
+
+Adjust the time window:
+- Select 7 days for recent activity
+- Select 30 days for monthly trends
+- Use custom ranges for specific periods
+
+### By Event Type
+
+Focus on specific features:
+- Use column visibility to show relevant properties
+- Sort by event name to group similar events
+- Click event names to filter (coming soon)
+
+## Performance Considerations
+
+### Retention Periods
+
+Event data is retained based on your plan:
+
+- **Sandbox** - 30 days
+- **Starter** - 90 days
+- **Pro** - 1 year
+- **Enterprise** - Custom retention
+
+<Tip>
+  Export historical data regularly if you need longer retention than your plan provides.
+</Tip>
+
+### Query Optimization
+
+For best performance:
+
+- Use shorter time ranges when possible
+- Limit custom properties to essential data
+- Avoid deeply nested property objects
+- Batch track calls when tracking multiple events
+
+## Best Practices
+
+### Event Naming
+
+- Use descriptive, action-based names: `api-call`, `export-created`, `user-login`
+- Use kebab-case for consistency
+- Match feature keys for metered features
+- Avoid generic names like `event` or `action`
+
+### Property Design
+
+- Include context that helps explain the event
+- Use consistent types (always string, always number, etc.)
+- Flatten nested objects when possible
+- Document property meanings for your team
+
+### Monitoring Strategy
+
+- Check analytics daily for unusual patterns
+- Set up alerts for usage anomalies (via webhooks)
+- Review customer usage before renewal dates
+- Use trends to inform product decisions
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Track API" icon="chart-line" href="/api/track">
+    Track usage events programmatically
+  </Card>
+  <Card title="Events API" icon="list" href="/api/events/list">
+    Query events via API
+  </Card>
+  <Card title="Metered Features" icon="gauge" href="/guides/metered-features">
+    Learn about usage-based features
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Get real-time event notifications
+  </Card>
+</CardGroup>

@@ -1,0 +1,348 @@
+---
+title: 'Create Product'
+api: 'POST /plans'
+---
+
+Create a new product (plan) with features and pricing.
+
+## Request Body
+
+<ParamField body="id" type="string" required>
+  Unique identifier for the product. Must match the pattern `/^[a-zA-Z0-9_-]+$/`. Used to reference this product in other API calls.
+  
+  <Note>Product IDs are permanent and cannot be changed after creation.</Note>
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Display name of the product shown to customers.
+</ParamField>
+
+<ParamField body="description" type="string | null" optional>
+  Optional description of the product and what it includes.
+</ParamField>
+
+<ParamField body="add_on" type="boolean" default={false}>
+  Whether this is an add-on product. Add-ons can be attached multiple times and bypass upgrade/downgrade flows.
+</ParamField>
+
+<ParamField body="auto_enable" type="boolean" default={false}>
+  Whether to automatically enable this product for new customers.
+</ParamField>
+
+<ParamField body="group" type="string" default="">
+  Product group name. Products in the same group have upgrade/downgrade logic when customers switch between them.
+</ParamField>
+
+<ParamField body="price" type="object" optional>
+  Base subscription price for this product.
+  
+  <Expandable title="Price Object">
+    <ParamField body="amount" type="number" required>
+      Price amount in cents (e.g., 2900 for $29.00)
+    </ParamField>
+    
+    <ParamField body="interval" type="string" required>
+      Billing interval: `month`, `year`, `week`, or `day`
+    </ParamField>
+    
+    <ParamField body="interval_count" type="number" optional>
+      Number of intervals between billings. For example, `interval=month` and `interval_count=3` bills every 3 months.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="items" type="array" optional>
+  Array of product items defining features and their pricing/limits.
+  
+  <Expandable title="Product Item Object">
+    <ParamField body="feature_id" type="string" required>
+      ID of the feature to include. Feature must already exist.
+    </ParamField>
+    
+    <ParamField body="granted_balance" type="number" optional>
+      Amount of usage granted for metered features. For boolean features, use 1 to grant access.
+    </ParamField>
+    
+    <ParamField body="unlimited" type="boolean" optional>
+      Set to `true` for unlimited usage of this feature.
+    </ParamField>
+    
+    <ParamField body="reset" type="object" optional>
+      Reset configuration for metered features.
+      
+      <Expandable title="Reset Object">
+        <ParamField body="interval" type="string" required>
+          Reset interval: `month`, `year`, `week`, or `day`
+        </ParamField>
+        
+        <ParamField body="interval_count" type="number" optional>
+          Number of intervals between resets
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField body="price" type="object" optional>
+      Pricing for additional usage beyond included amount.
+      
+      <Expandable title="Usage Price Object">
+        <ParamField body="amount" type="number" optional>
+          Price per unit (mutually exclusive with `tiers`)
+        </ParamField>
+        
+        <ParamField body="tiers" type="array" optional>
+          Tiered pricing configuration (mutually exclusive with `amount`)
+        </ParamField>
+        
+        <ParamField body="interval" type="string" required>
+          Billing interval: `month`, `year`, `week`, or `day`
+        </ParamField>
+        
+        <ParamField body="interval_count" type="number" optional>
+          Number of intervals between billings
+        </ParamField>
+        
+        <ParamField body="billing_units" type="number" required>
+          Number of units to bill at once
+        </ParamField>
+        
+        <ParamField body="usage_model" type="string" required>
+          Usage billing model: `pay_per_use`, `pay_in_advance`, or `package`
+        </ParamField>
+        
+        <ParamField body="max_purchase" type="number | null" optional>
+          Maximum units that can be purchased
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField body="rollover" type="object" optional>
+      Configuration for rolling over unused usage to the next period.
+    </ParamField>
+    
+    <ParamField body="proration" type="object" optional>
+      Proration behavior when changing plans mid-cycle.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="free_trial" type="object" optional>
+  Free trial configuration for this product.
+  
+  <Expandable title="Free Trial Object">
+    <ParamField body="duration_length" type="number" required>
+      Length of the trial period
+    </ParamField>
+    
+    <ParamField body="duration_type" type="string" default="month">
+      Unit of duration: `day`, `week`, `month`, or `year`
+    </ParamField>
+    
+    <ParamField body="card_required" type="boolean" default={true}>
+      Whether a payment method is required to start the trial
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<RequestExample>
+
+```bash cURL
+curl --request POST \
+  --url https://api.autumn.com/v1/plans \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "id": "pro",
+    "name": "Pro Plan",
+    "description": "For growing teams",
+    "add_on": false,
+    "auto_enable": false,
+    "group": "main",
+    "price": {
+      "amount": 2900,
+      "interval": "month"
+    },
+    "items": [
+      {
+        "feature_id": "api_calls",
+        "granted_balance": 10000,
+        "reset": {
+          "interval": "month"
+        },
+        "price": {
+          "amount": 0.01,
+          "interval": "month",
+          "billing_units": 1,
+          "usage_model": "pay_per_use"
+        }
+      }
+    ],
+    "free_trial": {
+      "duration_length": 14,
+      "duration_type": "day",
+      "card_required": true
+    }
+  }'
+```
+
+```javascript Node.js
+const response = await fetch('https://api.autumn.com/v1/plans', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer <token>',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    id: 'pro',
+    name: 'Pro Plan',
+    description: 'For growing teams',
+    add_on: false,
+    auto_enable: false,
+    group: 'main',
+    price: {
+      amount: 2900,
+      interval: 'month'
+    },
+    items: [
+      {
+        feature_id: 'api_calls',
+        granted_balance: 10000,
+        reset: { interval: 'month' },
+        price: {
+          amount: 0.01,
+          interval: 'month',
+          billing_units: 1,
+          usage_model: 'pay_per_use'
+        }
+      }
+    ],
+    free_trial: {
+      duration_length: 14,
+      duration_type: 'day',
+      card_required: true
+    }
+  })
+});
+
+const product = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.autumn.com/v1/plans',
+    headers={
+        'Authorization': 'Bearer <token>',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'id': 'pro',
+        'name': 'Pro Plan',
+        'description': 'For growing teams',
+        'add_on': False,
+        'auto_enable': False,
+        'group': 'main',
+        'price': {
+            'amount': 2900,
+            'interval': 'month'
+        },
+        'items': [
+            {
+                'feature_id': 'api_calls',
+                'granted_balance': 10000,
+                'reset': {'interval': 'month'},
+                'price': {
+                    'amount': 0.01,
+                    'interval': 'month',
+                    'billing_units': 1,
+                    'usage_model': 'pay_per_use'
+                }
+            }
+        ],
+        'free_trial': {
+            'duration_length': 14,
+            'duration_type': 'day',
+            'card_required': True
+        }
+    }
+)
+
+product = response.json()
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json Response
+{
+  "id": "pro",
+  "name": "Pro Plan",
+  "description": "For growing teams",
+  "group": "main",
+  "version": 1,
+  "add_on": false,
+  "default": false,
+  "price": {
+    "amount": 2900,
+    "interval": "month",
+    "interval_count": 1
+  },
+  "features": [
+    {
+      "feature_id": "api_calls",
+      "granted_balance": 10000,
+      "unlimited": false,
+      "reset": {
+        "interval": "month",
+        "interval_count": 1,
+        "reset_when_enabled": true
+      },
+      "price": {
+        "amount": 0.01,
+        "interval": "month",
+        "interval_count": 1,
+        "billing_units": 1,
+        "usage_model": "pay_per_use",
+        "max_purchase": null
+      }
+    }
+  ],
+  "free_trial": {
+    "duration_length": 14,
+    "duration_type": "day",
+    "card_required": true
+  },
+  "created_at": 1640995200,
+  "env": "production",
+  "archived": false,
+  "base_variant_id": null
+}
+```
+
+</ResponseExample>
+
+## Response
+
+Returns the created product object if successful.
+
+## Error Responses
+
+### Common Errors
+
+- **400 Bad Request**: Invalid request body or parameters
+  - Product ID already exists
+  - Invalid ID format (must match `/^[a-zA-Z0-9_-]+$/`)
+  - Referenced feature doesn't exist
+  - Invalid pricing configuration
+- **401 Unauthorized**: Invalid or missing API key
+- **403 Forbidden**: API key doesn't have permission to create products
+- **500 Internal Server Error**: Something went wrong on Autumn's end
+
+## Notes
+
+- Features referenced in `items` must be created before the product
+- Product IDs are permanent and cannot be changed
+- When customers are attached to this product, updating it will create a new version
+- See the [Products & Plans](/concepts/products-and-plans) guide for best practices
+- For usage-based billing details, see [Usage-Based Billing](/guides/usage-based-billing)

@@ -1,0 +1,167 @@
+---
+title: 'List Features'
+description: 'Retrieve all features in your organization'
+api: 'GET /v1/features'
+---
+
+Returns a list of all features configured in your organization. Features define the capabilities and limits of your products.
+
+## Response
+
+<ResponseField name="list" type="array" required>
+  Array of feature objects
+  
+  <Expandable title="Feature Object">
+    <ResponseField name="id" type="string" required>
+      The unique identifier for the feature. Used to reference the feature in other API calls like `/track` or `/check`.
+    </ResponseField>
+    
+    <ResponseField name="name" type="string" required>
+      The human-readable name of the feature.
+    </ResponseField>
+    
+    <ResponseField name="type" type="enum" required>
+      The type of the feature. Possible values:
+      - `boolean` - Simple on/off feature flag
+      - `metered` - Usage-based feature with consumption tracking
+      - `credit_system` - Credit-based feature that unifies multiple metered features
+    </ResponseField>
+    
+    <ResponseField name="consumable" type="boolean" required>
+      Whether the feature is consumable. Consumable features are depleted with usage (e.g., API calls, tokens). Non-consumable features are allocated (e.g., seats, projects).
+    </ResponseField>
+    
+    <ResponseField name="display" type="object">
+      Display names for the feature in your user interface.
+      
+      <Expandable title="Display">
+        <ResponseField name="singular" type="string">
+          Singular form of the feature name (e.g., "credit", "seat").
+        </ResponseField>
+        
+        <ResponseField name="plural" type="string">
+          Plural form of the feature name (e.g., "credits", "seats").
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="event_names" type="array">
+      Array of event names that trigger usage tracking for this feature.
+    </ResponseField>
+    
+    <ResponseField name="credit_schema" type="array">
+      Credit conversion schema. Only applicable for `credit_system` type features.
+      
+      <Expandable title="Credit Schema Item">
+        <ResponseField name="metered_feature_id" type="string" required>
+          The ID of the metered feature that consumes credits.
+        </ResponseField>
+        
+        <ResponseField name="credit_cost" type="number" required>
+          The number of credits consumed per unit of the metered feature.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="archived" type="boolean" required>
+      Whether the feature is archived. Archived features are hidden from the dashboard and list endpoints.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://api.useautumn.com/v1/features \
+  -H "Authorization: Bearer YOUR_SECRET_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.useautumn.com/v1/features', {
+  headers: {
+    'Authorization': 'Bearer YOUR_SECRET_KEY'
+  }
+});
+
+const data = await response.json();
+console.log(data.list);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.useautumn.com/v1/features',
+    headers={'Authorization': 'Bearer YOUR_SECRET_KEY'}
+)
+
+features = response.json()['list']
+print(features)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 - Success
+{
+  "list": [
+    {
+      "id": "api_calls",
+      "name": "API Calls",
+      "type": "metered",
+      "consumable": true,
+      "display": {
+        "singular": "API call",
+        "plural": "API calls"
+      },
+      "event_names": ["api.call"],
+      "archived": false
+    },
+    {
+      "id": "seats",
+      "name": "Team Seats",
+      "type": "metered",
+      "consumable": false,
+      "display": {
+        "singular": "seat",
+        "plural": "seats"
+      },
+      "event_names": [],
+      "archived": false
+    },
+    {
+      "id": "credits",
+      "name": "AI Credits",
+      "type": "credit_system",
+      "consumable": true,
+      "credit_schema": [
+        {
+          "metered_feature_id": "gpt4_tokens",
+          "credit_cost": 10
+        },
+        {
+          "metered_feature_id": "gpt3_tokens",
+          "credit_cost": 1
+        }
+      ],
+      "archived": false
+    }
+  ]
+}
+```
+
+```json 401 - Unauthorized
+{
+  "error": {
+    "message": "Invalid API key",
+    "code": "unauthorized"
+  }
+}
+```
+</ResponseExample>
+
+## Error Codes
+
+| Status Code | Error Code | Description |
+|------------|------------|-------------|
+| 401 | `unauthorized` | Invalid or missing API key |
+| 403 | `forbidden` | Insufficient permissions |
+| 500 | `internal_error` | An unexpected error occurred |

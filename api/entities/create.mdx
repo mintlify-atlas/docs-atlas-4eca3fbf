@@ -1,0 +1,373 @@
+---
+title: "Create Entity"
+description: "Create a new entity for a customer"
+---
+
+## Overview
+
+Create one or more entities for a customer. Entities represent individual instances of metered features, such as users, projects, or API keys. You can create a single entity or multiple entities in one request.
+
+## Endpoint
+
+```
+POST /customers/{customer_id}/entities
+```
+
+## Path Parameters
+
+<ParamField path="customer_id" type="string" required>
+  The unique identifier of the customer who will own the entity
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="with_autumn_id" type="boolean" default="false">
+  Include internal Autumn ID in the response
+</ParamField>
+
+<ParamField query="from_auto_create" type="boolean" default="false">
+  Internal flag indicating if the entity was auto-created
+</ParamField>
+
+## Body Parameters
+
+You can provide either a single entity object or an array of entity objects.
+
+<ParamField body="id" type="string" required>
+  The unique identifier for the entity. Can be a string or number (numbers are automatically converted to strings).
+</ParamField>
+
+<ParamField body="name" type="string">
+  The name of the entity (e.g., user's display name)
+</ParamField>
+
+<ParamField body="feature_id" type="string" required>
+  The ID of the feature this entity is associated with
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Additional customer data to update when creating the entity
+  
+  <Expandable title="Customer data object">
+    <ParamField body="name" type="string">
+      Customer's name
+    </ParamField>
+    
+    <ParamField body="email" type="string">
+      Customer's email address
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response
+
+### Single Entity
+
+When creating a single entity, returns the created entity object.
+
+<ResponseField name="id" type="string">
+  The unique identifier of the entity
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The name of the entity
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  The customer ID this entity belongs to
+</ResponseField>
+
+<ResponseField name="feature_id" type="string">
+  The feature ID this entity belongs to
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp when the entity was created
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  The environment (sandbox/live)
+</ResponseField>
+
+<ResponseField name="autumn_id" type="string" optional>
+  Internal Autumn identifier (only included when `with_autumn_id=true`)
+</ResponseField>
+
+<ResponseField name="subscriptions" type="array" optional>
+  Plans associated with this entity
+</ResponseField>
+
+<ResponseField name="scheduled_subscriptions" type="array">
+  Scheduled subscriptions for this entity
+</ResponseField>
+
+<ResponseField name="balances" type="object" optional>
+  Features associated with this entity
+</ResponseField>
+
+### Multiple Entities
+
+When creating multiple entities (array request), returns an object with a list of created entities.
+
+<ResponseField name="list" type="array">
+  Array of created entity objects (same structure as single entity above)
+</ResponseField>
+
+## Example Request
+
+### Single Entity
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/customers/cus_123/entities \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "user_001",
+    "name": "John Doe",
+    "feature_id": "feat_users"
+  }'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  'https://api.autumnhq.com/v1/customers/cus_123/entities',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      id: 'user_001',
+      name: 'John Doe',
+      feature_id: 'feat_users'
+    })
+  }
+);
+
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.autumnhq.com/v1/customers/cus_123/entities',
+    headers={'Authorization': 'Bearer YOUR_API_KEY'},
+    json={
+        'id': 'user_001',
+        'name': 'John Doe',
+        'feature_id': 'feat_users'
+    }
+)
+
+data = response.json()
+```
+</CodeGroup>
+
+### Multiple Entities
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/customers/cus_123/entities \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "id": "user_001",
+      "name": "John Doe",
+      "feature_id": "feat_users"
+    },
+    {
+      "id": "user_002",
+      "name": "Jane Smith",
+      "feature_id": "feat_users"
+    }
+  ]'
+```
+
+```typescript TypeScript
+const response = await fetch(
+  'https://api.autumnhq.com/v1/customers/cus_123/entities',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify([
+      {
+        id: 'user_001',
+        name: 'John Doe',
+        feature_id: 'feat_users'
+      },
+      {
+        id: 'user_002',
+        name: 'Jane Smith',
+        feature_id: 'feat_users'
+      }
+    ])
+  }
+);
+
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.autumnhq.com/v1/customers/cus_123/entities',
+    headers={'Authorization': 'Bearer YOUR_API_KEY'},
+    json=[
+        {
+            'id': 'user_001',
+            'name': 'John Doe',
+            'feature_id': 'feat_users'
+        },
+        {
+            'id': 'user_002',
+            'name': 'Jane Smith',
+            'feature_id': 'feat_users'
+        }
+    ]
+)
+
+data = response.json()
+```
+</CodeGroup>
+
+## Example Response
+
+### Single Entity Response
+
+```json
+{
+  "id": "user_001",
+  "name": "John Doe",
+  "customer_id": "cus_123",
+  "feature_id": "feat_users",
+  "created_at": 1708185600,
+  "env": "live",
+  "scheduled_subscriptions": [],
+  "balances": {}
+}
+```
+
+### Multiple Entities Response
+
+```json
+{
+  "list": [
+    {
+      "id": "user_001",
+      "name": "John Doe",
+      "customer_id": "cus_123",
+      "feature_id": "feat_users",
+      "created_at": 1708185600,
+      "env": "live",
+      "scheduled_subscriptions": [],
+      "balances": {}
+    },
+    {
+      "id": "user_002",
+      "name": "Jane Smith",
+      "customer_id": "cus_123",
+      "feature_id": "feat_users",
+      "created_at": 1708185601,
+      "env": "live",
+      "scheduled_subscriptions": [],
+      "balances": {}
+    }
+  ]
+}
+```
+
+## Error Responses
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error object">
+    <ResponseField name="message" type="string">
+      Human-readable error message
+    </ResponseField>
+    
+    <ResponseField name="code" type="string">
+      Machine-readable error code
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Common Errors
+
+<AccordionGroup>
+  <Accordion title="404 - Customer Not Found">
+    ```json
+    {
+      "message": "Customer not found",
+      "code": "customer_not_found"
+    }
+    ```
+    
+    The specified customer ID does not exist.
+  </Accordion>
+  
+  <Accordion title="404 - Feature Not Found">
+    ```json
+    {
+      "message": "Feature not found",
+      "code": "feature_not_found"
+    }
+    ```
+    
+    The specified feature ID does not exist.
+  </Accordion>
+  
+  <Accordion title="409 - Entity Already Exists">
+    ```json
+    {
+      "message": "Entity user_001 already exists",
+      "code": "entity_already_exists"
+    }
+    ```
+    
+    An entity with the specified ID already exists for this customer and feature.
+  </Accordion>
+  
+  <Accordion title="400 - Invalid Request">
+    ```json
+    {
+      "message": "Invalid request body",
+      "code": "invalid_request"
+    }
+    ```
+    
+    The request body is malformed or missing required fields.
+  </Accordion>
+  
+  <Accordion title="401 - Unauthorized">
+    ```json
+    {
+      "message": "Invalid or missing API key",
+      "code": "unauthorized"
+    }
+    ```
+    
+    Your API key is either missing or invalid.
+  </Accordion>
+</AccordionGroup>
+
+## Notes
+
+- Entity IDs must be unique within a customer and feature combination
+- Numeric IDs are automatically converted to strings
+- When creating multiple entities, the operation is atomic - either all succeed or all fail
+- Creating an entity may trigger webhook events for related subscriptions
+
+## Related Resources
+
+- [List Entities](/api/entities/list)
+- [Get Entity](/api/entities/get)
+- [Delete Entity](/api/entities/delete)
+- [Entities Concept](/concepts/entities)
+- [Track Usage](/api/track)

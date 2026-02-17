@@ -1,0 +1,250 @@
+---
+title: 'Cancel Product'
+api: 'POST /cancel'
+description: "Cancel a customer's subscription to a product"
+---
+
+## Overview
+
+The cancel endpoint cancels a customer's subscription to a product. You can choose to cancel immediately or at the end of the current billing period. Optionally, you can prorate the cancellation to issue refunds or credits.
+
+## Authentication
+
+This endpoint requires API key authentication. Include your API key in the request header:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer.
+
+  ```json
+  "cus_123"
+  ```
+</ParamField>
+
+<ParamField body="product_id" type="string" required>
+  The ID of the product to cancel.
+
+  ```json
+  "pro_plan"
+  ```
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  The ID of the entity (optional). Use when canceling entity-scoped subscriptions.
+
+  ```json
+  "entity_123"
+  ```
+</ParamField>
+
+<ParamField body="cancel_immediately" type="boolean">
+  Whether to cancel the product immediately or at period end.
+  
+  - `true` - Cancel immediately and revoke access
+  - `false` (default) - Cancel at the end of the current billing period
+
+  ```json
+  false
+  ```
+</ParamField>
+
+<ParamField body="prorate" type="boolean">
+  Whether to prorate the cancellation. Defaults to `true` if not specified.
+  
+  - `true` (default) - Calculate and refund/credit unused time
+  - `false` - No refund, customer keeps access until period end
+
+  ```json
+  true
+  ```
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Whether the cancellation was successful.
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  The ID of the customer.
+</ResponseField>
+
+<ResponseField name="product_id" type="string">
+  The ID of the canceled product.
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL - End of Period
+curl -X POST https://api.useautumn.com/cancel \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "product_id": "pro_plan",
+    "cancel_immediately": false
+  }'
+```
+
+```bash cURL - Immediate
+curl -X POST https://api.useautumn.com/cancel \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "product_id": "pro_plan",
+    "cancel_immediately": true,
+    "prorate": true
+  }'
+```
+
+```typescript TypeScript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
+
+// Cancel at end of period
+const result = await autumn.cancel({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan',
+  cancel_immediately: false
+});
+
+console.log(result);
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key='YOUR_API_KEY')
+
+# Cancel immediately with proration
+result = autumn.cancel(
+  customer_id='cus_123',
+  product_id='pro_plan',
+  cancel_immediately=True,
+  prorate=True
+)
+
+print(result)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "customer_id": "cus_123",
+  "product_id": "pro_plan"
+}
+```
+
+## Cancellation Behavior
+
+### Cancel at Period End (Recommended)
+
+When `cancel_immediately: false`, the subscription is marked for cancellation but the customer retains access until the end of their current billing period.
+
+```json
+{
+  "customer_id": "cus_123",
+  "product_id": "pro_plan",
+  "cancel_immediately": false
+}
+```
+
+**Behavior:**
+- Customer keeps access until billing period ends
+- No immediate refund
+- Subscription will not renew
+- Customer is not charged again
+
+### Cancel Immediately
+
+When `cancel_immediately: true`, access is revoked immediately.
+
+```json
+{
+  "customer_id": "cus_123",
+  "product_id": "pro_plan",
+  "cancel_immediately": true,
+  "prorate": true
+}
+```
+
+**Behavior:**
+- Access is revoked immediately
+- If `prorate: true`, unused time is refunded or credited
+- If `prorate: false`, no refund is issued
+
+## Proration Examples
+
+### With Proration
+
+If a customer paid $100 for a monthly subscription and cancels halfway through:
+
+```json
+{
+  "customer_id": "cus_123",
+  "product_id": "pro_plan",
+  "cancel_immediately": true,
+  "prorate": true
+}
+```
+
+The customer receives a $50 credit or refund for the unused 15 days.
+
+### Without Proration
+
+```json
+{
+  "customer_id": "cus_123",
+  "product_id": "pro_plan",
+  "cancel_immediately": true,
+  "prorate": false
+}
+```
+
+The customer receives no refund, but access is still revoked immediately.
+
+## Error Responses
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="code" type="string">
+      Error code identifying the type of error.
+      
+      Common error codes:
+      - `customer_not_found` - The specified customer does not exist
+      - `product_not_found` - The specified product does not exist
+      - `subscription_not_found` - Customer is not subscribed to this product
+      - `already_canceled` - Subscription is already canceled
+      - `cancellation_failed` - Failed to cancel subscription
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Human-readable error message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Webhooks
+
+When a subscription is canceled, the following webhooks are triggered:
+
+- `subscription.canceled` - Fired when cancellation is scheduled
+- `subscription.deleted` - Fired when subscription ends (immediately or at period end)
+
+See the [Webhooks guide](/guides/webhooks) for handling these events.
+
+## Related Endpoints
+
+- [Attach](/api/attach) - Enable products for customers
+- [Checkout](/api/checkout) - Create checkout sessions for product purchases
+- [Products List](/api/products/list) - View available products

@@ -1,0 +1,640 @@
+---
+title: "TypeScript SDK"
+description: "Full-featured SDK for Node.js and TypeScript server applications"
+---
+
+## Installation
+
+Install the Autumn SDK using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install autumn-js
+```
+
+```bash yarn
+yarn add autumn-js
+```
+
+```bash pnpm
+pnpm add autumn-js
+```
+
+```bash bun
+bun add autumn-js
+```
+</CodeGroup>
+
+## Quick Start
+
+### 1. Initialize the Client
+
+Create an Autumn client instance with your secret key:
+
+```typescript index.ts
+import Autumn from 'autumn-js';
+
+const autumn = new Autumn({
+  secretKey: process.env.AUTUMN_SECRET_KEY, // am_sk_...
+  baseUrl: 'https://api.useautumn.com/v1' // Optional, defaults to production
+});
+```
+
+### 2. Configuration Options
+
+<ParamField path="secretKey" type="string" required>
+  Your Autumn secret key for server-side authentication. Get this from your [dashboard](https://app.useautumn.com).
+</ParamField>
+
+<ParamField path="baseUrl" type="string" default="https://api.useautumn.com/v1">
+  The Autumn API base URL. Use this for self-hosted instances.
+</ParamField>
+
+### 3. Environment Setup
+
+Store your secret key securely:
+
+```bash .env
+AUTUMN_SECRET_KEY=am_sk_test_...
+```
+
+<Warning>
+  Never commit secret keys to version control. Always use environment variables or secret management services.
+</Warning>
+
+## Core Operations
+
+### Attach (Subscribe Customers)
+
+Subscribe customers to products and plans:
+
+```typescript billing.ts
+import Autumn from 'autumn-js';
+
+const autumn = new Autumn({
+  secretKey: process.env.AUTUMN_SECRET_KEY
+});
+
+// Subscribe a customer to a product
+const { data } = await autumn.attach({
+  customerId: 'user_123',
+  productId: 'pro_plan',
+  successUrl: 'https://yourapp.com/success',
+  cancelUrl: 'https://yourapp.com/pricing'
+});
+
+// For new customers without payment method, data.url contains Stripe Checkout URL
+if (data.url) {
+  // Redirect user to Stripe Checkout
+  return { redirectUrl: data.url };
+}
+
+// For existing customers, subscription is updated immediately
+console.log('Subscription updated:', data);
+```
+
+### Attach with Quantity
+
+Handle seat-based or quantity-based pricing:
+
+```typescript
+await autumn.attach({
+  customerId: 'org_456',
+  productId: 'team_plan',
+  quantity: 5, // Number of seats
+  successUrl: 'https://yourapp.com/success'
+});
+```
+
+### Check (Verify Access)
+
+Check if a customer can access a feature:
+
+```typescript access.ts
+const { data } = await autumn.check({
+  customerId: 'user_123',
+  featureId: 'api_calls'
+});
+
+if (!data.allowed) {
+  throw new Error('Feature access denied');
+}
+
+// Allow the operation
+performFeatureAction();
+```
+
+### Check with Usage Details
+
+Get detailed usage information:
+
+```typescript
+const { data } = await autumn.check({
+  customerId: 'user_123',
+  featureId: 'api_calls',
+  includeUsage: true
+});
+
+console.log(`Used: ${data.used} / ${data.limit}`);
+console.log(`Remaining: ${data.remaining}`);
+
+if (!data.allowed) {
+  return {
+    error: 'Limit reached',
+    upgrade_url: '/pricing'
+  };
+}
+```
+
+### Track (Record Usage)
+
+Track feature consumption for metered features:
+
+```typescript usage.ts
+// Track single unit of usage
+await autumn.track({
+  customerId: 'user_123',
+  featureId: 'api_calls',
+  value: 1
+});
+
+// Track multiple units
+await autumn.track({
+  customerId: 'user_123',
+  featureId: 'storage_gb',
+  value: 2.5
+});
+```
+
+### Check and Track Pattern
+
+Combine check and track for gated features:
+
+```typescript
+async function makeApiCall(customerId: string) {
+  // 1. Check if customer has access
+  const { data: checkData } = await autumn.check({
+    customerId,
+    featureId: 'api_calls'
+  });
+
+  if (!checkData.allowed) {
+    throw new Error('API limit reached');
+  }
+
+  // 2. Perform the operation
+  const result = await performApiOperation();
+
+  // 3. Track the usage
+  await autumn.track({
+    customerId,
+    featureId: 'api_calls',
+    value: 1
+  });
+
+  return result;
+}
+```
+
+## Customer Management
+
+### Create Customer
+
+Create customers when users sign up:
+
+```typescript
+const { data } = await autumn.customers.create({
+  id: 'user_123', // Your internal user ID
+  email: 'user@example.com',
+  name: 'John Doe'
+});
+```
+
+### Get Customer
+
+Retrieve customer information:
+
+```typescript
+const { data } = await autumn.customers.get({
+  customerId: 'user_123'
+});
+
+console.log('Customer:', data.customer);
+console.log('Active products:', data.products);
+```
+
+### Update Customer
+
+Update customer details:
+
+```typescript
+await autumn.customers.update({
+  customerId: 'user_123',
+  name: 'Jane Doe',
+  email: 'jane@example.com'
+});
+```
+
+### List Customers
+
+Fetch all customers with pagination:
+
+```typescript
+const { data } = await autumn.customers.list({
+  limit: 100,
+  offset: 0
+});
+
+console.log(`Total customers: ${data.total}`);
+data.list.forEach(customer => {
+  console.log(`${customer.name} - ${customer.email}`);
+});
+```
+
+## Product Operations
+
+### List Products
+
+Get all products with pricing:
+
+```typescript
+const { data } = await autumn.products.list();
+
+data.list.forEach(product => {
+  console.log(`${product.name}: $${product.price}`);
+});
+```
+
+### List Products for Customer
+
+Get products with billing scenario for a specific customer:
+
+```typescript
+const { data } = await autumn.products.list({
+  customerId: 'user_123'
+});
+
+const buttonText: Record<string, string> = {
+  active: 'Current Plan',
+  upgrade: 'Upgrade',
+  downgrade: 'Downgrade',
+  scheduled: 'Scheduled'
+};
+
+const products = data.list.map(product => ({
+  id: product.id,
+  name: product.name,
+  price: product.price,
+  buttonText: buttonText[product.scenario] ?? 'Subscribe'
+}));
+```
+
+### Get Product
+
+Retrieve a single product:
+
+```typescript
+const { data } = await autumn.products.get({
+  productId: 'pro_plan'
+});
+
+console.log(data.product);
+```
+
+## Checkout Flow
+
+### Generate Checkout Session
+
+Use `checkout` to preview pricing before attaching:
+
+```typescript
+const { data } = await autumn.checkout({
+  customerId: 'user_123',
+  productId: 'pro_plan'
+});
+
+if (data.url) {
+  // New customer - redirect to Stripe
+  return { stripeUrl: data.url };
+}
+
+// Returning customer - show preview
+return {
+  preview: {
+    product: data.product,
+    total: data.total,
+    currency: data.currency
+  }
+};
+```
+
+### Complete Checkout
+
+After user confirms preview, attach the product:
+
+```typescript
+// User confirmed the change
+await autumn.attach({
+  customerId: 'user_123',
+  productId: 'pro_plan'
+});
+```
+
+## Cancellation
+
+### Cancel Subscription
+
+Cancel a customer's subscription:
+
+```typescript
+await autumn.cancel({
+  customerId: 'user_123',
+  productId: 'pro_plan'
+});
+```
+
+## Advanced Usage
+
+### Entity Management
+
+Manage entities (seats, workspaces, projects):
+
+```typescript
+// Create an entity
+const { data } = await autumn.entities.create({
+  customerId: 'org_123',
+  entityDefinitionId: 'workspace',
+  entityId: 'workspace_456',
+  name: 'Marketing Team'
+});
+
+// List entities
+const { data: entities } = await autumn.entities.list({
+  customerId: 'org_123'
+});
+
+// Delete an entity
+await autumn.entities.delete({
+  customerId: 'org_123',
+  entityId: 'workspace_456'
+});
+```
+
+### Balance Management (Credits)
+
+Manage customer credit balances:
+
+```typescript
+// Add credits
+await autumn.balances.create({
+  customerId: 'user_123',
+  featureId: 'credits',
+  value: 1000
+});
+
+// Update balance
+await autumn.balances.update({
+  customerId: 'user_123',
+  featureId: 'credits',
+  value: 500 // Add 500 more credits
+});
+
+// Check balance
+const { data } = await autumn.check({
+  customerId: 'user_123',
+  featureId: 'credits',
+  includeUsage: true
+});
+
+console.log(`Credits remaining: ${data.remaining}`);
+```
+
+### Invoice Management
+
+Retrieve customer invoices:
+
+```typescript
+// List invoices
+const { data } = await autumn.invoices.list({
+  customerId: 'user_123'
+});
+
+data.list.forEach(invoice => {
+  console.log(`${invoice.date}: ${invoice.amount} ${invoice.currency}`);
+});
+
+// Get specific invoice
+const { data: invoice } = await autumn.invoices.get({
+  invoiceId: 'inv_123'
+});
+```
+
+### Billing Portal
+
+Generate a Stripe billing portal URL:
+
+```typescript
+const { data } = await autumn.customers.billingPortal({
+  customerId: 'user_123',
+  returnUrl: 'https://yourapp.com/settings'
+});
+
+// Redirect user to billing portal
+return { portalUrl: data.url };
+```
+
+## Type Safety
+
+The SDK is fully typed with TypeScript:
+
+```typescript
+import type {
+  CheckParams,
+  CheckResult,
+  AttachParams,
+  AttachResult,
+  Customer,
+  Product
+} from 'autumn-js';
+
+const params: CheckParams = {
+  customerId: 'user_123',
+  featureId: 'api_calls'
+};
+
+const { data }: { data: CheckResult } = await autumn.check(params);
+```
+
+## Error Handling
+
+All SDK methods throw typed errors:
+
+```typescript
+try {
+  await autumn.attach({
+    customerId: 'user_123',
+    productId: 'pro_plan'
+  });
+} catch (error) {
+  if (error.code === 'not_found') {
+    console.error('Product not found');
+  } else if (error.code === 'payment_required') {
+    console.error('Payment method required');
+  } else {
+    console.error('Unexpected error:', error.message);
+  }
+}
+```
+
+## Express.js Integration
+
+Example middleware for Express:
+
+```typescript middleware.ts
+import Autumn from 'autumn-js';
+import type { Request, Response, NextFunction } from 'express';
+
+const autumn = new Autumn({
+  secretKey: process.env.AUTUMN_SECRET_KEY
+});
+
+export async function requireFeature(featureId: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const customerId = req.user?.id; // From your auth middleware
+    
+    if (!customerId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const { data } = await autumn.check({ customerId, featureId });
+      
+      if (!data.allowed) {
+        return res.status(403).json({
+          error: 'Feature access denied',
+          upgrade_url: '/pricing'
+        });
+      }
+      
+      next();
+    } catch (error) {
+      return res.status(500).json({ error: 'Access check failed' });
+    }
+  };
+}
+```
+
+Usage:
+
+```typescript routes.ts
+app.post('/api/generate', 
+  requireFeature('ai_generation'),
+  async (req, res) => {
+    // Feature access verified
+    const result = await generateWithAI();
+    
+    // Track usage
+    await autumn.track({
+      customerId: req.user.id,
+      featureId: 'ai_generation',
+      value: 1
+    });
+    
+    res.json(result);
+  }
+);
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Environment Variables">
+    Always store API keys in environment variables:
+    
+    ```typescript
+    const autumn = new Autumn({
+      secretKey: process.env.AUTUMN_SECRET_KEY
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Implement Retry Logic">
+    Add retry logic for transient failures:
+    
+    ```typescript
+    async function checkWithRetry(params: CheckParams, retries = 3) {
+      for (let i = 0; i < retries; i++) {
+        try {
+          return await autumn.check(params);
+        } catch (error) {
+          if (i === retries - 1) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Cache Feature Checks">
+    Implement caching to reduce API calls:
+    
+    ```typescript
+    const cache = new Map<string, { allowed: boolean, expires: number }>();
+    
+    async function checkWithCache(customerId: string, featureId: string) {
+      const key = `${customerId}:${featureId}`;
+      const cached = cache.get(key);
+      
+      if (cached && cached.expires > Date.now()) {
+        return { data: { allowed: cached.allowed } };
+      }
+      
+      const result = await autumn.check({ customerId, featureId });
+      cache.set(key, {
+        allowed: result.data.allowed,
+        expires: Date.now() + 60000 // Cache for 1 minute
+      });
+      
+      return result;
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Webhooks">
+    Set up webhook handlers for real-time updates:
+    
+    ```typescript
+    app.post('/webhooks/autumn', async (req, res) => {
+      const event = req.body;
+      
+      switch (event.type) {
+        case 'customer.subscription.updated':
+          // Handle subscription change
+          break;
+        case 'customer.feature.limit_reached':
+          // Notify customer
+          break;
+      }
+      
+      res.status(200).send('OK');
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api/attach">
+    Explore all available API endpoints
+  </Card>
+  <Card title="React SDK" icon="react" href="/sdks/react">
+    Check out the React SDK for frontend
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Set up webhooks for real-time events
+  </Card>
+  <Card title="Python SDK" icon="python" href="/sdks/python">
+    View the Python SDK documentation
+  </Card>
+</CardGroup>

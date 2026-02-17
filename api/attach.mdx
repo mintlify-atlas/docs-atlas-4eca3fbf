@@ -1,0 +1,199 @@
+---
+title: 'Attach Product'
+api: 'POST /attach'
+description: 'Enable a product for a customer and process payment if their payment method is on file'
+---
+
+## Overview
+
+The attach endpoint enables a product for a customer and processes payment immediately if their payment method is already saved. For new customers without payment info, use the [checkout](/api/checkout) endpoint instead.
+
+## Authentication
+
+This endpoint requires API key authentication. Include your API key in the request header:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer to attach the product to.
+
+  ```json
+  "cus_123"
+  ```
+</ParamField>
+
+<ParamField body="product_id" type="string" required>
+  The ID of the product to attach. Either `product_id` or `product_ids` must be provided.
+
+  ```json
+  "pro_plan"
+  ```
+</ParamField>
+
+<ParamField body="product_ids" type="string[]">
+  Array of product IDs to attach multiple products at once. Cannot be used with `product_id`.
+
+  ```json
+  ["pro_plan", "addon_feature"]
+  ```
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  The ID of the entity (optional). Use this when working with entity-scoped products or features.
+
+  ```json
+  "entity_123"
+  ```
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Additional customer properties. These will be used to create or update the customer.
+
+  <Expandable title="Customer Data Properties">
+    <ParamField body="name" type="string">
+      Customer's full name
+    </ParamField>
+    <ParamField body="email" type="string">
+      Customer's email address
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="options" type="array">
+  Feature-specific options for configurable features (e.g., quantity for seat-based features).
+</ParamField>
+
+<ParamField body="free_trial" type="boolean">
+  Whether to enable a free trial for this product. Defaults to the product's trial configuration.
+
+  ```json
+  true
+  ```
+</ParamField>
+
+<ParamField body="success_url" type="string">
+  URL to redirect to after successful payment setup (if checkout is required).
+
+  ```json
+  "https://example.com/success"
+  ```
+</ParamField>
+
+<ParamField body="force_checkout" type="boolean">
+  Force a checkout flow even if payment method is on file.
+
+  ```json
+  false
+  ```
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Whether the operation was successful.
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  The ID of the customer.
+</ResponseField>
+
+<ResponseField name="product_ids" type="string[]">
+  Array of product IDs that were attached.
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Response code indicating the operation result.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable message describing the result.
+</ResponseField>
+
+<ResponseField name="checkout_url" type="string" optional>
+  If payment collection is required, this contains the Stripe Checkout URL. The customer should be redirected to this URL to complete payment.
+</ResponseField>
+
+<ResponseField name="invoice" type="object" optional>
+  Invoice details if an invoice was created.
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.useautumn.com/attach \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "product_id": "pro_plan"
+  }'
+```
+
+```typescript TypeScript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
+
+const result = await autumn.attach({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan'
+});
+
+console.log(result);
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key='YOUR_API_KEY')
+
+result = autumn.attach(
+  customer_id='cus_123',
+  product_id='pro_plan'
+)
+
+print(result)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "customer_id": "cus_123",
+  "product_ids": ["pro_plan"],
+  "code": "product_attached",
+  "message": "Product attached successfully"
+}
+```
+
+## Error Responses
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="code" type="string">
+      Error code identifying the type of error.
+      
+      Common error codes:
+      - `customer_not_found` - The specified customer does not exist
+      - `product_not_found` - The specified product does not exist
+      - `payment_method_required` - Customer has no payment method on file
+      - `already_subscribed` - Customer already has this product
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Human-readable error message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Related Endpoints
+
+- [Checkout](/api/checkout) - Create checkout session for new customers
+- [Cancel](/api/cancel) - Cancel a product subscription
+- [Check](/api/check) - Verify customer access to features

@@ -1,0 +1,181 @@
+---
+title: "Managing Subscriptions"
+description: "Learn how to create, update, and manage customer subscriptions with Autumn"
+---
+
+## Overview
+
+Subscriptions allow you to provide recurring access to your products and plans. Autumn handles subscription lifecycle management, including creation, upgrades, downgrades, cancellations, and renewals.
+
+Subscriptions can include:
+- Fixed recurring fees
+- Usage-based charges
+- Metered features with allowances
+- Trial periods
+- Multiple billing intervals (monthly, yearly, etc.)
+
+## Creating a Subscription
+
+<Steps>
+  <Step title="Create a product">
+    First, create a product that defines what customers will subscribe to. See [Products and Plans](/concepts/products-and-plans) for details.
+
+    ```typescript
+    const product = await autumn.products.create({
+      name: "Pro Plan",
+      billing_interval: "monthly",
+      items: [
+        {
+          type: "fixed",
+          price: 2900 // $29.00
+        }
+      ]
+    });
+    ```
+  </Step>
+
+  <Step title="Attach the product to a customer">
+    Use the `/attach` endpoint to subscribe a customer to your product. This creates an active subscription.
+
+    ```typescript
+    const subscription = await autumn.attach({
+      customer_id: "customer_123",
+      product_id: product.id
+    });
+    ```
+
+    The subscription starts immediately unless you specify a trial period or future start date.
+
+    <Info>Learn more about the [Attach API](/api/attach)</Info>
+  </Step>
+
+  <Step title="Handle checkout (optional)">
+    If you need to collect payment information first, use checkout mode:
+
+    ```typescript
+    const checkout = await autumn.checkout({
+      customer_id: "customer_123",
+      product_id: product.id,
+      mode: "checkout"
+    });
+
+    // Redirect customer to checkout.url
+    ```
+
+    <Info>Learn more about the [Checkout API](/api/checkout)</Info>
+  </Step>
+</Steps>
+
+## Upgrading and Downgrading
+
+Change a customer's subscription by attaching a different product:
+
+```typescript
+// Upgrade to a higher tier
+const upgraded = await autumn.attach({
+  customer_id: "customer_123",
+  product_id: "pro_plan_id"
+});
+```
+
+Autumn automatically handles proration for mid-cycle upgrades and downgrades based on your product configuration.
+
+<Tip>
+By default, upgrades are prorated and charged immediately, while downgrades take effect at the end of the billing period.
+</Tip>
+
+## Canceling Subscriptions
+
+<Steps>
+  <Step title="Cancel at period end">
+    The most common cancellation pattern - access continues until the end of the billing period:
+
+    ```typescript
+    await autumn.cancel({
+      customer_id: "customer_123",
+      cancel_at_period_end: true
+    });
+    ```
+  </Step>
+
+  <Step title="Cancel immediately">
+    For immediate cancellation, omit the `cancel_at_period_end` parameter:
+
+    ```typescript
+    await autumn.cancel({
+      customer_id: "customer_123"
+    });
+    ```
+
+    This immediately revokes access and stops billing.
+  </Step>
+</Steps>
+
+<Info>Learn more about the [Cancel API](/api/cancel)</Info>
+
+## Updating Subscription Quantities
+
+For seat-based or quantity-based subscriptions:
+
+```typescript
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: "team_plan_id",
+  quantity: 5 // 5 seats
+});
+
+// Later, update the quantity
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: "team_plan_id",
+  quantity: 10 // Upgrade to 10 seats
+});
+```
+
+## Subscription Status
+
+Subscriptions have the following statuses:
+
+- **active** - Customer has access and billing is current
+- **trialing** - Customer is in a trial period
+- **past_due** - Payment failed but access may continue
+- **canceled** - Subscription has been canceled
+- **expired** - Trial or subscription period has ended
+
+You can check a customer's subscription status:
+
+```typescript
+const customer = await autumn.customers.get({
+  customer_id: "customer_123"
+});
+
+const activeProducts = customer.products.filter(
+  p => p.status === "active"
+);
+```
+
+## Best Practices
+
+<Card title="Use webhooks for status changes" icon="bell">
+  Set up webhooks to react to subscription events like renewals, cancellations, and payment failures.
+</Card>
+
+<Card title="Handle prorations carefully" icon="calculator">
+  Test your upgrade and downgrade flows to ensure prorations work as expected for your business model.
+</Card>
+
+<Card title="Implement grace periods" icon="clock">
+  Consider keeping access active for a few days after payment failure to allow customers to update payment methods.
+</Card>
+
+<Card title="Communicate changes" icon="envelope">
+  Always notify customers about subscription changes, especially cancellations and failed payments.
+</Card>
+
+## Related Resources
+
+- [Products and Plans Concept](/concepts/products-and-plans)
+- [Customers Concept](/concepts/customers)
+- [Attach API](/api/attach)
+- [Cancel API](/api/cancel)
+- [Checkout API](/api/checkout)

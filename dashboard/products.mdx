@@ -1,0 +1,239 @@
+---
+title: "Products"
+description: "Create and manage subscription plans, features, and pricing models"
+---
+
+The Products section allows you to define your pricing structure, including subscription plans, one-time purchases, features, and rewards.
+
+## Plans
+
+Plans represent the products your customers can subscribe to or purchase. Autumn supports three types of plans:
+
+### Subscription Plans
+
+Recurring plans that bill customers on a regular schedule (monthly, yearly, etc.):
+
+- **Base price** - Fixed amount charged per billing cycle
+- **Billing interval** - Frequency of charges (monthly, yearly, custom)
+- **Features** - Access controls and usage limits
+- **Free trials** - Optional trial periods before charging
+- **Proration** - Handle upgrades and downgrades mid-cycle
+
+### Add-on Subscriptions
+
+Optional recurring plans that complement base subscriptions:
+
+- Must be attached alongside a base plan
+- Can add extra features or increase usage limits
+- Billed on the same cycle as the base plan
+
+### One-off Purchases
+
+One-time prices for credits, top-ups, or lifetime access:
+
+- Single payment, no recurring charges
+- Often used for credit packs or feature unlocks
+- Can grant credits or temporary access
+
+## Creating a Plan
+
+1. Click **Create plan** in the Plans tab
+2. Enter basic details:
+   - **Name** - Display name for the plan
+   - **Description** - Optional description
+   - **Group** - Organize plans into categories
+3. Configure pricing:
+   - **Plan type** - Subscription or one-time purchase
+   - **Base price** - Fixed recurring amount (for subscriptions)
+   - **Billing cycle** - Monthly, yearly, or custom interval
+4. Add features to the plan (see Features section below)
+5. Configure advanced options:
+   - **Free trial** - Offer trial period before charging
+   - **Is add-on** - Mark as an add-on plan
+   - **Metadata** - Custom key-value pairs
+
+<Tip>
+  Use groups to organize plans by tier (e.g., "Starter", "Pro", "Enterprise") or product line.
+</Tip>
+
+## Features
+
+Features define what customers can access and how much they can use. There are two main types:
+
+### Boolean Features
+
+Simple on/off access controls:
+
+```typescript
+// Check if customer has access to a boolean feature
+const { hasAccess } = await autumn.check({
+  customerId: "cus_123",
+  featureKey: "advanced-analytics"
+});
+```
+
+**Use cases:**
+- Unlock premium features
+- Enable integrations
+- Access to specific pages or sections
+
+### Metered Features
+
+Usage-based features with configurable limits and pricing:
+
+```typescript
+// Track usage of a metered feature
+await autumn.track({
+  customerId: "cus_123",
+  featureKey: "api-calls",
+  usage: 1
+});
+
+// Check remaining balance
+const { hasAccess, usage } = await autumn.check({
+  customerId: "cus_123",
+  featureKey: "api-calls"
+});
+```
+
+**Configuration options:**
+- **Usage limit** - Maximum allowed usage per period
+- **Included usage** - Free usage included with the plan
+- **Overage pricing** - Charge for usage beyond the limit
+- **Billing units** - Units of measure (e.g., calls, GB, hours)
+- **Reset frequency** - When usage resets (monthly, yearly, never)
+- **Rollover** - Carry unused credits to next period
+
+**Pricing models:**
+- **Flat rate** - Fixed price per unit
+- **Tiered pricing** - Different rates at different volume levels
+- **Volume pricing** - Rate applies to all units when threshold is reached
+
+### Creating a Feature
+
+1. Navigate to **Products** → **Features**
+2. Click **Create feature**
+3. Configure the feature:
+   - **Name** - Display name
+   - **Key** - Unique identifier used in API calls
+   - **Type** - Boolean or Metered
+4. For metered features, configure:
+   - **Billing units** - Unit of measure
+   - **Default limit** - Fallback limit if not set in plan
+5. Add the feature to plans and configure plan-specific settings
+
+<Note>
+  Feature keys are used in API calls and cannot be changed after creation. Choose descriptive, kebab-case names like `api-calls` or `storage-gb`.
+</Note>
+
+## Feature Configuration in Plans
+
+When adding a feature to a plan, you can configure:
+
+### Basic Settings
+
+- **Included usage** - Free units included in the plan
+- **Usage limit** - Maximum allowed usage
+- **Overage pricing** - Charge for usage beyond limit
+
+### Advanced Settings
+
+- **Usage reset** - When usage resets (monthly, billing cycle, never)
+- **Proration** - How to handle mid-cycle changes
+- **Rollover** - Carry unused credits to next period
+- **Entity-level limits** - Apply limits per entity instead of customer
+
+<Tip>
+  Use entity-level limits when you want to track usage per workspace, project, or team rather than per customer. See the [Entities guide](/concepts/entities) for details.
+</Tip>
+
+## Rewards
+
+Rewards incentivize customer actions like referrals or milestones:
+
+### Reward Types
+
+**Discount rewards:**
+- Percentage or fixed amount off
+- Apply to specific plans
+- One-time or recurring discounts
+
+**Free product rewards:**
+- Grant access to plans without payment
+- Useful for referral programs
+- Time-limited or permanent access
+
+### Creating a Reward Program
+
+1. Navigate to **Products** → **Rewards**
+2. Click **Create reward program**
+3. Configure:
+   - **Name** - Program name
+   - **Type** - Discount or free product
+   - **Trigger** - When reward is granted (referral, milestone, etc.)
+   - **Reward details** - Discount amount or free product
+4. Share the referral link with customers
+
+## Plan Versioning
+
+Autumn maintains version history when you update plans:
+
+- Existing customers stay on their current version
+- New customers get the latest version
+- You can migrate customers to new versions
+- Archived versions remain accessible for reporting
+
+<Warning>
+  Changes to plan pricing or features create a new version. Carefully review changes before publishing to ensure existing customers aren't affected unexpectedly.
+</Warning>
+
+## Archiving Plans
+
+Archive plans you no longer want to offer:
+
+1. Click the menu icon (•••) on a plan
+2. Select **Archive**
+3. The plan is hidden from new customers but existing subscriptions continue
+
+<Note>
+  Archived plans can be restored from the **Show archived** toggle.
+</Note>
+
+## Best Practices
+
+### Plan Structure
+
+- Keep plan names simple and descriptive
+- Use groups to organize related plans
+- Limit the number of plans to avoid choice paralysis (3-5 tiers works well)
+
+### Feature Design
+
+- Use boolean features for access control
+- Use metered features for usage-based pricing
+- Set reasonable default limits
+- Consider usage patterns when setting reset frequencies
+
+### Pricing Strategy
+
+- Start with simple flat-rate pricing
+- Add tiered pricing as you understand customer usage
+- Use included usage to provide value at each tier
+- Set overage pricing to monetize heavy users
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Products & Plans" icon="cube" href="/concepts/products-and-plans">
+    Learn about product concepts
+  </Card>
+  <Card title="Features" icon="puzzle" href="/concepts/features">
+    Understand feature types
+  </Card>
+  <Card title="Pricing Models" icon="dollar" href="/concepts/pricing-models">
+    Explore pricing strategies
+  </Card>
+  <Card title="API: Create Product" icon="code" href="/api/products/create">
+    Create products via API
+  </Card>
+</CardGroup>

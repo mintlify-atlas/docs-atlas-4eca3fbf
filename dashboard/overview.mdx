@@ -1,0 +1,108 @@
+---
+title: "Dashboard Overview"
+description: "Navigate and manage your Autumn workspace from the dashboard"
+---
+
+The Autumn dashboard provides a comprehensive interface for managing your pricing, customers, and analytics. Access the dashboard at `https://app.useautumn.com` after signing in.
+
+## Main Navigation
+
+The dashboard is organized into four primary sections accessible from the left sidebar:
+
+### Products
+
+Manage your pricing structure including plans, features, and rewards:
+
+- **Plans** - Create and configure subscription plans and one-time purchases
+- **Features** - Define metered and boolean features for your products
+- **Rewards** - Set up referral programs and discount rewards
+
+<Card title="Learn more" icon="basket" href="/dashboard/products">
+  Explore product management in detail
+</Card>
+
+### Customers
+
+View and manage your customer base:
+
+- View all customers and their subscriptions
+- Track feature usage and balances
+- Manage customer subscriptions and plans
+- Access customer invoices and billing history
+
+<Card title="Learn more" icon="user" href="/dashboard/customers">
+  Explore customer management in detail
+</Card>
+
+### Events
+
+Monitor usage events tracked through your application:
+
+- View event history and timeseries data
+- Analyze feature usage patterns
+- Track API calls and event properties
+
+<Card title="Learn more" icon="chart-bar" href="/dashboard/analytics">
+  Explore analytics and events
+</Card>
+
+### Developer
+
+Access developer tools and integrations:
+
+- **API Keys** - Generate and manage API keys for authentication
+- **Stripe** - Configure Stripe integration for payments
+- **Webhooks** - Set up webhook endpoints for real-time updates
+- **Vercel** - Connect Vercel deployments (if enabled)
+- **RevenueCat** - Integrate with RevenueCat for mobile subscriptions (if enabled)
+
+## Environment Management
+
+If your organization has deployed Autumn, you can switch between environments using the environment dropdown in the sidebar:
+
+- **Sandbox** - Test environment for development and staging
+- **Production** - Live environment for production workloads
+
+<Note>
+  Changes made in the sandbox environment do not affect production data.
+</Note>
+
+## Organization Settings
+
+Access organization settings by clicking your organization name in the sidebar:
+
+- Manage team members and permissions
+- Configure billing and subscription settings
+- View organization usage and limits
+
+## Keyboard Shortcuts
+
+Speed up your workflow with these keyboard shortcuts:
+
+- `Cmd/Ctrl + B` - Toggle sidebar
+- `Cmd/Ctrl + K` - Open command palette
+
+## Getting Started
+
+After setting up your Autumn account:
+
+1. **Create your first plan** in the Products section
+2. **Define features** that customers can access
+3. **Integrate the SDK** in your application
+4. **Test with the Autumn CLI** or create test customers
+5. **Monitor usage** in the Analytics section
+
+<CardGroup cols={2}>
+  <Card title="Products" icon="basket" href="/dashboard/products">
+    Set up plans and features
+  </Card>
+  <Card title="Customers" icon="user" href="/dashboard/customers">
+    Manage customer subscriptions
+  </Card>
+  <Card title="Analytics" icon="chart-bar" href="/dashboard/analytics">
+    Monitor usage and events
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/attach">
+    Integrate with your application
+  </Card>
+</CardGroup>

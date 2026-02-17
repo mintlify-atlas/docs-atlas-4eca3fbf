@@ -1,0 +1,167 @@
+---
+title: Introduction
+description: An open-source layer between Stripe and your application for building any pricing model
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="Autumn Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="Autumn Hero Dark"
+/>
+
+## Welcome to Autumn
+
+Autumn is an open-source billing infrastructure layer that sits between Stripe and your application, enabling you to create any pricing model and embed it with just a couple lines of code. 
+
+With Autumn, you can build:
+
+<CardGroup cols={2}>
+  <Card title="Subscriptions" icon="calendar-check">
+    Simple recurring billing with flexible plan tiers and automatic renewals
+  </Card>
+  <Card title="Credit Systems" icon="coins">
+    Top-ups, prepaid credits, and balance-based billing models
+  </Card>
+  <Card title="Usage-Based Billing" icon="chart-line">
+    Metered features with real-time limits, overages, and flexible reset periods
+  </Card>
+  <Card title="Custom Plans" icon="sliders">
+    Tailored pricing for enterprise customers without code changes
+  </Card>
+</CardGroup>
+
+## Why Autumn?
+
+### Billing Infrastructure Gets Complex Fast
+
+More than just payments: you need permission management, usage metering, consumption limits with cron jobs, and seamless integration with upgrade, downgrade, cancellation, and failed payment states. Race conditions, edge cases, and subtle bugs will slow down your product velocity.
+
+### Decouple Billing from Application Logic
+
+Growing companies iterate on pricing frequently—raising prices, experimenting with credits, or monetizing new features. Without Autumn, each change requires database migrations, rebuilding in-app flows, maintaining internal dashboards for custom pricing, and carefully grandfathering users on legacy plans.
+
+## How It Works
+
+Autumn simplifies your entire billing workflow into three core functions:
+
+### 1. Check Access
+
+Verify if a customer has access to a product, feature, or check their remaining usage:
+
+```typescript
+const { check } = useAutumn();
+
+const { data } = await check({ featureId: "ai_tokens" });
+
+if (!data.allowed) {
+  alert("AI limit reached");
+}
+```
+
+### 2. Handle Purchases
+
+One function call for all purchase flows—returns a Stripe Checkout URL or handles upgrades/downgrades automatically:
+
+```tsx
+const { attach } = useAutumn();
+
+<button
+  onClick={async () => {
+    await attach({ productId: "pro" });
+  }}
+>
+  Upgrade to Pro
+</button>
+```
+
+### 3. Track Usage
+
+Record usage events when customers consume metered features:
+
+```typescript
+const { track } = useAutumn();
+
+await track({
+  featureId: "ai_tokens",
+  value: 1312
+});
+```
+
+## Deployment Options
+
+<CardGroup cols={2}>
+  <Card title="Cloud" icon="cloud" href="https://app.useautumn.com">
+    Get started instantly with our managed cloud service—no infrastructure setup required
+  </Card>
+  <Card title="Self-Hosted" icon="server" href="/self-hosting">
+    Deploy Autumn on your own infrastructure with full control and customization
+  </Card>
+</CardGroup>
+
+## What You Can Build
+
+Autumn supports any pricing model you can imagine. Here are some popular patterns:
+
+<AccordionGroup>
+  <Accordion title="Usage & Overage" icon="bolt">
+    Set real-time usage limits that reset on your schedule. Automatically charge customers when they exceed their quota.
+  </Accordion>
+  
+  <Accordion title="Credits" icon="wallet">
+    Let users access monetary or arbitrary credits that multiple features can draw from. Perfect for API platforms and SaaS tools.
+  </Accordion>
+  
+  <Accordion title="Seat-Based with Per-Seat Limits" icon="users">
+    Bill customers based on their team size or other entities, with individual usage limits per seat.
+  </Accordion>
+  
+  <Accordion title="Pay Upfront" icon="credit-card">
+    Allow users to purchase a fixed quantity of a feature upfront, which gets consumed over time.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get Autumn running locally in under 5 minutes
+  </Card>
+  <Card title="Core Concepts" icon="book" href="/concepts/products-and-plans">
+    Understand products, plans, features, and pricing models
+  </Card>
+  <Card title="Self-Hosting Guide" icon="wrench" href="/self-hosting">
+    Deploy Autumn on your own infrastructure
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/attach">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>
+
+## Key Features
+
+- **Any Pricing Model**: Subscriptions, usage-based, credits, seat-based, hybrid models—build exactly what you need
+- **No Webhook Hell**: Autumn handles Stripe webhooks, state transitions, and edge cases automatically
+- **Change Pricing Without Code**: Adjust pricing, add features, or create custom enterprise plans through the dashboard
+- **Real-Time Usage Metering**: Track consumption with sub-second latency using Redis
+- **Automatic Plan Transitions**: Seamless upgrades, downgrades, and cancellations
+- **Grandfathering Built-In**: Safely iterate on pricing while maintaining legacy plans
+- **Open Source**: Self-host with full control or use our managed cloud service
+
+## Community and Support
+
+<CardGroup cols={3}>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/53emPtY9tA">
+    Join our community for support and discussions
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/useautumn/autumn">
+    View source code and contribute to the project
+  </Card>
+  <Card title="Email Support" icon="envelope" href="mailto:hey@useautumn.com">
+    Get in touch with the Autumn team
+  </Card>
+</CardGroup>

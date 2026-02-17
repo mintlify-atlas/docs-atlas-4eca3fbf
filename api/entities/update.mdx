@@ -1,0 +1,145 @@
+---
+title: "Update Entity"
+description: "Update an existing entity"
+---
+
+<Warning>
+  This endpoint is not yet implemented in the current version of Autumn. The EntityService includes an update method, but there is no corresponding API route handler available.
+</Warning>
+
+## Overview
+
+This endpoint will allow you to update an existing entity's properties such as its name or other metadata. Once implemented, this will be useful for keeping entity information synchronized with your application.
+
+## Planned Endpoint
+
+```
+PATCH /customers/{customer_id}/entities/{entity_id}
+```
+
+## Planned Path Parameters
+
+<ParamField path="customer_id" type="string" required>
+  The unique identifier of the customer who owns the entity
+</ParamField>
+
+<ParamField path="entity_id" type="string" required>
+  The unique identifier of the entity to update
+</ParamField>
+
+## Planned Body Parameters
+
+<ParamField body="name" type="string">
+  The new name for the entity
+</ParamField>
+
+<ParamField body="id" type="string">
+  Update the entity's ID (use with caution)
+</ParamField>
+
+## Workaround
+
+Until this endpoint is implemented, you can work around the limitation by:
+
+1. **Deleting and recreating** - Delete the existing entity and create a new one with updated values
+2. **Using metadata** - Store additional mutable data in your own database and reference entities by their immutable ID
+3. **Contact support** - If entity updates are critical for your use case, reach out to the Autumn team
+
+### Example Workaround: Delete and Recreate
+
+<CodeGroup>
+```typescript TypeScript
+// 1. Get the existing entity
+const existingEntity = await fetch(
+  'https://api.autumnhq.com/v1/customers/cus_123/entities/user_001',
+  {
+    headers: { 'Authorization': 'Bearer YOUR_API_KEY' }
+  }
+).then(r => r.json());
+
+// 2. Delete the existing entity
+await fetch(
+  'https://api.autumnhq.com/v1/customers/cus_123/entities/user_001',
+  {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer YOUR_API_KEY' }
+  }
+);
+
+// 3. Create a new entity with updated values
+const updatedEntity = await fetch(
+  'https://api.autumnhq.com/v1/customers/cus_123/entities',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      id: existingEntity.id,
+      name: 'Updated Name',  // New name
+      feature_id: existingEntity.feature_id
+    })
+  }
+).then(r => r.json());
+```
+
+```python Python
+import requests
+
+api_key = 'YOUR_API_KEY'
+base_url = 'https://api.autumnhq.com/v1'
+headers = {'Authorization': f'Bearer {api_key}'}
+
+# 1. Get the existing entity
+response = requests.get(
+    f'{base_url}/customers/cus_123/entities/user_001',
+    headers=headers
+)
+existing_entity = response.json()
+
+# 2. Delete the existing entity
+requests.delete(
+    f'{base_url}/customers/cus_123/entities/user_001',
+    headers=headers
+)
+
+# 3. Create a new entity with updated values
+response = requests.post(
+    f'{base_url}/customers/cus_123/entities',
+    headers={**headers, 'Content-Type': 'application/json'},
+    json={
+        'id': existing_entity['id'],
+        'name': 'Updated Name',  # New name
+        'feature_id': existing_entity['feature_id']
+    }
+)
+updated_entity = response.json()
+```
+</CodeGroup>
+
+<Note>
+  **Important Considerations for the Workaround:**
+  
+  - Deleting and recreating entities may trigger webhook events
+  - Usage data and balances associated with the entity will be preserved as they're linked by entity ID
+  - Active subscriptions tied to the entity will be handled according to your cancellation policies
+  - There may be a brief moment where the entity doesn't exist
+</Note>
+
+## Implementation Status
+
+The backend `EntityService.update()` method exists at `source/server/src/internal/api/entities/EntityService.ts:109` and supports updating entity properties. However, no route handler has been implemented to expose this functionality via the REST API.
+
+To track implementation progress or request this feature, please:
+
+- Check the [Autumn GitHub repository](https://github.com/useautumn/autumn)
+- Join the [Autumn Discord community](https://discord.gg/53emPtY9tA)
+- Contact the Autumn team directly
+
+## Related Resources
+
+- [Get Entity](/api/entities/get)
+- [Create Entity](/api/entities/create)
+- [Delete Entity](/api/entities/delete)
+- [Entities Concept](/concepts/entities)

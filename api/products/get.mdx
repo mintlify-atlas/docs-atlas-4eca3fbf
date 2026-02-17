@@ -1,0 +1,311 @@
+---
+title: 'Get Product'
+api: 'GET /plans/{plan_id}'
+---
+
+Retrieve a specific product (plan) by its ID.
+
+## Path Parameters
+
+<ParamField path="plan_id" type="string" required>
+  The unique identifier of the product to retrieve.
+</ParamField>
+
+## Response
+
+Returns a product object if a valid identifier was provided.
+
+<ResponseField name="id" type="string">
+  Unique identifier for the product
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Display name of the product
+</ResponseField>
+
+<ResponseField name="description" type="string | null">
+  Optional description of the product
+</ResponseField>
+
+<ResponseField name="group" type="string | null">
+  Product group for managing upgrades/downgrades between products
+</ResponseField>
+
+<ResponseField name="version" type="number">
+  Version number of the product. Increments when the product is updated while customers are attached.
+</ResponseField>
+
+<ResponseField name="add_on" type="boolean">
+  Whether this is an add-on product. Add-ons can be attached multiple times.
+</ResponseField>
+
+<ResponseField name="default" type="boolean">
+  Whether this is the default product for new customers
+</ResponseField>
+
+<ResponseField name="price" type="object | null">
+  Base subscription price
+  
+  <Expandable title="Price Object">
+    <ResponseField name="amount" type="number">
+      Price amount in cents
+    </ResponseField>
+    
+    <ResponseField name="interval" type="string">
+      Billing interval: `month`, `year`, `week`, or `day`
+    </ResponseField>
+    
+    <ResponseField name="interval_count" type="number" optional>
+      Number of intervals between billings (e.g., 3 for quarterly)
+    </ResponseField>
+    
+    <ResponseField name="display" type="object" optional>
+      Display configuration for pricing UI
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="features" type="array">
+  Array of features included in this product
+  
+  <Expandable title="Feature Object">
+    <ResponseField name="feature_id" type="string">
+      ID of the feature
+    </ResponseField>
+    
+    <ResponseField name="feature" type="object" optional>
+      Full feature object with name, type, and configuration
+      
+      <Expandable title="Feature Details">
+        <ResponseField name="id" type="string">
+          Feature identifier
+        </ResponseField>
+        
+        <ResponseField name="name" type="string">
+          Display name of the feature
+        </ResponseField>
+        
+        <ResponseField name="type" type="string">
+          Feature type: `metered`, `boolean`, or `trait`
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="granted_balance" type="number">
+      Amount of usage granted for this feature
+    </ResponseField>
+    
+    <ResponseField name="unlimited" type="boolean">
+      Whether usage is unlimited
+    </ResponseField>
+    
+    <ResponseField name="reset" type="object | null">
+      Reset interval configuration for metered features
+      
+      <Expandable title="Reset Object">
+        <ResponseField name="interval" type="string">
+          Reset interval: `month`, `year`, `week`, or `day`
+        </ResponseField>
+        
+        <ResponseField name="interval_count" type="number" optional>
+          Number of intervals between resets
+        </ResponseField>
+        
+        <ResponseField name="reset_when_enabled" type="boolean">
+          Whether to reset usage when the product is first attached
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="price" type="object | null">
+      Pricing for additional usage beyond included amount
+      
+      <Expandable title="Usage Price Object">
+        <ResponseField name="amount" type="number" optional>
+          Price per unit in cents
+        </ResponseField>
+        
+        <ResponseField name="tiers" type="array" optional>
+          Tiered pricing configuration
+        </ResponseField>
+        
+        <ResponseField name="interval" type="string">
+          Billing interval
+        </ResponseField>
+        
+        <ResponseField name="billing_units" type="number">
+          Number of units to bill at once
+        </ResponseField>
+        
+        <ResponseField name="usage_model" type="string">
+          Usage billing model: `pay_per_use`, `pay_in_advance`, or `package`
+        </ResponseField>
+        
+        <ResponseField name="max_purchase" type="number | null">
+          Maximum units that can be purchased
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="display" type="object" optional>
+      Display configuration for this feature in pricing tables
+    </ResponseField>
+    
+    <ResponseField name="rollover" type="object" optional>
+      Configuration for rolling over unused usage
+    </ResponseField>
+    
+    <ResponseField name="proration" type="object" optional>
+      Proration behavior when changing plans
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="free_trial" type="object | null" optional>
+  Free trial configuration
+  
+  <Expandable title="Free Trial Object">
+    <ResponseField name="duration_length" type="number">
+      Length of the trial period
+    </ResponseField>
+    
+    <ResponseField name="duration_type" type="string">
+      Unit of duration: `day`, `week`, `month`, or `year`
+    </ResponseField>
+    
+    <ResponseField name="card_required" type="boolean">
+      Whether a payment method is required to start the trial
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp of when the product was created
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  Environment: `production` or `development`
+</ResponseField>
+
+<ResponseField name="archived" type="boolean">
+  Whether the product is archived. Archived products are hidden from the dashboard.
+</ResponseField>
+
+<ResponseField name="base_variant_id" type="string | null">
+  ID of the base product variant if this is a versioned product
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl --request GET \
+  --url https://api.autumn.com/v1/plans/pro \
+  --header 'Authorization: Bearer <token>'
+```
+
+```javascript Node.js
+const response = await fetch('https://api.autumn.com/v1/plans/pro', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer <token>'
+  }
+});
+
+const product = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.autumn.com/v1/plans/pro',
+    headers={'Authorization': 'Bearer <token>'}
+)
+
+product = response.json()
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json Response
+{
+  "id": "pro",
+  "name": "Pro Plan",
+  "description": "For growing teams",
+  "group": "main",
+  "version": 1,
+  "add_on": false,
+  "default": false,
+  "price": {
+    "amount": 2900,
+    "interval": "month",
+    "interval_count": 1
+  },
+  "features": [
+    {
+      "feature_id": "api_calls",
+      "feature": {
+        "id": "api_calls",
+        "name": "API Calls",
+        "type": "metered"
+      },
+      "granted_balance": 10000,
+      "unlimited": false,
+      "reset": {
+        "interval": "month",
+        "interval_count": 1,
+        "reset_when_enabled": true
+      },
+      "price": {
+        "amount": 0.01,
+        "interval": "month",
+        "interval_count": 1,
+        "billing_units": 1,
+        "usage_model": "pay_per_use",
+        "max_purchase": null
+      }
+    },
+    {
+      "feature_id": "advanced_analytics",
+      "feature": {
+        "id": "advanced_analytics",
+        "name": "Advanced Analytics",
+        "type": "boolean"
+      },
+      "granted_balance": 1,
+      "unlimited": false,
+      "reset": null,
+      "price": null
+    }
+  ],
+  "free_trial": {
+    "duration_length": 14,
+    "duration_type": "day",
+    "card_required": true
+  },
+  "created_at": 1640995200,
+  "env": "production",
+  "archived": false,
+  "base_variant_id": null
+}
+```
+
+</ResponseExample>
+
+## Error Responses
+
+### Common Errors
+
+- **404 Not Found**: No product exists with the provided ID
+- **401 Unauthorized**: Invalid or missing API key
+- **403 Forbidden**: API key doesn't have access to this resource
+- **500 Internal Server Error**: Something went wrong on Autumn's end
+
+## Notes
+
+- This endpoint returns the latest version of the product by default
+- Archived products can still be retrieved
+- Feature objects include full details about each feature's configuration
+- See [Products & Plans](/concepts/products-and-plans) for more information about product structure

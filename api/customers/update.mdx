@@ -1,0 +1,312 @@
+---
+title: "Update Customer"
+description: "Update an existing customer's information"
+---
+
+## Overview
+
+Update an existing customer's information including their ID, contact details, metadata, and Stripe integration settings. This endpoint allows partial updates - you only need to include the fields you want to change.
+
+## Endpoint
+
+```
+POST /customers/{customer_id}
+```
+
+## Authentication
+
+This endpoint requires authentication. Include your API key in the `Authorization` header:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request
+
+### Path Parameters
+
+<ParamField path="customer_id" type="string" required>
+  The customer's current unique identifier. This can be either your custom customer ID or Autumn's internal ID.
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="expand" type="string[]">
+  Array of fields to expand in the response. Options:
+  - `invoices` - Include customer invoices
+  - `entities` - Include related entities
+  - `trials_used` - Include trial usage history
+  - `rewards` - Include referral rewards
+  - `referrals` - Include referrals made by this customer
+  - `payment_method` - Include payment method details
+  
+  Example: `?expand=invoices,entities`
+</ParamField>
+
+### Body Parameters
+
+All body parameters are optional - include only the fields you want to update.
+
+<ParamField body="id" type="string">
+  New unique identifier for the customer. **Cannot be set to null**. When changing the ID:
+  - The new ID must not already exist for another customer
+  - The customer will be accessible via the new ID
+  - All relationships and data are preserved
+</ParamField>
+
+<ParamField body="name" type="string">
+  Customer's name. If the customer has a linked Stripe account, this will also update the name in Stripe.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Customer's email address. Must be a valid email format. If the customer has a linked Stripe account, this will also update the email in Stripe.
+</ParamField>
+
+<ParamField body="fingerprint" type="string">
+  Unique device or hardware identifier used to detect duplicate customers and prevent trial abuse.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  Custom key-value pairs to store additional information. 
+  
+  **Special behavior**: To delete a metadata key, set its value to `null`:
+  ```json
+  {
+    "metadata": {
+      "key_to_delete": null,
+      "key_to_update": "new_value"
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField body="stripe_id" type="string">
+  Update or link a Stripe customer ID. Autumn will verify the Stripe customer exists before updating.
+</ParamField>
+
+<ParamField body="send_email_receipts" type="boolean">
+  Whether to send email receipts to this customer for payments and invoices.
+</ParamField>
+
+## Response
+
+### Success Response (200)
+
+Returns the updated customer object with all current information.
+
+<ResponseField name="id" type="string | null">
+  The customer's unique identifier (possibly updated).
+</ResponseField>
+
+<ResponseField name="name" type="string | null">
+  Customer's name.
+</ResponseField>
+
+<ResponseField name="email" type="string | null">
+  Customer's email address.
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp when the customer was created.
+</ResponseField>
+
+<ResponseField name="fingerprint" type="string | null">
+  Unique device identifier.
+</ResponseField>
+
+<ResponseField name="stripe_id" type="string | null">
+  Stripe customer ID.
+</ResponseField>
+
+<ResponseField name="env" type="enum">
+  Environment: `production` or `development`.
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Custom metadata attached to the customer (with updates applied).
+</ResponseField>
+
+<ResponseField name="send_email_receipts" type="boolean">
+  Whether email receipts are enabled for this customer.
+</ResponseField>
+
+<ResponseField name="subscriptions" type="array">
+  Array of active subscription objects.
+</ResponseField>
+
+<ResponseField name="scheduled_subscriptions" type="array">
+  Array of future scheduled subscriptions.
+</ResponseField>
+
+<ResponseField name="balances" type="object">
+  Credit balances by feature ID.
+</ResponseField>
+
+## Examples
+
+### Request Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/customers/user_123 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Jane Doe",
+    "email": "jane.doe@example.com",
+    "metadata": {
+      "company": "New Company Inc",
+      "old_key": null
+    }
+  }'
+```
+
+```typescript TypeScript
+import { AutumnClient } from '@useautumn/autumn-js';
+
+const autumn = new AutumnClient({
+  apiKey: 'YOUR_API_KEY'
+});
+
+const customer = await autumn.customers.update('user_123', {
+  name: 'Jane Doe',
+  email: 'jane.doe@example.com',
+  metadata: {
+    company: 'New Company Inc',
+    old_key: null // Delete this key
+  }
+});
+
+console.log(`Customer updated: ${customer.id}`);
+```
+
+```python Python
+from autumn import AutumnClient
+
+autumn = AutumnClient(api_key='YOUR_API_KEY')
+
+customer = autumn.customers.update(
+    'user_123',
+    name='Jane Doe',
+    email='jane.doe@example.com',
+    metadata={
+        'company': 'New Company Inc',
+        'old_key': None  # Delete this key
+    }
+)
+
+print(f"Customer updated: {customer['id']}")
+```
+
+</CodeGroup>
+
+### Response Example
+
+```json
+{
+  "id": "user_123",
+  "name": "Jane Doe",
+  "email": "jane.doe@example.com",
+  "created_at": 1672531200,
+  "fingerprint": "device_abc123",
+  "stripe_id": "cus_stripe_xyz",
+  "env": "production",
+  "metadata": {
+    "company": "New Company Inc"
+  },
+  "send_email_receipts": true,
+  "subscriptions": [
+    {
+      "id": "sub_123",
+      "plan_id": "pro-plan",
+      "status": "active"
+    }
+  ],
+  "scheduled_subscriptions": [],
+  "balances": {}
+}
+```
+
+## Error Handling
+
+### Common Errors
+
+- **400 Bad Request**: Invalid request parameters or attempting to set ID to null
+  ```json
+  {
+    "error": "Cannot change customer ID to null"
+  }
+  ```
+
+- **401 Unauthorized**: Invalid or missing API key
+
+- **404 Not Found**: Customer with the specified ID does not exist
+  ```json
+  {
+    "error": "Customer not found",
+    "customer_id": "user_123"
+  }
+  ```
+
+- **409 Conflict**: New customer ID already exists for another customer
+  ```json
+  {
+    "error": "Customer with ID user_456 already exists"
+  }
+  ```
+
+### Updating Customer ID
+
+When changing a customer's ID, ensure the new ID is unique:
+
+```typescript
+try {
+  const customer = await autumn.customers.update('old_id', {
+    id: 'new_id'
+  });
+  console.log('Customer ID updated successfully');
+} catch (error) {
+  if (error.status === 409) {
+    console.error('New ID already exists');
+  }
+}
+```
+
+### Metadata Management
+
+Update specific metadata keys while preserving others:
+
+```typescript
+// Current metadata: { "key1": "value1", "key2": "value2" }
+
+// Update only key1 and delete key2
+const customer = await autumn.customers.update('user_123', {
+  metadata: {
+    key1: 'updated_value',
+    key2: null // This key will be deleted
+  }
+});
+
+// Result metadata: { "key1": "updated_value" }
+```
+
+### Stripe Integration
+
+When updating email or name, Autumn automatically syncs with Stripe if the customer has a Stripe ID:
+
+```typescript
+const customer = await autumn.customers.update('user_123', {
+  email: 'newemail@example.com',
+  name: 'New Name'
+});
+// Both Autumn and Stripe customer records are updated
+```
+
+## Related Resources
+
+- [Customers Concept](/concepts/customers) - Learn about customer management
+- [Get Customer](/api/customers/get) - Retrieve a specific customer
+- [Create Customer](/api/customers/create) - Create a new customer
+- [Delete Customer](/api/customers/delete) - Delete a customer
+- [Dashboard Customers](/dashboard/customers) - Manage customers in the dashboard

@@ -1,0 +1,264 @@
+---
+title: 'Checkout'
+api: 'POST /checkout'
+description: 'Create a checkout session for customers to purchase products with payment collection'
+---
+
+## Overview
+
+The checkout endpoint creates a Stripe Checkout session where customers can purchase products and enter payment information. Use this for new customers or when payment collection is required. For customers with existing payment methods, use [attach](/api/attach) instead.
+
+## Authentication
+
+This endpoint requires API key authentication. Include your API key in the request header:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer to create a checkout for.
+
+  ```json
+  "cus_123"
+  ```
+</ParamField>
+
+<ParamField body="product_id" type="string" required>
+  The ID of the product to purchase. Either `product_id` or `product_ids` must be provided.
+
+  ```json
+  "pro_plan"
+  ```
+</ParamField>
+
+<ParamField body="product_ids" type="string[]">
+  Array of product IDs to purchase multiple products at once. Cannot be used with `product_id`.
+
+  ```json
+  ["pro_plan", "addon_feature"]
+  ```
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  The ID of the entity (optional). Use this when working with entity-scoped products.
+
+  ```json
+  "entity_123"
+  ```
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Customer properties used to create or update the customer.
+
+  <Expandable title="Customer Data Properties">
+    <ParamField body="name" type="string">
+      Customer's full name
+    </ParamField>
+    <ParamField body="email" type="string">
+      Customer's email address
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="options" type="array">
+  Feature-specific options for configurable features (e.g., quantity for seat-based features).
+</ParamField>
+
+<ParamField body="free_trial" type="boolean">
+  Whether to enable a free trial for this product. Defaults to the product's trial configuration.
+
+  ```json
+  true
+  ```
+</ParamField>
+
+<ParamField body="success_url" type="string">
+  URL to redirect to after successful payment. Must start with http:// or https://.
+
+  ```json
+  "https://example.com/success"
+  ```
+</ParamField>
+
+<ParamField body="setup_payment" type="boolean">
+  If true, creates a setup session to collect payment method without immediate charge.
+
+  ```json
+  false
+  ```
+</ParamField>
+
+<ParamField body="checkout_session_params" type="object">
+  Additional parameters to pass to the Stripe Checkout session.
+</ParamField>
+
+## Response
+
+<ResponseField name="url" type="string">
+  The Stripe Checkout URL. Redirect the customer to this URL to complete the purchase.
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  The ID of the customer.
+</ResponseField>
+
+<ResponseField name="lines" type="array">
+  Preview of line items that will appear in the checkout.
+
+  <Expandable title="Line Item Object">
+    <ResponseField name="description" type="string">
+      Description of the line item.
+    </ResponseField>
+
+    <ResponseField name="amount" type="number">
+      Amount in cents (or smallest currency unit).
+    </ResponseField>
+
+    <ResponseField name="item" type="object" optional>
+      The product item details.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="product" type="object" optional>
+  Details about the product being purchased.
+</ResponseField>
+
+<ResponseField name="current_product" type="object" optional>
+  Details about the customer's current product (if upgrading/downgrading).
+</ResponseField>
+
+<ResponseField name="total" type="number" optional>
+  Total amount to be charged (in cents).
+</ResponseField>
+
+<ResponseField name="currency" type="string" optional>
+  Currency code (e.g., "usd", "eur").
+</ResponseField>
+
+<ResponseField name="has_prorations" type="boolean" optional>
+  Whether the checkout includes proration charges.
+</ResponseField>
+
+<ResponseField name="next_cycle" type="object" optional>
+  Information about the next billing cycle.
+
+  <Expandable title="Next Cycle Object">
+    <ResponseField name="starts_at" type="number">
+      Unix timestamp (ms) when the next cycle starts.
+    </ResponseField>
+
+    <ResponseField name="total" type="number">
+      Amount that will be charged in the next cycle.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.useautumn.com/checkout \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "product_id": "pro_plan",
+    "success_url": "https://example.com/success"
+  }'
+```
+
+```typescript TypeScript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
+
+const result = await autumn.checkout({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan',
+  success_url: 'https://example.com/success'
+});
+
+// Redirect the user to the checkout URL
+window.location.href = result.url;
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key='YOUR_API_KEY')
+
+result = autumn.checkout(
+  customer_id='cus_123',
+  product_id='pro_plan',
+  success_url='https://example.com/success'
+)
+
+# Redirect the user to the checkout URL
+print(f"Checkout URL: {result['url']}")
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "url": "https://checkout.stripe.com/c/pay/cs_test_abc123...",
+  "customer_id": "cus_123",
+  "lines": [
+    {
+      "description": "Pro Plan - Monthly",
+      "amount": 4900,
+      "item": {
+        "id": "item_pro_monthly",
+        "name": "Pro Plan"
+      }
+    }
+  ],
+  "total": 4900,
+  "currency": "usd",
+  "has_prorations": false,
+  "next_cycle": {
+    "starts_at": 1719792000000,
+    "total": 4900
+  }
+}
+```
+
+## Handling Checkout Completion
+
+After the customer completes payment, they will be redirected to your `success_url`. You should:
+
+1. Listen for the `checkout.session.completed` webhook to confirm payment
+2. Update your database to reflect the customer's new subscription
+3. Grant access to the purchased features
+
+See the [Webhooks guide](/guides/webhooks) for more details on handling checkout completion.
+
+## Error Responses
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="code" type="string">
+      Error code identifying the type of error.
+      
+      Common error codes:
+      - `customer_not_found` - The specified customer does not exist
+      - `product_not_found` - The specified product does not exist
+      - `invalid_success_url` - The success URL is invalid or missing
+      - `stripe_error` - Error creating Stripe Checkout session
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Human-readable error message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Related Endpoints
+
+- [Attach](/api/attach) - Attach product without checkout (for customers with payment methods)
+- [Cancel](/api/cancel) - Cancel a product subscription
+- [Customer Billing Portal](/api/customers/billing-portal) - Create self-service portal session

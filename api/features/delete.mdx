@@ -1,0 +1,141 @@
+---
+title: 'Delete Feature'
+description: 'Permanently delete a feature'
+api: 'DELETE /v1/features/{feature_id}'
+---
+
+Permanently deletes a feature from your organization. This action cannot be undone.
+
+<Warning>
+  You cannot delete a feature that is:
+  - Currently attached to any product
+  - Referenced by a credit system feature
+  
+  You must either delete the products using this feature or remove the feature from those products before deletion. Alternatively, consider archiving the feature instead.
+</Warning>
+
+## Path Parameters
+
+<ParamField path="feature_id" type="string" required>
+  The unique identifier of the feature to delete.
+  
+  Example: `api_calls`
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean" required>
+  Returns `true` if the feature was successfully deleted.
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X DELETE https://api.useautumn.com/v1/features/api_calls \
+  -H "Authorization: Bearer YOUR_SECRET_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.useautumn.com/v1/features/api_calls', {
+  method: 'DELETE',
+  headers: {
+    'Authorization': 'Bearer YOUR_SECRET_KEY'
+  }
+});
+
+const result = await response.json();
+console.log(result.success);
+```
+
+```python Python
+import requests
+
+response = requests.delete(
+    'https://api.useautumn.com/v1/features/api_calls',
+    headers={'Authorization': 'Bearer YOUR_SECRET_KEY'}
+)
+
+result = response.json()
+print(result['success'])
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 - Success
+{
+  "success": true
+}
+```
+
+```json 400 - Feature In Use (Product)
+{
+  "error": {
+    "message": "Feature 'api_calls' is used in a product. You must delete the product first, or archive it instead.",
+    "code": "feature_in_use"
+  }
+}
+```
+
+```json 400 - Feature In Use (Credit System)
+{
+  "error": {
+    "message": "Feature 'gpt4_tokens' is used by credit system 'credits'",
+    "code": "feature_in_use"
+  }
+}
+```
+
+```json 404 - Not Found
+{
+  "error": {
+    "message": "Feature with id 'api_calls' not found",
+    "code": "feature_not_found"
+  }
+}
+```
+
+```json 401 - Unauthorized
+{
+  "error": {
+    "message": "Invalid API key",
+    "code": "unauthorized"
+  }
+}
+```
+</ResponseExample>
+
+## Error Codes
+
+| Status Code | Error Code | Description |
+|------------|------------|-------------|
+| 400 | `feature_in_use` | The feature is used in a product or credit system |
+| 401 | `unauthorized` | Invalid or missing API key |
+| 403 | `forbidden` | Insufficient permissions |
+| 404 | `feature_not_found` | The feature does not exist |
+| 500 | `internal_error` | An unexpected error occurred |
+
+## Before You Delete
+
+Before deleting a feature, consider the following:
+
+1. **Archive Instead**: If you want to hide the feature from the dashboard and list endpoints but preserve historical data, use the [Update Feature](/api/features/update) endpoint to set `archived: true`.
+
+2. **Check Dependencies**: Verify that no products reference this feature and that no credit systems depend on it.
+
+3. **Impact on Existing Subscriptions**: Deleting a feature does not affect existing customer subscriptions, but it prevents new subscriptions from including this feature.
+
+## Alternative: Archive a Feature
+
+Instead of deleting, you can archive a feature:
+
+```bash
+curl -X POST https://api.useautumn.com/v1/features/api_calls \
+  -H "Authorization: Bearer YOUR_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"archived": true}'
+```
+
+Archived features:
+- Are hidden from the dashboard
+- Are excluded from list endpoints by default
+- Preserve all historical usage data
+- Can be unarchived later if needed
