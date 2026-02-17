@@ -7,13 +7,29 @@ The Customers section provides a comprehensive view of your customer base, inclu
 
 ## Customer List
 
-The customer list displays all customers in your organization with key information:
+The customer list displays all customers in your organization with key information in a high-performance virtualized table:
 
 - **Name/Email** - Customer identification
 - **Status** - Active, trialing, past due, or canceled
-- **Products** - Current subscriptions
-- **Feature usage** - Usage bars for metered features
+- **Products** - Current subscriptions with plan names
+- **Feature usage** - Real-time usage bars for metered features
 - **Balance** - Credit balances for prepaid features
+- **MRR/ARR** - Revenue metrics (if applicable)
+
+### Table Features
+
+**Virtualization:**
+The customer table uses virtual scrolling to handle thousands of customers smoothly. Only visible rows are rendered, ensuring fast performance even with large datasets.
+
+**Dynamic columns:**
+Columns are generated automatically based on your features:
+- Base columns (name, email, status)
+- One column per metered feature showing usage
+- Balance columns for credit-based features
+- Custom metadata columns
+
+**Interactive rows:**
+Click any customer row to navigate to their detail page. The table maintains scroll position when you return.
 
 ### Filtering Customers
 
@@ -22,6 +38,33 @@ Filter the customer list by:
 - **Status** - Active, trialing, past due, canceled
 - **Version** - Customers on specific plan versions
 - **Search** - Find by name, email, or customer ID
+- **Custom filters** - None filter for customers without specific features
+
+**Filter button:**
+Click the filter icon to open the filter panel with options:
+- Multiple status selection
+- Plan version filtering
+- Combine filters with search
+
+<Tip>
+  Filters and search work together. Use search to narrow by text, then apply status filters for precise segmentation.
+</Tip>
+
+### Search Bar
+
+Powerful search across customer data:
+
+- Search by customer name
+- Search by email address
+- Search by customer ID (both `id` and `internal_id`)
+- Real-time results as you type
+- Highlights matching text
+
+**Search tips:**
+- Use partial matches ("john" finds "john@example.com")
+- Search is case-insensitive
+- Combine with filters for advanced queries
+- Clear search to show all customers
 
 ### Column Visibility
 
@@ -34,44 +77,124 @@ Customize which columns are visible:
    - Subscription details
    - Feature usage metrics
    - Balance information
+4. Select/deselect entire groups at once
+
+**Column groups:**
+- **Customer info** - Name, email, ID
+- **Subscription** - Plans, status, billing cycle
+- **Usage** - Metered feature consumption
+- **Balances** - Credit and boolean balances
+- **Revenue** - MRR, lifetime value
 
 <Tip>
-  Your column visibility preferences are saved and persist across sessions.
+  Your column visibility preferences are saved and persist across sessions, allowing you to create a personalized view.
 </Tip>
+
+### Pagination
+
+Navigate large customer lists efficiently:
+
+**Page size selector:**
+- 25 customers per page (default)
+- 50 customers per page
+- 100 customers per page
+- 250 customers per page
+
+**Navigation controls:**
+- First/last page buttons
+- Previous/next page buttons
+- Direct page number input
+- Total customer count display
+
+<Note>
+  Larger page sizes load more data upfront but reduce the need to paginate. Choose based on your dataset size and performance needs.
+</Note>
+
+### Creating Customers
+
+Add customers directly in the dashboard:
+
+1. Click **Create customer** button
+2. Enter customer details:
+   - **Email** - Customer email address (required)
+   - **Name** - Customer display name
+   - **External ID** - Your internal customer ID
+   - **Metadata** - Custom key-value pairs
+3. Optionally attach a product immediately
+4. Click **Create**
+
+<Note>
+  In most cases, customers are created automatically when they sign up through your application using the Autumn SDK.
+</Note>
 
 ## Customer Details
 
 Click on a customer to view their complete profile:
 
+### Overview Section
+
+Key customer information at a glance:
+
+- Customer name and email
+- Customer ID (both Autumn ID and your external ID)
+- Account status badge
+- Lifetime value and MRR
+- Account creation date
+- Last activity timestamp
+
+**Quick actions:**
+- Edit customer details
+- Create billing portal link
+- View in Stripe
+- Delete customer
+
 ### Subscriptions
 
 View all active and past subscriptions:
 
+**Subscription cards show:**
 - **Plan name** - Current subscription plan
 - **Status** - Active, trialing, past due, canceled
 - **Billing cycle** - Next billing date and amount
 - **Trial end** - When trial period expires (if applicable)
+- **Price** - Monthly or yearly charge
+- **Start date** - When subscription began
 
 **Actions:**
 - **Attach product** - Add a new subscription
 - **Update plan** - Change to a different plan
+- **Configure plan** - Override features and limits
 - **Cancel subscription** - End the subscription
-- **Manage billing** - Open customer billing portal
+- **View in Stripe** - Open in payment provider
+
+<Warning>
+  Customers can have multiple active subscriptions. Add-on plans must be attached alongside a base subscription plan.
+</Warning>
 
 ### Feature Usage
 
-Monitor usage for all metered features:
-
-- **Usage bars** - Visual representation of usage vs. limit
-- **Percentage** - Percentage of limit consumed
-- **Reset date** - When usage resets to zero
-- **Configuration** - View feature settings for this customer
+Monitor usage for all metered features in real-time:
 
 **Usage display:**
 ```
 █████████░░░░░░░░░░░ 45% (450/1000 API calls)
 Resets: Feb 1, 2024
 ```
+
+**Usage bars show:**
+- Visual progress bar with fill percentage
+- Current usage vs. limit (e.g., 450/1000)
+- Feature name and units
+- Reset date for usage period
+- Color coding (green → yellow → red as limit approaches)
+
+**Configuration link:**
+Click feature name to view:
+- Usage limit configuration
+- Included usage from plan
+- Overage pricing settings
+- Reset frequency
+- Historical usage data
 
 <Note>
   Usage bars turn red when approaching or exceeding limits, making it easy to identify customers who may need plan upgrades.
@@ -87,68 +210,135 @@ Prepaid credits that decrement with usage:
 
 - **Current balance** - Remaining credits
 - **Granted** - Manually added credits
+- **Purchased** - Credits from one-time purchases
 - **Rollover** - Credits carried from previous period
+- **Usage this period** - Credits consumed
 
 **Actions:**
 - **Add credits** - Manually grant additional credits
 - **Set balance** - Override current balance
+- **View history** - See all balance changes
 
 #### Boolean Balances
 
 Feature access flags:
 
-- **Enabled** - Customer has access
+- **Enabled** - Customer has access (green checkmark)
+- **Disabled** - Customer lacks access (red X)
 - **Source** - How access was granted (plan, manual override)
+
+**Manual overrides:**
+Grant or revoke access regardless of plan:
+- Override plan settings for specific customers
+- Temporary access for testing
+- Grandfathered features
+- Special exceptions
+
+### Entities
+
+For multi-tenant applications, view customer entities:
+
+**Entity list shows:**
+- Entity ID and name
+- Entity type (workspace, project, team)
+- Created date
+- Usage per entity
+- Entity-specific balances
+
+**Actions:**
+- Create new entity
+- Edit entity details
+- View entity usage
+- Delete entity
+
+<Card title="Learn about entities" icon="building" href="/concepts/entities">
+  Understand entity-based usage tracking
+</Card>
 
 ### Usage Analytics
 
-Analyze customer event history:
+Analyze customer event history with interactive visualizations:
 
-**Event table:**
+#### Usage Chart
+
+Visualize event frequency over time:
+
+- **Bar chart** - Shows usage per time bucket
+- **Multiple series** - Different colors per event type
+- **Interactive tooltips** - Hover for exact counts
+- **Time range selector** - 7 days, 30 days, custom
+- **Bin size selector** - Day, week, month aggregation
+
+**Chart controls:**
+- **Interval** - Select date range (7d, 30d, 90d)
+- **Bin size** - Choose aggregation (day, week, month)
+- **Event filter** - Show specific events only
+- **Group by** - Split by property value
+
+#### Event Table
+
+Detailed event log:
+
+**Table shows:**
 - **Event name** - Type of event tracked
 - **Timestamp** - When the event occurred
 - **Usage** - Quantity consumed
 - **Properties** - Custom event metadata
+- **Entity** - Associated workspace/project
 
-**Usage chart:**
-- Visualize event frequency over time
-- Filter by time range (7 days, 30 days)
-- View top 5 event types
-- Identify usage patterns and trends
+**Dynamic columns:**
+Common properties automatically become columns:
+- `endpoint` - API endpoint called
+- `method` - HTTP method
+- `status` - Response status code
+- Custom properties from your events
+
+**Pagination:**
+- 500 events per page (configurable)
+- Navigate with page controls
+- Total event count displayed
 
 <Tip>
   Click on an event row to view the complete event payload including all properties and metadata.
 </Tip>
 
+#### Group By Analysis
+
+Group events by property for deeper insights:
+
+1. Select **Group by** dropdown
+2. Choose property (e.g., `endpoint`, `method`)
+3. Chart shows separate series per group
+4. Filter by specific group value
+5. Table shows property columns
+
+**Use cases:**
+- Group by endpoint to see API usage patterns
+- Group by entity to compare workspace activity
+- Group by custom property for business metrics
+
+<Note>
+  When grouped data has too many unique values (>10), only the top groups by volume are shown to maintain chart readability.
+</Note>
+
 ### Invoices
 
 Access customer billing history:
 
+**Invoice list shows:**
 - **Invoice number** - Unique invoice identifier
 - **Date** - When invoice was created
 - **Amount** - Total charged
-- **Status** - Paid, pending, or failed
+- **Status** - Paid, pending, void, or failed
 - **Products** - Plans included in invoice
+- **Payment method** - Card or other payment type
 
 **Actions:**
-- Click an invoice to view in Stripe
+- Click invoice to view in Stripe
+- Download invoice PDF
 - Access hosted invoice URL
 - View payment details
-
-## Creating Customers
-
-Create customers directly in the dashboard:
-
-1. Click **Create customer** in the customer list
-2. Enter customer details:
-   - **Email** - Customer email address (required)
-   - **Name** - Customer display name
-   - **Metadata** - Custom key-value pairs
-3. Optionally attach a product immediately
-
-<Note>
-  In most cases, customers are created automatically when they sign up through your application using the Autumn SDK.
-</Note>
+- Resend invoice email
 
 ## Managing Subscriptions
 
@@ -157,33 +347,71 @@ Create customers directly in the dashboard:
 Add a subscription to a customer:
 
 1. Click **Attach product** on customer page
-2. Select a plan from the list
+2. Select a plan from the dropdown list
 3. Configure options:
-   - **Start date** - When subscription begins
+   - **Start date** - When subscription begins (default: now)
    - **Trial end** - Override default trial period
    - **Proration** - How to handle mid-cycle charges
+   - **Billing anchor** - Lock billing to specific day
 4. Customize features if needed:
-   - Override usage limits
+   - Override usage limits per feature
    - Adjust included usage
-   - Set custom pricing
-5. Click **Attach** to create subscription
+   - Set custom overage pricing
+   - Enable/disable specific features
+5. Review total pricing
+6. Click **Attach** to create subscription
+
+**Immediate effects:**
+- Customer gains access to plan features
+- Usage tracking begins
+- Stripe subscription created (if applicable)
+- Webhooks fire for subscription creation
 
 ### Updating Plans
 
 Change a customer's subscription:
 
 1. Click **Update** on the subscription card
-2. Select new plan
+2. Select new plan from dropdown
 3. Configure proration:
-   - **Immediate** - Change takes effect now
-   - **Next cycle** - Change at renewal
+   - **Immediate** - Change takes effect now with prorated charge
+   - **Next cycle** - Change at renewal, no proration
    - **Custom date** - Schedule for specific date
-4. Review pricing changes
+4. Review pricing changes:
+   - Unused time credit from old plan
+   - Prorated charge for new plan
+   - Net amount due
 5. Confirm update
+
+**Proration example:**
+```
+Old plan: $100/month (15 days remaining = $50 credit)
+New plan: $200/month (15 days prorated = $100 charge)
+Net due: $50
+```
 
 <Warning>
   Mid-cycle plan changes may result in prorated charges or credits. Review the proration preview before confirming.
 </Warning>
+
+### Customizing Plan Features
+
+Override plan defaults for individual customers:
+
+1. Click **Configure plan** on subscription
+2. Select feature to customize:
+   - Change usage limit
+   - Adjust included usage
+   - Set custom overage pricing
+   - Enable/disable feature
+3. Save configuration
+4. Customer sees updated limits immediately
+
+**Common use cases:**
+- Give enterprise customer higher limits
+- Grant beta access to specific features
+- Provide temporary limit increases
+- Custom negotiated pricing
 
 ### Canceling Subscriptions
 
@@ -191,31 +419,24 @@ End a customer subscription:
 
 1. Click **Cancel** on the subscription card
 2. Choose cancellation timing:
-   - **Immediately** - Cancel now
+   - **Immediately** - Cancel now, access ends
    - **At period end** - Cancel at next renewal
-3. Confirm cancellation
+3. Optional: Add cancellation reason
+4. Confirm cancellation
+
+**Immediate cancellation:**
+- Access ends right away
+- Prorated refund (if configured)
+- Subscription marked as canceled
+
+**End of period cancellation:**
+- Customer retains access until renewal
+- No future charges
+- Graceful offboarding experience
 
 <Tip>
-  Canceling at period end allows customers to use the service through the paid period.
+  Canceling at period end allows customers to use the service through the paid period, providing better UX.
 </Tip>
-
-## Entities
-
-Manage multi-tenant customers with entities:
-
-- View all entities for a customer
-- Create new entities (workspaces, projects, teams)
-- Track usage per entity
-- Apply feature limits per entity
-
-**Use cases:**
-- SaaS platforms with workspace-based pricing
-- Development tools with per-project limits
-- Team collaboration tools with per-team quotas
-
-<Card title="Learn about entities" icon="building" href="/concepts/entities">
-  Understand entity-based usage tracking
-</Card>
 
 ## Customer Actions
 
@@ -228,12 +449,19 @@ Generate a secure link for customers to manage their own billing:
 1. Click **Billing portal** in customer actions
 2. Copy the generated URL
 3. Send to customer or redirect from your app
+4. Link expires after 24 hours
 
 **Customers can:**
 - Update payment methods
-- View invoices
+- View and download invoices
 - Download receipts
 - Update billing information
+- View subscription details
+- Cancel subscriptions (if enabled)
+
+<Note>
+  The billing portal is hosted by Stripe and provides a secure, PCI-compliant interface for payment management.
+</Note>
 
 ### Metadata
 
@@ -242,6 +470,23 @@ Store custom data with customers:
 - Add key-value pairs for custom attributes
 - Use in webhooks and API responses
 - Query customers by metadata
+- Sync with your internal systems
+
+**Common metadata uses:**
+- Internal customer ID
+- Sales rep assignment
+- Account tier or segment
+- Acquisition channel
+- Custom flags and settings
+
+### Edit Customer
+
+Update customer information:
+
+- Change name or email
+- Update external ID
+- Modify metadata
+- Add notes or tags
 
 ### Delete Customer
 
@@ -249,23 +494,34 @@ Permanently remove a customer:
 
 1. Cancel all active subscriptions first
 2. Click **Delete** in customer actions
-3. Confirm deletion
+3. Confirm deletion (type customer email)
+4. Customer and all data removed
 
 <Warning>
-  Customer deletion is permanent and cannot be undone. All usage history and billing data will be removed.
+  Customer deletion is permanent and cannot be undone. All usage history and billing data will be removed. Consider archiving instead.
 </Warning>
 
-## Pagination and Performance
+## Performance and Scalability
 
-The customer list supports pagination for large datasets:
+The customer list is optimized for large datasets:
 
-- **Page size** - Choose 25, 50, 100, or 250 customers per page
-- **Navigation** - Use page numbers or next/previous buttons
-- **Search** - Filter results without losing page position
+**Virtualization:**
+- Only visible rows are rendered
+- Smooth scrolling with 1000+ customers
+- Lazy loading of balance data
+- Efficient memory usage
 
-<Note>
-  The customer list is virtualized for performance, allowing you to scroll through thousands of customers smoothly.
-</Note>
+**Real-time updates:**
+- Balance information updates as events are tracked
+- Subscription status reflects Stripe changes
+- Usage bars update in real-time
+- No manual refresh needed
+
+**Pagination:**
+- Configurable page sizes (25-250)
+- Fast page navigation
+- Maintains filter state across pages
+- Total count always accurate
 
 ## Best Practices
 
@@ -275,20 +531,31 @@ The customer list supports pagination for large datasets:
 - Add metadata for custom segmentation
 - Monitor usage regularly to identify upgrade opportunities
 - Set up webhooks for automated workflows
+- Keep customer emails up to date
 
 ### Subscription Changes
 
 - Review proration settings before making changes
-- Communicate plan changes to customers
+- Communicate plan changes to customers in advance
 - Use scheduled changes for renewals to avoid mid-cycle charges
 - Test changes in sandbox environment first
+- Document custom configurations in notes
 
 ### Usage Monitoring
 
-- Watch for customers approaching limits
+- Watch for customers approaching limits (red usage bars)
 - Proactively reach out to offer upgrades
 - Use the analytics chart to identify growth trends
 - Monitor events to detect unusual usage patterns
+- Set up alerts via webhooks for limit warnings
+
+### Data Organization
+
+- Use consistent naming for customers
+- Maintain metadata standards
+- Regularly audit inactive customers
+- Archive instead of delete when possible
+- Export data regularly for backup
 
 ## Related Resources
 
@@ -296,13 +563,13 @@ The customer list supports pagination for large datasets:
   <Card title="Customers Concept" icon="user" href="/concepts/customers">
     Learn about customer data model
   </Card>
-  <Card title="Subscriptions Guide" icon="repeat" href="/guides/subscriptions">
+  <Card title="Subscriptions Guide" icon="repeat" href="/guides/attach-products">
     Managing customer subscriptions
   </Card>
-  <Card title="Usage Tracking" icon="chart-line" href="/guides/metered-features">
+  <Card title="Usage Tracking" icon="chart-line" href="/guides/track-usage">
     Track and limit feature usage
   </Card>
-  <Card title="API: Get Customer" icon="code" href="/api/customers/get">
+  <Card title="API: Get Customer" icon="code" href="/api-reference/customers/get">
     Retrieve customer data via API
   </Card>
 </CardGroup>

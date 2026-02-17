@@ -1,0 +1,526 @@
+---
+title: "Create Product"
+api: "POST /plans"
+---
+
+Creates a new product (plan) that customers can subscribe to. Products define pricing, features, and usage limits for your service.
+
+<Note>
+  Product IDs are immutable. Use versioning to update products while maintaining existing subscriptions.
+</Note>
+
+## Request Body
+
+<ParamField body="id" type="string" required>
+  Unique identifier for the product. Must contain only alphanumeric characters, underscores, and hyphens.
+  
+  **Important:** This ID cannot be changed after creation. Choose carefully.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Display name for the product shown to customers.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Detailed description of what's included in this product.
+</ParamField>
+
+<ParamField body="group" type="string" default="">
+  Optional grouping identifier to organize related products (e.g., "subscription_plans" or "add_ons").
+</ParamField>
+
+<ParamField body="add_on" type="boolean" default={false}>
+  Whether this product is an add-on that can be purchased alongside a base plan.
+</ParamField>
+
+<ParamField body="auto_enable" type="boolean" default={false}>
+  Whether this product should be automatically enabled for new customers.
+</ParamField>
+
+<ParamField body="price" type="object">
+  Base subscription price for the product. Omit for free products.
+  
+  <Expandable title="price properties">
+    <ParamField body="amount" type="number" required>
+      Price in cents (e.g., 2999 for $29.99).
+    </ParamField>
+    
+    <ParamField body="interval" type="string" required>
+      Billing frequency. Must be one of:
+      - `one_off` - Single payment
+      - `week` - Weekly billing
+      - `month` - Monthly billing
+      - `quarter` - Every 3 months
+      - `semi_annual` - Every 6 months
+      - `year` - Annual billing
+    </ParamField>
+    
+    <ParamField body="interval_count" type="number">
+      Number of intervals between billings. For example, `interval_count: 3` with `interval: "month"` bills every 3 months.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="items" type="array">
+  Features included in this product. Each item configures usage limits and pricing for a specific feature.
+  
+  <Expandable title="item properties">
+    <ParamField body="feature_id" type="string" required>
+      ID of the feature to include in this product.
+    </ParamField>
+    
+    <ParamField body="included" type="number">
+      Number of usage units included with the base subscription.
+    </ParamField>
+    
+    <ParamField body="unlimited" type="boolean">
+      Set to `true` for unlimited usage of this feature.
+    </ParamField>
+    
+    <ParamField body="reset" type="object">
+      When usage limits should reset.
+      
+      <Expandable title="reset properties">
+        <ParamField body="interval" type="string" required>
+          Reset frequency. One of: `one_off`, `minute`, `hour`, `day`, `week`, `month`, `quarter`, `semi_annual`, `year`.
+        </ParamField>
+        
+        <ParamField body="interval_count" type="number">
+          Number of intervals between resets.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField body="price" type="object">
+      Pricing for additional usage beyond the included amount.
+      
+      <Expandable title="price properties">
+        <ParamField body="amount" type="number">
+          Flat price per billing unit. Cannot be used with `tiers`.
+        </ParamField>
+        
+        <ParamField body="tiers" type="array">
+          Tiered pricing structure. Cannot be used with `amount`.
+          
+          <Expandable title="tier properties">
+            <ParamField body="to" type="number | 'infinite'" required>
+              Upper bound for this tier. Use `"infinite"` for the final tier.
+            </ParamField>
+            
+            <ParamField body="amount" type="number" required>
+              Price in cents for usage in this tier.
+            </ParamField>
+          </Expandable>
+        </ParamField>
+        
+        <ParamField body="interval" type="string" required>
+          Billing frequency. Must be one of: `one_off`, `week`, `month`, `quarter`, `semi_annual`, `year`.
+        </ParamField>
+        
+        <ParamField body="interval_count" type="number" default={1}>
+          Number of intervals between billings.
+        </ParamField>
+        
+        <ParamField body="billing_units" type="number" default={1}>
+          Number of usage units per billable unit. For example, if `billing_units: 1000`, customers are charged per 1,000 usage units.
+        </ParamField>
+        
+        <ParamField body="billing_method" type="string" required>
+          How usage is billed:
+          - `prepaid` - Customer purchases usage upfront
+          - `usage_based` - Customer is billed for actual usage at the end of the period
+        </ParamField>
+        
+        <ParamField body="max_purchase" type="number">
+          Maximum amount of additional usage that can be purchased (prepaid only).
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField body="proration" type="object">
+      How to handle mid-cycle subscription changes.
+      
+      <Expandable title="proration properties">
+        <ParamField body="on_increase" type="string" required>
+          Behavior when upgrading:
+          - `bill_immediately` - Bill the full amount immediately
+          - `prorate_immediately` - Bill prorated amount immediately
+          - `prorate_next_cycle` - Apply proration to next billing cycle
+          - `bill_next_cycle` - Apply full amount to next billing cycle
+        </ParamField>
+        
+        <ParamField body="on_decrease" type="string" required>
+          Behavior when downgrading:
+          - `prorate` - Default proration behavior
+          - `prorate_immediately` - Credit prorated amount immediately
+          - `prorate_next_cycle` - Apply proration to next cycle
+          - `none` - No proration (replaceable strategy)
+          - `no_prorations` - No prorations at all
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField body="rollover" type="object">
+      Configuration for rolling over unused usage to the next period.
+      
+      <Expandable title="rollover properties">
+        <ParamField body="max" type="number" required>
+          Maximum amount that can roll over. Set high for unlimited rollover.
+        </ParamField>
+        
+        <ParamField body="expiry_duration_type" type="string" required>
+          How long rolled-over usage lasts:
+          - `month` - Expires after specified months
+          - `forever` - Never expires
+        </ParamField>
+        
+        <ParamField body="expiry_duration_length" type="number">
+          Number of months before expiry (required when `expiry_duration_type` is `month`).
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="free_trial" type="object">
+  Free trial configuration for this product.
+  
+  <Expandable title="free_trial properties">
+    <ParamField body="duration_length" type="number" required>
+      Length of the free trial period.
+    </ParamField>
+    
+    <ParamField body="duration_type" type="string" required>
+      Unit of time for the trial:
+      - `day` - Trial length in days
+      - `month` - Trial length in months
+      - `year` - Trial length in years
+    </ParamField>
+    
+    <ParamField body="card_required" type="boolean" required>
+      Whether a payment method is required to start the trial.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response
+
+Returns the created [Product](/api-reference/products/list#product-object) object.
+
+## Examples
+
+### Basic Subscription Product
+
+A simple monthly subscription with included API calls:
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.autumn.com/v1/plans \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "plan_starter",
+    "name": "Starter Plan",
+    "description": "Perfect for individuals and small teams",
+    "price": {
+      "amount": 2900,
+      "interval": "month"
+    },
+    "items": [
+      {
+        "feature_id": "api_calls",
+        "included": 10000,
+        "reset": {
+          "interval": "month"
+        }
+      }
+    ],
+    "free_trial": {
+      "duration_length": 14,
+      "duration_type": "day",
+      "card_required": false
+    }
+  }'
+```
+
+```javascript JavaScript
+const product = await autumn.plans.create({
+  id: 'plan_starter',
+  name: 'Starter Plan',
+  description: 'Perfect for individuals and small teams',
+  price: {
+    amount: 2900,
+    interval: 'month'
+  },
+  items: [
+    {
+      feature_id: 'api_calls',
+      included: 10000,
+      reset: {
+        interval: 'month'
+      }
+    }
+  ],
+  free_trial: {
+    duration_length: 14,
+    duration_type: 'day',
+    card_required: false
+  }
+});
+```
+
+```python Python
+product = autumn.plans.create(
+    id='plan_starter',
+    name='Starter Plan',
+    description='Perfect for individuals and small teams',
+    price={
+        'amount': 2900,
+        'interval': 'month'
+    },
+    items=[
+        {
+            'feature_id': 'api_calls',
+            'included': 10000,
+            'reset': {
+                'interval': 'month'
+            }
+        }
+    ],
+    free_trial={
+        'duration_length': 14,
+        'duration_type': 'day',
+        'card_required': False
+    }
+)
+```
+</RequestExample>
+
+### Usage-Based Pricing with Tiers
+
+A product with tiered usage pricing and rollover:
+
+<RequestExample>
+```bash cURL - Tiered pricing
+curl -X POST https://api.autumn.com/v1/plans \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "plan_pro",
+    "name": "Pro Plan",
+    "price": {
+      "amount": 9900,
+      "interval": "month"
+    },
+    "items": [
+      {
+        "feature_id": "api_calls",
+        "included": 100000,
+        "reset": {
+          "interval": "month"
+        },
+        "price": {
+          "tiers": [
+            { "to": 50000, "amount": 50 },
+            { "to": "infinite", "amount": 25 }
+          ],
+          "interval": "month",
+          "billing_units": 1000,
+          "billing_method": "usage_based"
+        },
+        "rollover": {
+          "max": 50000,
+          "expiry_duration_type": "month",
+          "expiry_duration_length": 2
+        }
+      }
+    ]
+  }'
+```
+
+```javascript JavaScript - Tiered pricing
+const product = await autumn.plans.create({
+  id: 'plan_pro',
+  name: 'Pro Plan',
+  price: {
+    amount: 9900,
+    interval: 'month'
+  },
+  items: [
+    {
+      feature_id: 'api_calls',
+      included: 100000,
+      reset: {
+        interval: 'month'
+      },
+      price: {
+        tiers: [
+          { to: 50000, amount: 50 },
+          { to: 'infinite', amount: 25 }
+        ],
+        interval: 'month',
+        billing_units: 1000,
+        billing_method: 'usage_based'
+      },
+      rollover: {
+        max: 50000,
+        expiry_duration_type: 'month',
+        expiry_duration_length: 2
+      }
+    }
+  ]
+});
+```
+
+```python Python - Tiered pricing
+product = autumn.plans.create(
+    id='plan_pro',
+    name='Pro Plan',
+    price={
+        'amount': 9900,
+        'interval': 'month'
+    },
+    items=[
+        {
+            'feature_id': 'api_calls',
+            'included': 100000,
+            'reset': {
+                'interval': 'month'
+            },
+            'price': {
+                'tiers': [
+                    {'to': 50000, 'amount': 50},
+                    {'to': 'infinite', 'amount': 25}
+                ],
+                'interval': 'month',
+                'billing_units': 1000,
+                'billing_method': 'usage_based'
+            },
+            'rollover': {
+                'max': 50000,
+                'expiry_duration_type': 'month',
+                'expiry_duration_length': 2
+            }
+        }
+    ]
+)
+```
+</RequestExample>
+
+### Prepaid Add-On
+
+An add-on product with prepaid usage:
+
+<RequestExample>
+```bash cURL - Add-on
+curl -X POST https://api.autumn.com/v1/plans \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "addon_extra_storage",
+    "name": "Extra Storage",
+    "description": "Additional storage for your account",
+    "add_on": true,
+    "items": [
+      {
+        "feature_id": "storage_gb",
+        "included": 100,
+        "price": {
+          "amount": 500,
+          "interval": "month",
+          "billing_units": 10,
+          "billing_method": "prepaid",
+          "max_purchase": 1000
+        }
+      }
+    ]
+  }'
+```
+
+```javascript JavaScript - Add-on
+const addon = await autumn.plans.create({
+  id: 'addon_extra_storage',
+  name: 'Extra Storage',
+  description: 'Additional storage for your account',
+  add_on: true,
+  items: [
+    {
+      feature_id: 'storage_gb',
+      included: 100,
+      price: {
+        amount: 500,
+        interval: 'month',
+        billing_units: 10,
+        billing_method: 'prepaid',
+        max_purchase: 1000
+      }
+    }
+  ]
+});
+```
+
+```python Python - Add-on
+addon = autumn.plans.create(
+    id='addon_extra_storage',
+    name='Extra Storage',
+    description='Additional storage for your account',
+    add_on=True,
+    items=[
+        {
+            'feature_id': 'storage_gb',
+            'included': 100,
+            'price': {
+                'amount': 500,
+                'interval': 'month',
+                'billing_units': 10,
+                'billing_method': 'prepaid',
+                'max_purchase': 1000
+            }
+        }
+    ]
+)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "id": "plan_starter",
+  "name": "Starter Plan",
+  "description": "Perfect for individuals and small teams",
+  "group": "",
+  "version": 1,
+  "add_on": false,
+  "default": false,
+  "price": {
+    "amount": 2900,
+    "interval": "month",
+    "interval_count": 1
+  },
+  "features": [
+    {
+      "feature_id": "api_calls",
+      "included": 10000,
+      "unlimited": false,
+      "reset": {
+        "interval": "month",
+        "interval_count": 1
+      },
+      "price": null,
+      "display": null,
+      "rollover": null,
+      "proration": null
+    }
+  ],
+  "free_trial": {
+    "duration_length": 14,
+    "duration_type": "day",
+    "card_required": false
+  },
+  "created_at": 1708473600,
+  "env": "live",
+  "archived": false,
+  "base_variant_id": null
+}
+```
+</ResponseExample>

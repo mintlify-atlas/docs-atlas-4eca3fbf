@@ -1,0 +1,211 @@
+---
+title: "Retrieve Customer"
+api: "GET /customers/:customer_id"
+---
+
+Retrieves the details of an existing customer. You can retrieve a customer by their unique ID.
+
+## Path Parameters
+
+<ParamField path="customer_id" type="string" required>
+  The unique identifier of the customer to retrieve. This is the ID you provided when creating the customer.
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="expand" type="array">
+  Expandable fields to include in the response. See [Expandable Fields](#expandable-fields) below.
+</ParamField>
+
+## Response
+
+Returns a Customer object if a valid identifier was provided.
+
+<ResponseField name="id" type="string">
+  Your unique identifier for the customer.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Customer's name.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Customer's email address.
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp when the customer was created.
+</ResponseField>
+
+<ResponseField name="fingerprint" type="string">
+  Unique device identifier for the customer.
+</ResponseField>
+
+<ResponseField name="stripe_id" type="string">
+  Associated Stripe customer ID, if any.
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  Environment where the customer exists (e.g., `test` or `live`).
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Additional metadata stored for the customer.
+</ResponseField>
+
+<ResponseField name="send_email_receipts" type="boolean">
+  Whether email receipts are enabled for this customer.
+</ResponseField>
+
+<ResponseField name="subscriptions" type="array">
+  Array of active Subscription objects for this customer. Each subscription represents an active plan the customer is subscribed to.
+</ResponseField>
+
+<ResponseField name="scheduled_subscriptions" type="array">
+  Array of scheduled Subscription objects that will activate in the future.
+</ResponseField>
+
+<ResponseField name="balances" type="object">
+  Object mapping feature IDs to Balance objects, representing the customer's available usage for each feature.
+</ResponseField>
+
+## Expandable Fields
+
+You can expand the following fields by passing them in the `expand` query parameter:
+
+- `invoices` - Include all invoices for the customer
+- `trials_used` - Include information about trials the customer has used
+- `rewards` - Include rewards and discounts applied to the customer
+- `entities` - Include associated entities
+- `referrals` - Include referral information
+- `payment_method` - Include the customer's payment method details
+- `subscriptions.plan` - Expand the plan details within each subscription
+- `balances.feature` - Expand the feature details within each balance
+
+Example: `?expand[]=invoices&expand[]=payment_method`
+
+<RequestExample>
+```bash cURL
+curl -X GET https://api.autumn.com/v1/customers/user_12345 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```bash cURL with expand
+curl -X GET "https://api.autumn.com/v1/customers/user_12345?expand[]=invoices&expand[]=payment_method" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const customer = await autumn.customers.retrieve('user_12345');
+```
+
+```javascript JavaScript with expand
+const customer = await autumn.customers.retrieve('user_12345', {
+  expand: ['invoices', 'payment_method']
+});
+```
+
+```python Python
+customer = autumn.customers.retrieve('user_12345')
+```
+
+```python Python with expand
+customer = autumn.customers.retrieve(
+    'user_12345',
+    expand=['invoices', 'payment_method']
+)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "id": "user_12345",
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "created_at": 1708473600,
+  "fingerprint": "device_abc123",
+  "stripe_id": "cus_PQr8sT9uVwX1yZ",
+  "env": "live",
+  "metadata": {
+    "user_tier": "premium",
+    "signup_source": "web"
+  },
+  "send_email_receipts": true,
+  "subscriptions": [
+    {
+      "id": "sub_xyz789",
+      "plan_id": "plan_premium",
+      "status": "active",
+      "current_period_start": 1708473600,
+      "current_period_end": 1711152000
+    }
+  ],
+  "scheduled_subscriptions": [],
+  "balances": {
+    "feat_api_calls": {
+      "feature_id": "feat_api_calls",
+      "balance": 10000,
+      "reset_at": 1711152000
+    }
+  }
+}
+```
+
+```json 200 with expanded fields
+{
+  "id": "user_12345",
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "created_at": 1708473600,
+  "fingerprint": "device_abc123",
+  "stripe_id": "cus_PQr8sT9uVwX1yZ",
+  "env": "live",
+  "metadata": {
+    "user_tier": "premium",
+    "signup_source": "web"
+  },
+  "send_email_receipts": true,
+  "subscriptions": [
+    {
+      "id": "sub_xyz789",
+      "plan_id": "plan_premium",
+      "status": "active",
+      "current_period_start": 1708473600,
+      "current_period_end": 1711152000
+    }
+  ],
+  "scheduled_subscriptions": [],
+  "balances": {
+    "feat_api_calls": {
+      "feature_id": "feat_api_calls",
+      "balance": 10000,
+      "reset_at": 1711152000
+    }
+  },
+  "invoices": [
+    {
+      "id": "inv_abc123",
+      "amount": 2999,
+      "status": "paid",
+      "created_at": 1708473600
+    }
+  ],
+  "payment_method": {
+    "type": "card",
+    "last4": "4242",
+    "brand": "visa"
+  }
+}
+```
+
+```json 404
+{
+  "error": {
+    "message": "Customer not found",
+    "code": "customer_not_found",
+    "status": 404
+  }
+}
+```
+</ResponseExample>

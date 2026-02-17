@@ -1,0 +1,340 @@
+---
+title: 'Stripe Connect'
+description: 'Using Stripe Connect for multi-tenant payment processing'
+icon: 'link'
+---
+
+Stripe Connect enables Autumn to process payments on behalf of connected accounts. This is the recommended approach for production deployments and multi-tenant platforms.
+
+## Overview
+
+Autumn's Stripe Connect integration allows:
+
+- Users to connect their Stripe accounts via OAuth
+- Platform to process payments on connected accounts
+- Automatic account management and token refresh
+- Secure credential handling (credentials never stored)
+
+## Architecture
+
+### Master and Connected Accounts
+
+Autumn uses a dual-account model:
+
+**Master Account**
+- Your platform's main Stripe account
+- Configured with `STRIPE_LIVE_SECRET_KEY` / `STRIPE_SANDBOX_SECRET_KEY`
+- Used to manage connected accounts
+- Receives platform webhooks
+
+**Connected Accounts**
+- Your customers' Stripe accounts
+- Linked via OAuth or created as platform-managed accounts
+- Each organization can have one connected account per environment
+- Identified by `account_id` in the database
+
+## OAuth Flow
+
+<Steps>
+  <Step title="User Initiates Connection">
+    User clicks "Connect with Stripe" in the Autumn dashboard.
+    
+    ```typescript
+    // Generated OAuth URL
+    server/src/internal/orgs/handlers/stripeHandlers/handleGetOAuthUrl.ts:6
+    ```
+    
+    The OAuth URL includes:
+    - Client ID for your environment (test/live)
+    - Redirect URI back to your server
+    - State parameter for security
+  </Step>
+
+  <Step title="User Authorizes on Stripe">
+    User is redirected to Stripe's OAuth consent page where they:
+    - Log in to their Stripe account
+    - Grant permissions to your platform
+    - Authorize the connection
+  </Step>
+
+  <Step title="Autumn Receives Callback">
+    Stripe redirects back to your server with an authorization code:
+    
+    ```
+    POST /stripe/oauth_callback
+    ```
+    
+    Autumn:
+    1. Verifies the state parameter
+    2. Exchanges authorization code for account credentials
+    3. Stores the `account_id` in the database
+    4. Redirects user back to dashboard
+  </Step>
+</Steps>
+
+## Connected Account Storage
+
+Connected account information is stored in the `organizations` table:
+
+```typescript
+{
+  test_stripe_connect: {
+    account_id: "acct_xxx",           // Connected account ID
+    master_org_id: "org_xxx",         // Platform org (if applicable)
+    default_account_id: "acct_yyy"    // Fallback account
+  },
+  live_stripe_connect: {
+    account_id: "acct_xxx",
+    master_org_id: "org_xxx",
+    default_account_id: "acct_yyy"
+  }
+}
+```
+
+## Making API Calls on Connected Accounts
+
+Autumn automatically routes API calls to the correct account:
+
+```typescript
+// Creating a Stripe client for an organization
+import { createStripeCli } from '@/external/connect/createStripeCli';
+
+const stripeCli = createStripeCli({ org, env });
+
+// All calls are automatically scoped to the connected account
+const customer = await stripeCli.customers.create({
+  email: 'customer@example.com'
+});
+```
+
+### Implementation Details
+
+```typescript
+// Client creation logic
+server/src/external/connect/createStripeCli.ts
+
+// Account ID resolution
+server/src/external/connect/connectUtils.ts:8
+```
+
+The `createStripeCli` function:
+1. Determines if the org uses Connect (`orgToAccountId`)
+2. Checks if a master org is involved (`shouldUseMaster`)
+3. Initializes the appropriate Stripe client with account context
+
+## Webhook Handling for Connect
+
+Connect webhooks are sent to a platform-level endpoint:
+
+```
+POST /webhooks/connect/:env
+```
+
+### Webhook Flow
+
+<Steps>
+  <Step title="Webhook Received">
+    Stripe sends webhook to your Connect endpoint with:
+    - Event data
+    - `account` field identifying the connected account
+    - Signature for verification
+  </Step>
+
+  <Step title="Signature Verification">
+    ```typescript
+    server/src/external/stripe/webhookMiddlewares/stripeConnectSeederMiddleware.ts:26
+    ```
+    
+    Autumn:
+    1. Gets master Stripe client
+    2. Retrieves webhook secret from environment
+    3. Verifies signature using master client
+  </Step>
+
+  <Step title="Account Resolution">
+    The middleware:
+    1. Extracts `account_id` from webhook event
+    2. Looks up organization by account ID
+    3. Loads organization features
+    4. Sets up context for event handling
+    
+    ```typescript
+    // Account to org lookup
+server/src/internal/orgs/OrgService.ts (getByAccountId method)
+    ```
+  </Step>
+
+  <Step title="Event Processing">
+    Event is processed with full organization context:
+    ```typescript
+    server/src/external/stripe/handleStripeWebhookEvent.ts:28
+    ```
+  </Step>
+</Steps>
+
+## Account Management
+
+### Getting Account ID
+
+```typescript
+import { orgToAccountId } from '@/external/connect/connectUtils';
+
+const accountId = orgToAccountId({ 
+  org, 
+  env: AppEnv.Live,
+  noDefaultAccount: false // Whether to exclude default account
+});
+```
+
+### Checking Connection Status
+
+```typescript
+import { isStripeConnected } from '@/internal/orgs/orgUtils';
+
+// Check any connection (OAuth or secret key)
+const connected = isStripeConnected({ org, env });
+
+// Check specifically for OAuth connection
+const oauthConnected = isStripeConnected({ 
+  org, 
+  env,
+  throughAccountId: true 
+});
+```
+
+### Disconnecting Accounts
+
+```typescript
+import { deauthorizeAccount, deleteConnectedAccount } from '@/external/connect/connectUtils';
+
+// For OAuth-connected accounts (recommended)
+await deauthorizeAccount({ accountId, env, logger });
+
+// For platform-managed accounts
+await deleteConnectedAccount({ accountId, env, logger });
+```
+
+**Code reference:**
+```typescript
+server/src/external/connect/connectUtils.ts:28
+```
+
+## Master Organization Pattern
+
+Autumn supports a "master organization" pattern for platform operators:
+
+```typescript
+const useMaster = shouldUseMaster({ org, env });
+```
+
+When enabled:
+- The organization has a `master_org_id` set
+- API calls route through the master org's Stripe account
+- Connected account is used as the `stripeAccount` parameter
+- Useful for revenue share or platform fee models
+
+**Implementation:**
+```typescript
+server/src/external/connect/connectUtils.ts:76
+```
+
+## OAuth Configuration
+
+### Redirect URI
+
+The OAuth callback URL must be configured in your Stripe Connect settings:
+
+```
+# For production
+https://your-domain.com/stripe/oauth_callback
+
+# For development
+http://localhost:8080/stripe/oauth_callback
+```
+
+### State Parameter
+
+Autumn generates and validates OAuth state for security:
+
+```typescript
+server/src/internal/platform/platformBeta/utils/oauthStateUtils.ts
+```
+
+State includes:
+- Organization slug
+- Environment (test/live)
+- Redirect URI after connection
+- Master org ID (if applicable)
+
+## Code Reference
+
+Key files for Stripe Connect implementation:
+
+| File | Purpose |
+|------|----------|
+| `server/src/external/connect/connectUtils.ts` | Account management utilities |
+| `server/src/external/connect/initStripeCli.ts` | Stripe client initialization |
+| `server/src/external/connect/createStripeCli.ts` | Org-scoped client creation |
+| `server/src/external/stripe/webhookMiddlewares/stripeConnectSeederMiddleware.ts` | Connect webhook middleware |
+| `server/src/internal/orgs/handlers/stripeHandlers/handleGetOAuthUrl.ts` | OAuth URL generation |
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use OAuth in Production">
+    OAuth is more secure and provides a better user experience than secret key connections. Always use OAuth for production deployments.
+  </Accordion>
+
+  <Accordion title="Handle Account Disconnections">
+    Users can disconnect their Stripe accounts at any time through the Stripe dashboard. Implement proper error handling for missing accounts.
+  </Accordion>
+
+  <Accordion title="Test Both Modes">
+    Always test your integration in both sandbox and live modes. Each has separate credentials and connected accounts.
+  </Accordion>
+
+  <Accordion title="Monitor Webhook Failures">
+    Connect webhooks include an `account` field. Ensure you're properly routing events to the correct organization.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### "Master organization not found" Error
+
+This occurs when:
+- An org has `master_org_id` set but the master org doesn't exist
+- The master org relationship is misconfigured
+
+**Solution:** Verify the `master` relationship is properly loaded from the database.
+
+### "Connect webhook secret not found" Error
+
+Connect webhooks require webhook secrets stored in the database:
+
+```typescript
+org.stripe_config.test_connect_webhook_secret
+org.stripe_config.live_connect_webhook_secret
+```
+
+**Solution:** Ensure webhook secrets are configured in your environment.
+
+### "Account ID not linked to any org" Warning
+
+This means a webhook was received for an account ID that doesn't exist in your database.
+
+**Possible causes:**
+- Account was disconnected but webhooks are still firing
+- Database and Stripe are out of sync
+- Webhook is for a different platform/environment
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Stripe Webhooks" icon="webhook" href="/integration/stripe-webhooks">
+    Learn about webhook events Autumn handles
+  </Card>
+  <Card title="Stripe Setup" icon="gear" href="/integration/stripe-setup">
+    Review initial Stripe configuration
+  </Card>
+</CardGroup>

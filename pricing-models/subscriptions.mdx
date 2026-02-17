@@ -17,15 +17,15 @@ Subscription pricing charges customers a recurring fee at regular intervals. Thi
 
 Subscriptions consist of:
 - **Base price** - The recurring charge amount
-- **Billing interval** - How often customers are charged (weekly, monthly, yearly, etc.)
+- **Billing interval** - How often customers are charged (week, month, year)
 - **Renewal** - Automatic rebilling at the end of each period
-- **Status** - Active, trialing, canceled, or past due
+- **Proration** - Handling mid-cycle changes
 
 ```typescript
 {
-  type: "price",           // Fixed price item
+  type: "price",
   price: 2900,            // $29.00
-  interval: "month"        // Billed monthly
+  interval: "month"       // Billed monthly
 }
 ```
 
@@ -37,6 +37,7 @@ Subscriptions consist of:
 
     ```typescript
     const product = await autumn.products.create({
+      id: "pro_plan",
       name: "Pro Plan",
       description: "Full access to all features",
       is_add_on: false,
@@ -59,35 +60,36 @@ Subscriptions consist of:
     ```typescript
     const subscription = await autumn.attach({
       customer_id: "customer_123",
-      product_id: product.id
+      product_id: "pro_plan"
     });
     ```
 
     The subscription activates immediately and renews automatically.
 
-    <Info>Learn more about the [Attach API](/api/billing/attach)</Info>
+    <Info>Learn more about the [Attach API](/api-reference/core/attach)</Info>
   </Step>
 
   <Step title="Collect payment (optional)">
-    For customers without payment methods, use checkout mode:
+    For customers without payment methods, redirect to checkout:
 
     ```typescript
-    const checkout = await autumn.checkout({
+    const checkout = await autumn.attach({
       customer_id: "customer_123",
-      product_id: product.id,
-      mode: "checkout"
+      product_id: "pro_plan",
+      success_url: "https://yourapp.com/success"
     });
 
     // Redirect to checkout.url
+    window.location.href = checkout.url;
     ```
 
-    <Info>Learn more about the [Checkout API](/api/billing/checkout)</Info>
+    <Info>Learn more about the [Checkout flow](/guides/attach-products)</Info>
   </Step>
 </Steps>
 
 ## Billing Intervals
 
-Autumn supports multiple billing intervals:
+Autumn supports multiple billing intervals with flexible counts:
 
 ### Monthly Subscriptions
 
@@ -156,10 +158,11 @@ Use `interval_count` for any custom period:
 
 ## Multiple Billing Options
 
-Offer customers a choice between different billing intervals:
+Offer customers a choice between different billing intervals using product groups:
 
 ```typescript
-const proProduct = await autumn.products.create({
+const proMonthly = await autumn.products.create({
+  id: "pro_monthly",
   name: "Pro Plan",
   group: "pro",           // Group related products
   items: [
@@ -172,6 +175,7 @@ const proProduct = await autumn.products.create({
 });
 
 const proAnnual = await autumn.products.create({
+  id: "pro_annual",
   name: "Pro Plan (Annual)",
   group: "pro",
   items: [
@@ -185,7 +189,7 @@ const proAnnual = await autumn.products.create({
 ```
 
 <Tip>
-Use the `group` field to associate monthly and annual versions of the same plan.
+Use the `group` field to associate monthly and annual versions of the same plan for seamless upgrades.
 </Tip>
 
 ## Free Trials
@@ -194,10 +198,13 @@ Offer trial periods before billing begins:
 
 ```typescript
 const product = await autumn.products.create({
+  id: "pro_with_trial",
   name: "Pro Plan",
   free_trial: {
-    duration: 14,          // 14 days
-    interval: "day"
+    duration: "day",
+    length: 14,              // 14 days
+    card_required: true,     // Require payment method
+    unique_fingerprint: false
   },
   items: [
     {
@@ -217,14 +224,14 @@ Customers can cancel anytime during the trial without being charged.
 
 ## Upgrades and Downgrades
 
-### Upgrading
+### Upgrading Plans
 
 Move customers to a higher-priced plan:
 
 ```typescript
 await autumn.attach({
   customer_id: "customer_123",
-  product_id: "pro_plan_id"  // Higher tier
+  product_id: "pro_plan"  // Higher tier
 });
 ```
 
@@ -233,12 +240,12 @@ By default, upgrades:
 - Are prorated based on time remaining in the period
 - Credit the unused portion of the old plan
 
-### Downgrading
+### Downgrading Plans
 
 ```typescript
 await autumn.attach({
   customer_id: "customer_123",
-  product_id: "starter_plan_id"  // Lower tier
+  product_id: "starter_plan"  // Lower tier
 });
 ```
 
@@ -275,70 +282,114 @@ Control how mid-cycle changes are handled:
 - `prorate_immediately` - Credit difference now
 - `none` - No proration
 
-## Cancellation
+## Checking Subscription Access
 
-### Cancel at Period End
-
-Allow customers to finish their current billing period:
+Verify a customer's subscription status before granting access:
 
 ```typescript
-await autumn.cancel({
+const check = await autumn.check({
   customer_id: "customer_123",
-  cancel_at_period_end: true
-});
-```
-
-Customers retain access until the period ends, then the subscription stops.
-
-### Cancel Immediately
-
-```typescript
-await autumn.cancel({
-  customer_id: "customer_123"
-});
-```
-
-Access is revoked immediately, and no refund is issued (unless you handle it separately).
-
-### Reactivating Canceled Subscriptions
-
-If canceled at period end, customers can reactivate before expiration:
-
-```typescript
-// Check if subscription is marked for cancellation
-const customer = await autumn.customers.retrieve({
-  customer_id: "customer_123"
+  product_id: "pro_plan"
 });
 
-if (customer.products[0].cancel_at_period_end) {
-  // Reattach to reactivate
-  await autumn.attach({
-    customer_id: "customer_123",
-    product_id: customer.products[0].product_id
-  });
+if (!check.has_access) {
+  // Customer doesn't have active subscription
+  return { error: "Subscription required" };
 }
+
+// Grant access to feature
 ```
 
-## Subscription Status
+<Info>Learn more about the [Check API](/api-reference/core/check)</Info>
 
-Subscriptions have several statuses:
+## Dashboard Configuration
 
-- **active** - Customer has access and billing is current
-- **trialing** - In free trial period
-- **past_due** - Payment failed, but access may continue
-- **canceled** - Subscription has been canceled
-- **incomplete** - Payment method required
+Create subscription products in the Autumn dashboard:
 
-Check subscription status:
+1. Navigate to **Products** → **Create Product**
+2. Enter product ID, name, and description
+3. Under **Items**, click **Add Item**
+4. Select **Price**
+5. Enter the price amount (in cents)
+6. Choose billing interval (month, year, week)
+7. Optionally configure a free trial
+8. Save the product
+
+<Tip>
+You can create multiple versions of the same product with different billing intervals (monthly vs. annual).
+</Tip>
+
+## Common Patterns
+
+### Good-Better-Best Tiers
 
 ```typescript
-const customer = await autumn.customers.retrieve({
-  customer_id: "customer_123"
+const starter = await autumn.products.create({
+  id: "starter",
+  name: "Starter",
+  group: "main",
+  items: [{ type: "price", price: 900, interval: "month" }]
 });
 
-const activeProducts = customer.products?.filter(
-  p => p.status === "active"
-);
+const pro = await autumn.products.create({
+  id: "pro",
+  name: "Pro",
+  group: "main",
+  items: [{ type: "price", price: 2900, interval: "month" }]
+});
+
+const enterprise = await autumn.products.create({
+  id: "enterprise",
+  name: "Enterprise",
+  group: "main",
+  items: [{ type: "price", price: 9900, interval: "month" }]
+});
+```
+
+### Base Subscription + Usage
+
+Combine fixed recurring fees with usage-based charges:
+
+```typescript
+const hybrid = await autumn.products.create({
+  id: "pro_hybrid",
+  name: "Pro Plan",
+  items: [
+    {
+      type: "price",
+      price: 2900,         // $29/month base
+      interval: "month"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 10000,  // 10k included
+      price: 10,              // $0.10 per 1k overage
+      billing_units: 1000,
+      usage_model: "pay_per_use",
+      interval: "month"
+    }
+  ]
+});
+```
+
+<Info>Learn more about [Usage-Based Pricing](/pricing-models/usage-based)</Info>
+
+### Freemium Model
+
+```typescript
+const free = await autumn.products.create({
+  id: "free_plan",
+  name: "Free Plan",
+  is_default: true,        // Auto-assigned to new customers
+  items: [
+    {
+      type: "feature",
+      feature_id: "basic_features",
+      unlimited: true
+    }
+  ]
+});
 ```
 
 ## Best Practices
@@ -367,87 +418,64 @@ const activeProducts = customer.products?.filter(
   When changing prices, consider keeping existing customers on their current rate.
 </Card>
 
-## Dashboard Configuration
+## Frequently Asked Questions
 
-Create subscription products in the Autumn dashboard:
+<Accordion title="How do I cancel a subscription?">
+  Use the cancel endpoint with the customer ID:
 
-1. Navigate to **Products** → **Create Product**
-2. Enter product name and description
-3. Under **Pricing**, click **Add Price**
-4. Select **Fixed Price**
-5. Enter the price amount (in cents)
-6. Choose billing interval (month, year, etc.)
-7. Optionally add a free trial
-8. Save the product
+  ```typescript
+  await autumn.cancel({
+    customer_id: "customer_123",
+    cancel_at_period_end: true  // Keep access until period ends
+  });
+  ```
 
-<Tip>
-You can create multiple versions of the same product with different billing intervals (monthly vs. annual).
-</Tip>
+  Set `cancel_at_period_end: false` to cancel immediately.
+</Accordion>
 
-## Common Patterns
+<Accordion title="What happens when a payment fails?">
+  Autumn automatically retries failed payments according to Stripe's retry schedule. You'll receive webhooks for:
+  - `invoice.payment_failed` - Initial failure
+  - `invoice.payment_action_required` - Requires customer action (e.g., 3D Secure)
+  - `subscription.updated` - Status changes to `past_due`
 
-### Good-Better-Best Tiers
+  After all retries fail, the subscription may be canceled depending on your settings.
+</Accordion>
 
-```typescript
-const starter = await autumn.products.create({
-  name: "Starter",
-  items: [{ type: "price", price: 900, interval: "month" }]
-});
+<Accordion title="Can I change subscription prices for existing customers?">
+  Yes, but it requires creating a new product version. Existing customers remain on their current pricing unless you explicitly migrate them:
 
-const pro = await autumn.products.create({
-  name: "Pro",
-  items: [{ type: "price", price: 2900, interval: "month" }]
-});
+  ```typescript
+  // Create new version
+  await autumn.products.update({
+    id: "pro_plan",
+    items: [{ type: "price", price: 3900, interval: "month" }]
+  });
 
-const enterprise = await autumn.products.create({
-  name: "Enterprise",
-  items: [{ type: "price", price: 9900, interval: "month" }]
-});
-```
+  // Migrate customer
+  await autumn.attach({
+    customer_id: "customer_123",
+    product_id: "pro_plan"  // Uses new version
+  });
+  ```
+</Accordion>
 
-### Base Subscription + Usage
+<Accordion title="How do I handle tax calculations?">
+  Autumn integrates with Stripe Tax for automatic tax calculations. Enable it in your Stripe dashboard, and taxes will be calculated and collected automatically based on customer location.
+</Accordion>
 
-Combine fixed recurring fees with usage-based charges:
+<Accordion title="Can customers switch between monthly and annual billing?">
+  Yes! Place both plans in the same `group`, and use the attach endpoint to switch:
 
-```typescript
-const hybrid = await autumn.products.create({
-  name: "Pro Plan",
-  items: [
-    {
-      type: "price",
-      price: 2900,         // $29/month base
-      interval: "month"
-    },
-    {
-      type: "priced_feature",
-      feature_id: "api_calls",
-      included_usage: 10000,  // 10k included
-      price: 10,              // $0.10 per 1k overage
-      billing_units: 1000,
-      usage_model: "pay_per_use",
-      interval: "month"
-    }
-  ]
-});
-```
+  ```typescript
+  await autumn.attach({
+    customer_id: "customer_123",
+    product_id: "pro_annual"  // Switch to annual
+  });
+  ```
 
-<Info>Learn more about [Usage-Based Pricing](/pricing-models/usage-based)</Info>
-
-### Freemium Model
-
-```typescript
-const free = await autumn.products.create({
-  name: "Free Plan",
-  is_default: true,        // Auto-assigned to new customers
-  items: [
-    {
-      type: "price",
-      price: 0,              // Free
-      interval: "month"
-    }
-  ]
-});
-```
+  Proration will be applied based on your configuration.
+</Accordion>
 
 ## Related Resources
 
@@ -455,13 +483,13 @@ const free = await autumn.products.create({
   <Card title="Products and Plans" icon="box" href="/concepts/products-and-plans">
     Understand product structure
   </Card>
-  <Card title="Billing Flow" icon="arrow-progress" href="/concepts/billing-flow">
-    How billing cycles work
-  </Card>
-  <Card title="Attach API" icon="link" href="/api/billing/attach">
+  <Card title="Attach Products" icon="link" href="/guides/attach-products">
     Subscribe customers to products
   </Card>
-  <Card title="Checkout API" icon="credit-card" href="/api/billing/checkout">
-    Create checkout sessions
+  <Card title="Attach API" icon="code" href="/api-reference/core/attach">
+    API reference for subscriptions
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Handle subscription events
   </Card>
 </CardGroup>

@@ -18,7 +18,7 @@ description: "Learn how customers are structured and managed in Autumn"
 Every customer has these core attributes:
 
 <ParamField path="id" type="string">
-  Unique identifier for the customer (e.g., `cus_123`, user UUID)
+  Unique identifier for the customer (e.g., `user_123`, user UUID)
 </ParamField>
 
 <ParamField path="name" type="string">
@@ -145,13 +145,21 @@ await autumn.attach({
 });
 ```
 
-Each customer-product relationship creates a `customer_product` with:
+Each customer-product relationship creates a **subscription** with:
 
-<ParamField path="status" type="string">
-  Subscription status: `active`, `trialing`, `past_due`, `canceled`
+<ParamField path="plan_id" type="string">
+  ID of the product the customer is subscribed to
 </ParamField>
 
-<ParamField path="starts_at" type="number">
+<ParamField path="status" type="string">
+  Subscription status: `active`, `scheduled`, or `expired`
+</ParamField>
+
+<ParamField path="past_due" type="boolean">
+  Whether subscription payment is past due
+</ParamField>
+
+<ParamField path="started_at" type="number">
   Unix timestamp when subscription started
 </ParamField>
 
@@ -159,12 +167,32 @@ Each customer-product relationship creates a `customer_product` with:
   Unix timestamp when subscription was canceled (if applicable)
 </ParamField>
 
+<ParamField path="expires_at" type="number">
+  Unix timestamp when subscription expires
+</ParamField>
+
 <ParamField path="trial_ends_at" type="number">
   Unix timestamp when trial period ends (if in trial)
 </ParamField>
 
+<ParamField path="current_period_start" type="number">
+  Start of current billing period
+</ParamField>
+
+<ParamField path="current_period_end" type="number">
+  End of current billing period
+</ParamField>
+
 <ParamField path="quantity" type="number" default="1">
   Quantity of the product (for per-seat pricing)
+</ParamField>
+
+<ParamField path="add_on" type="boolean">
+  Whether this is an add-on subscription
+</ParamField>
+
+<ParamField path="auto_enable" type="boolean">
+  Whether subscription was auto-enabled
 </ParamField>
 
 ## External Processors
@@ -292,7 +320,7 @@ console.log(customer);
 //   id: "user_123",
 //   email: "jane@example.com",
 //   products: [
-//     { id: "pro", status: "active", ... }
+//     { plan_id: "pro", status: "active", ... }
 //   ],
 //   entities: [
 //     { id: "team_acme", name: "Acme Corp Team" }
@@ -308,7 +336,7 @@ console.log(customer);
   - `products`: Customer's subscriptions
   - `entities`: Customer's entities
   - `invoices`: Billing history
-  - `usage`: Feature usage data
+  - `features`: Feature entitlements
 </ParamField>
 
 ## Billing Portal
@@ -456,7 +484,7 @@ const customer = await autumn.customers.get({
 });
 
 const subscription = customer.products[0];
-if (subscription.status === "trialing") {
+if (subscription.trial_ends_at) {
   const daysLeft = Math.ceil(
     (subscription.trial_ends_at * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
   );
@@ -528,7 +556,7 @@ if (subscription.status === "trialing") {
   <Card title="Create Customer" icon="plus" href="/api/customers/create">
     Create a customer via API
   </Card>
-  <Card title="Attach Product" icon="link" href="/api/attach">
+  <Card title="Attach Product" icon="link" href="/api/billing/attach">
     Subscribe a customer to a product
   </Card>
   <Card title="Billing Portal" icon="credit-card" href="/api/customers/billing-portal">

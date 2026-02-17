@@ -13,7 +13,7 @@ Usage-based pricing charges customers for their actual consumption of your servi
 - Compute time (CPU hours, GPU minutes)
 - Data transfer (bandwidth)
 - Messages sent or emails delivered
-- AI model API calls
+- AI model tokens
 
 ## How Usage-Based Pricing Works
 
@@ -42,8 +42,8 @@ Usage-based pricing consists of:
 
     ```typescript
     const feature = await autumn.features.create({
+      id: "api_calls",
       name: "API Calls",
-      key: "api_calls",
       config: {
         usage_type: "continuous_use"  // Metered feature
       }
@@ -58,11 +58,12 @@ Usage-based pricing consists of:
 
     ```typescript
     const product = await autumn.products.create({
+      id: "payg_plan",
       name: "Pay As You Go",
       items: [
         {
           type: "priced_feature",
-          feature_id: feature.id,
+          feature_id: "api_calls",
           price: 10,              // $0.10 per 1,000 calls
           billing_units: 1000,
           usage_model: "pay_per_use",
@@ -79,11 +80,11 @@ Usage-based pricing consists of:
     ```typescript
     await autumn.attach({
       customer_id: "customer_123",
-      product_id: product.id
+      product_id: "payg_plan"
     });
     ```
 
-    <Info>Learn more about the [Attach API](/api/billing/attach)</Info>
+    <Info>Learn more about the [Attach API](/api-reference/core/attach)</Info>
   </Step>
 
   <Step title="Track usage as it occurs">
@@ -92,12 +93,12 @@ Usage-based pricing consists of:
     ```typescript
     await autumn.track({
       customer_id: "customer_123",
-      feature_id: feature.id,
+      feature_id: "api_calls",
       value: 1  // Increment by 1 API call
     });
     ```
 
-    <Info>Learn more about the [Track API](/api/billing/track)</Info>
+    <Info>Learn more about the [Track API](/api-reference/core/track)</Info>
   </Step>
 </Steps>
 
@@ -242,14 +243,13 @@ await autumn.track({
 
 ### Setting Absolute Values
 
-For gauge metrics like storage, set the current total:
+For gauge metrics like storage, use the set usage endpoint:
 
 ```typescript
-await autumn.track({
+await autumn.setUsage({
   customer_id: "customer_123",
   feature_id: "storage_gb",
-  value: 150,           // Customer now using 150 GB
-  set_usage: true       // Set absolute value
+  value: 150  // Customer now using 150 GB
 });
 ```
 
@@ -274,7 +274,7 @@ For high-volume scenarios, batch your tracking calls:
 
 ```typescript
 // Aggregate locally, then track in batches
-const usageBuffer = {};
+const usageBuffer: Record<string, number> = {};
 
 function recordUsage(customerId: string, featureId: string) {
   const key = `${customerId}:${featureId}`;
@@ -305,7 +305,8 @@ Check current usage before billing:
 
 ```typescript
 const customer = await autumn.customers.retrieve({
-  customer_id: "customer_123"
+  customer_id: "customer_123",
+  expand: ["balances.feature"]
 });
 
 const apiCallsBalance = customer.balances?.find(
@@ -313,10 +314,11 @@ const apiCallsBalance = customer.balances?.find(
 );
 
 console.log({
-  used: apiCallsBalance.used,
-  period_start: apiCallsBalance.period_start,
-  period_end: apiCallsBalance.period_end,
-  estimated_cost: calculateCost(apiCallsBalance.used)
+  used: apiCallsBalance?.used,
+  granted: apiCallsBalance?.granted,
+  remaining: apiCallsBalance?.remaining,
+  period_start: apiCallsBalance?.period_start,
+  period_end: apiCallsBalance?.period_end
 });
 ```
 
@@ -326,6 +328,7 @@ Combine fixed base prices with included usage:
 
 ```typescript
 const product = await autumn.products.create({
+  id: "pro_plan",
   name: "Pro Plan",
   items: [
     {
@@ -392,7 +395,8 @@ Verify balance before expensive operations:
 ```typescript
 const check = await autumn.check({
   customer_id: "customer_123",
-  feature_id: "api_calls"
+  feature_id: "api_calls",
+  required_balance: 1
 });
 
 if (!check.has_access) {
@@ -410,7 +414,7 @@ await autumn.track({
 });
 ```
 
-<Info>Learn more about the [Check API](/api/billing/check)</Info>
+<Info>Learn more about the [Check API](/api-reference/core/check)</Info>
 
 ## Dashboard Configuration
 
@@ -458,6 +462,7 @@ await autumn.track({
 
 ```typescript
 const payg = await autumn.products.create({
+  id: "payg",
   name: "Pay As You Go",
   items: [
     {
@@ -476,6 +481,7 @@ const payg = await autumn.products.create({
 
 ```typescript
 const baseOverage = await autumn.products.create({
+  id: "starter",
   name: "Starter Plan",
   items: [
     { type: "price", price: 900, interval: "month" },
@@ -496,6 +502,7 @@ const baseOverage = await autumn.products.create({
 
 ```typescript
 const multiMetered = await autumn.products.create({
+  id: "platform",
   name: "Platform Plan",
   items: [
     { type: "price", price: 4900, interval: "month" },
@@ -520,13 +527,69 @@ const multiMetered = await autumn.products.create({
 });
 ```
 
+## Frequently Asked Questions
+
+<Accordion title="When is usage billed?">
+  Usage is billed at the end of each billing period. For a monthly subscription starting on the 1st, usage from the 1st to the 31st is invoiced on the 1st of the next month along with the base subscription fee.
+</Accordion>
+
+<Accordion title="What happens if tracking fails?">
+  Use idempotency keys to safely retry failed tracking requests. If a request fails, retry with the same `idempotency_key` and usage will only be recorded once.
+
+  ```typescript
+  await autumn.track({
+    customer_id: "customer_123",
+    feature_id: "api_calls",
+    value: 1,
+    idempotency_key: `request_${uniqueId}`
+  });
+  ```
+</Accordion>
+
+<Accordion title="Can I change pricing mid-period?">
+  Yes, but the new pricing only applies to new usage. Existing usage is billed at the old rate. Create a new product version and migrate customers:
+
+  ```typescript
+  await autumn.products.update({
+    id: "payg",
+    items: [{ /* new pricing */ }]
+  });
+  ```
+</Accordion>
+
+<Accordion title="How do I handle refunds for usage?">
+  You can manually adjust balances to credit usage back:
+
+  ```typescript
+  await autumn.balances.update({
+    customer_id: "customer_123",
+    feature_id: "api_calls",
+    add_to_balance: 1000  // Credit back 1,000 calls
+  });
+  ```
+</Accordion>
+
+<Accordion title="Can I track usage without charging?">
+  Yes! Create a product with the feature but no price:
+
+  ```typescript
+  {
+    type: "feature",
+    feature_id: "api_calls",
+    included_usage: 10000,
+    interval: "month"
+    // No price field = free
+  }
+  ```
+</Accordion>
+
 ## Related Resources
 
 <CardGroup cols={2}>
-  <Card title="Track API" icon="activity" href="/api/billing/track">
+  <Card title="Track API" icon="activity" href="/api-reference/core/track">
     Send usage events for billing
   </Card>
-  <Card title="Check API" icon="shield-check" href="/api/billing/check">
+  <Card title="Check API" icon="shield-check" href="/api-reference/core/check">
     Verify customer access and balance
   </Card>
   <Card title="Features" icon="puzzle-piece" href="/concepts/features">

@@ -1,0 +1,534 @@
+---
+title: 'Create Checkout Session'
+api: 'POST /checkout'
+description: 'Create a checkout session for a customer to purchase a product with payment collection'
+---
+
+## Overview
+
+The `/checkout` endpoint creates a Stripe checkout session for a customer to purchase a product. This is the primary endpoint for collecting payment information from new customers or when you need to collect payment upfront.
+
+<Note>
+  For customers who already have a payment method saved, use [`/attach`](/api-reference/core/attach) instead for immediate product activation.
+</Note>
+
+## When to Use
+
+**Use `/checkout` when:**
+- Customer is new and needs to add payment information
+- You need to collect payment before activating product
+- Customer doesn't have a saved payment method
+- You want to show pricing breakdown before charging
+
+**Use `/attach` instead when:**
+- Customer already has payment method on file
+- You want immediate product activation
+- Customer is upgrading/downgrading existing subscription
+
+## Authentication
+
+This endpoint requires API key authentication:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer creating the checkout session for.
+
+  ```json
+  "cus_123"
+  ```
+</ParamField>
+
+<ParamField body="product_id" type="string" required>
+  The ID of the product to purchase. You can also use `product_ids` to include multiple products.
+
+  ```json
+  "pro_plan"
+  ```
+</ParamField>
+
+<ParamField body="product_ids" type="array">
+  Array of product IDs for purchasing multiple products. Use either `product_id` or `product_ids`, not both.
+
+  ```json
+  ["pro_plan", "addon_api"]
+  ```
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  The ID of the entity (optional). Use for entity-scoped products.
+
+  ```json
+  "team_123"
+  ```
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Customer properties to set when creating or updating the customer.
+
+  <Expandable title="Customer Data Properties">
+    <ParamField body="name" type="string">
+      Customer's full name
+    </ParamField>
+    <ParamField body="email" type="string">
+      Customer's email address
+    </ParamField>
+    <ParamField body="fingerprint" type="string">
+      Unique identifier for fraud prevention
+    </ParamField>
+    <ParamField body="metadata" type="object">
+      Custom metadata
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="options" type="array">
+  Feature-specific options for configurable features.
+
+  <Expandable title="Feature Options">
+    <ParamField body="feature_id" type="string" required>
+      The ID of the feature to configure
+    </ParamField>
+    <ParamField body="quantity" type="number">
+      Quantity for this feature (e.g., seat count)
+    </ParamField>
+  </Expandable>
+
+  ```json
+  [
+    {
+      "feature_id": "seats",
+      "quantity": 10
+    }
+  ]
+  ```
+</ParamField>
+
+<ParamField body="success_url" type="string">
+  URL to redirect to after successful payment. Required for hosted checkout.
+
+  ```json
+  "https://example.com/success"
+  ```
+</ParamField>
+
+<ParamField body="setup_payment" type="boolean">
+  If true, creates a setup session for adding payment method without charging.
+
+  ```json
+  false
+  ```
+</ParamField>
+
+<ParamField body="free_trial" type="boolean">
+  Whether to start a free trial for this product.
+
+  ```json
+  true
+  ```
+</ParamField>
+
+<ParamField body="checkout_session_params" type="object">
+  Additional Stripe Checkout Session parameters for customization.
+
+  ```json
+  {
+    "locale": "es",
+    "allow_promotion_codes": true
+  }
+  ```
+</ParamField>
+
+## Response
+
+<ResponseField name="url" type="string" nullable>
+  The Stripe Checkout session URL. Redirect the customer to this URL to complete payment.
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  The ID of the customer.
+</ResponseField>
+
+<ResponseField name="lines" type="array">
+  Array of line items that will be charged.
+
+  <Expandable title="Line Item Object">
+    <ResponseField name="description" type="string">
+      Description of the line item.
+    </ResponseField>
+
+    <ResponseField name="amount" type="number">
+      Amount in cents.
+    </ResponseField>
+
+    <ResponseField name="item" type="object" optional>
+      Product item details.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="product" type="object" optional>
+  The product being purchased.
+</ResponseField>
+
+<ResponseField name="current_product" type="object" optional>
+  The customer's current product (if upgrading/downgrading).
+</ResponseField>
+
+<ResponseField name="total" type="number" optional>
+  Total amount to be charged in cents.
+</ResponseField>
+
+<ResponseField name="currency" type="string" optional>
+  Currency code (e.g., `usd`).
+</ResponseField>
+
+<ResponseField name="has_prorations" type="boolean" optional>
+  Whether the checkout includes prorations.
+</ResponseField>
+
+<ResponseField name="next_cycle" type="object" optional>
+  Information about the next billing cycle.
+
+  <Expandable title="Next Cycle Object">
+    <ResponseField name="starts_at" type="number">
+      Unix timestamp when next cycle starts.
+    </ResponseField>
+
+    <ResponseField name="total" type="number">
+      Total amount for next cycle.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.useautumn.com/checkout \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "product_id": "pro_plan",
+    "success_url": "https://example.com/success"
+  }'
+```
+
+```typescript TypeScript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
+
+const result = await autumn.checkout({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan',
+  success_url: 'https://example.com/success'
+});
+
+// Redirect to checkout
+window.location.href = result.url;
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key='YOUR_API_KEY')
+
+result = autumn.checkout(
+  customer_id='cus_123',
+  product_id='pro_plan',
+  success_url='https://example.com/success'
+)
+
+# Redirect to checkout
+print(f"Checkout URL: {result['url']}")
+```
+
+```typescript React
+import { useAutumn } from '@useautumn/react';
+
+function CheckoutButton({ productId }: { productId: string }) {
+  const autumn = useAutumn();
+  const [loading, setLoading] = useState(false);
+
+  const handleCheckout = async () => {
+    setLoading(true);
+    try {
+      const result = await autumn.checkout({
+        customer_id: 'cus_123',
+        product_id: productId,
+        success_url: `${window.location.origin}/success`,
+        options: [
+          {
+            feature_id: 'seats',
+            quantity: 5
+          }
+        ]
+      });
+
+      // Redirect to Stripe Checkout
+      window.location.href = result.url;
+    } catch (error) {
+      console.error('Checkout failed:', error);
+      alert('Failed to create checkout session');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={handleCheckout} disabled={loading}>
+      {loading ? 'Loading...' : 'Subscribe Now'}
+    </button>
+  );
+}
+```
+</CodeGroup>
+
+## Example Responses
+
+### Successful Checkout Session
+
+```json
+{
+  "url": "https://checkout.stripe.com/c/pay/cs_test_a1b2c3...",
+  "customer_id": "cus_123",
+  "lines": [
+    {
+      "description": "Pro Plan",
+      "amount": 4900,
+      "item": {
+        "id": "pro_plan",
+        "name": "Pro Plan",
+        "price": 4900
+      }
+    }
+  ],
+  "product": {
+    "id": "pro_plan",
+    "name": "Pro Plan",
+    "price": 4900
+  },
+  "total": 4900,
+  "currency": "usd",
+  "has_prorations": false,
+  "next_cycle": {
+    "starts_at": 1738368000000,
+    "total": 4900
+  }
+}
+```
+
+### Checkout with Prorations
+
+```json
+{
+  "url": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "customer_id": "cus_123",
+  "lines": [
+    {
+      "description": "Unused time on Basic Plan",
+      "amount": -1500
+    },
+    {
+      "description": "Pro Plan (prorated)",
+      "amount": 3200
+    }
+  ],
+  "current_product": {
+    "id": "basic_plan",
+    "name": "Basic Plan"
+  },
+  "product": {
+    "id": "pro_plan",
+    "name": "Pro Plan"
+  },
+  "total": 1700,
+  "currency": "usd",
+  "has_prorations": true
+}
+```
+
+## Common Use Cases
+
+### Simple Product Purchase
+
+```typescript
+const result = await autumn.checkout({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan',
+  success_url: 'https://example.com/success'
+});
+
+window.location.href = result.url;
+```
+
+### Checkout with Seat Selection
+
+```typescript
+const seatCount = 10;
+
+const result = await autumn.checkout({
+  customer_id: 'cus_123',
+  product_id: 'team_plan',
+  success_url: 'https://example.com/success',
+  options: [
+    {
+      feature_id: 'seats',
+      quantity: seatCount
+    }
+  ]
+});
+
+window.location.href = result.url;
+```
+
+### Checkout with Custom Locale
+
+```typescript
+const result = await autumn.checkout({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan',
+  success_url: 'https://example.com/success',
+  checkout_session_params: {
+    locale: 'es', // Spanish
+    allow_promotion_codes: true
+  }
+});
+```
+
+### Free Trial Checkout
+
+```typescript
+const result = await autumn.checkout({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan',
+  free_trial: true,
+  success_url: 'https://example.com/success'
+});
+
+window.location.href = result.url;
+```
+
+### Preview Pricing Before Checkout
+
+```typescript
+// Get pricing details without creating session
+const preview = await autumn.checkout({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan'
+});
+
+console.log('Total:', preview.total / 100); // Convert cents to dollars
+console.log('Has prorations:', preview.has_prorations);
+
+// Show confirmation, then redirect
+if (confirm(`Proceed with checkout for $${preview.total / 100}?`)) {
+  window.location.href = preview.url;
+}
+```
+
+## Best Practices
+
+### Handle Checkout Success
+
+Use webhooks to handle successful payments:
+
+```typescript
+// In your webhook handler
+if (event.type === 'checkout.session.completed') {
+  const session = event.data.object;
+  const customerId = session.client_reference_id;
+  
+  // Grant access to product
+  await enableProductForCustomer(customerId);
+}
+```
+
+### Provide Clear Success URL
+
+Include query parameters in success URL for better UX:
+
+```typescript
+const result = await autumn.checkout({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan',
+  success_url: `https://example.com/success?session_id={CHECKOUT_SESSION_ID}`
+});
+```
+
+### Show Pricing Preview
+
+Display pricing information before redirecting:
+
+```typescript
+const preview = await autumn.checkout({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan'
+});
+
+const PricingPreview = () => (
+  <div>
+    <h3>Order Summary</h3>
+    {preview.lines.map(line => (
+      <div key={line.description}>
+        <span>{line.description}</span>
+        <span>${line.amount / 100}</span>
+      </div>
+    ))}
+    <div>
+      <strong>Total: ${preview.total / 100}</strong>
+    </div>
+    <button onClick={() => window.location.href = preview.url}>
+      Proceed to Checkout
+    </button>
+  </div>
+);
+```
+
+## Error Handling
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="code" type="string">
+      Error code identifying the type of error.
+      
+      Common error codes:
+      - `customer_not_found` - The specified customer does not exist
+      - `product_not_found` - The specified product does not exist
+      - `stripe_error` - Error from Stripe API
+      - `invalid_request` - Invalid parameters provided
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Human-readable error message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Error Response
+
+```json
+{
+  "error": {
+    "code": "product_not_found",
+    "message": "Product 'pro_plan' does not exist"
+  }
+}
+```
+
+## Related Endpoints
+
+- [Attach](/api-reference/core/attach) - Attach product for customers with payment method
+- [Setup Payment](/api-reference/core/setup-payment) - Add payment method without charging
+- [Cancel](/api-reference/core/cancel) - Cancel a subscription
+
+## Related Guides
+
+- [Subscriptions](/guides/subscriptions) - Managing customer subscriptions
+- [Free Trials](/guides/trials) - Implementing free trials
+- [Custom Pricing](/guides/custom-pricing) - Advanced pricing configurations

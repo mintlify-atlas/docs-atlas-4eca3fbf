@@ -1,0 +1,406 @@
+---
+title: 'Attach Product'
+api: 'POST /attach'
+description: 'Enable a product for a customer and process payment if their payment method is already on file'
+---
+
+## Overview
+
+The `/attach` endpoint enables a product for a customer with immediate activation. Use this when the customer already has a payment method saved. If payment information is needed, the endpoint returns a checkout URL.
+
+<Note>
+  For new customers without payment info, use [`/checkout`](/api-reference/core/checkout) instead. For more advanced billing control, see [`/billing/attach`](/api/billing/attach).
+</Note>
+
+## When to Use
+
+**Use `/attach` when:**
+- Customer already has a payment method on file
+- You want immediate product activation
+- Customer is upgrading/downgrading their plan
+- You need simple product enablement
+
+**Use `/checkout` instead when:**
+- Customer is new and needs to add payment info
+- You need to collect payment upfront
+- Customer doesn't have a saved payment method
+
+## Authentication
+
+This endpoint requires API key authentication:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer to attach the product to.
+
+  ```json
+  "cus_123"
+  ```
+</ParamField>
+
+<ParamField body="product_id" type="string" required>
+  The ID of the product to attach. You can also use `product_ids` (array) to attach multiple products at once.
+
+  ```json
+  "pro_plan"
+  ```
+</ParamField>
+
+<ParamField body="product_ids" type="array">
+  Array of product IDs to attach multiple products. Use either `product_id` or `product_ids`, not both.
+
+  ```json
+  ["pro_plan", "addon_analytics"]
+  ```
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  The ID of the entity (optional). Use this when working with entity-scoped products or features (e.g., team workspaces).
+
+  ```json
+  "team_123"
+  ```
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Customer properties to set if creating a new customer or updating an existing one.
+
+  <Expandable title="Customer Data Properties">
+    <ParamField body="name" type="string">
+      Customer's full name
+    </ParamField>
+    <ParamField body="email" type="string">
+      Customer's email address
+    </ParamField>
+    <ParamField body="fingerprint" type="string">
+      Unique identifier to detect duplicate accounts and prevent trial abuse
+    </ParamField>
+    <ParamField body="metadata" type="object">
+      Custom metadata to attach to the customer
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="options" type="array">
+  Feature-specific options for configurable features (e.g., quantity for seat-based features).
+
+  <Expandable title="Feature Options">
+    <ParamField body="feature_id" type="string" required>
+      The ID of the feature to configure
+    </ParamField>
+    <ParamField body="quantity" type="number">
+      Quantity for this feature (e.g., number of seats)
+    </ParamField>
+    <ParamField body="reset_after_trial_end" type="boolean">
+      Whether to reset the feature quantity after trial ends
+    </ParamField>
+  </Expandable>
+
+  ```json
+  [
+    {
+      "feature_id": "seats",
+      "quantity": 5
+    }
+  ]
+  ```
+</ParamField>
+
+<ParamField body="free_trial" type="boolean">
+  Whether to start a free trial for this product. Defaults to `false`.
+
+  ```json
+  true
+  ```
+</ParamField>
+
+<ParamField body="success_url" type="string">
+  URL to redirect to after successful payment (if checkout is required).
+
+  ```json
+  "https://example.com/success"
+  ```
+</ParamField>
+
+<ParamField body="force_checkout" type="boolean">
+  If true, always returns a checkout URL even if payment is already on file.
+
+  ```json
+  false
+  ```
+</ParamField>
+
+<ParamField body="setup_payment" type="boolean">
+  If true, creates a setup session for adding payment method without charging.
+
+  ```json
+  false
+  ```
+</ParamField>
+
+<ParamField body="invoice" type="boolean">
+  If true, creates an invoice instead of charging immediately.
+
+  ```json
+  false
+  ```
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Whether the product was successfully attached.
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  The ID of the customer.
+</ResponseField>
+
+<ResponseField name="product_ids" type="array">
+  Array of product IDs that were attached.
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Response code indicating the outcome.
+  
+  - `attached` - Product successfully attached
+  - `checkout_required` - Payment information needed, checkout_url provided
+  - `trial_started` - Free trial successfully started
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable message describing the outcome.
+</ResponseField>
+
+<ResponseField name="checkout_url" type="string" optional>
+  URL for the customer to complete payment (if payment action is required).
+</ResponseField>
+
+<ResponseField name="invoice" type="object" optional>
+  Invoice details if an invoice was created.
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.useautumn.com/attach \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "product_id": "pro_plan"
+  }'
+```
+
+```typescript TypeScript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
+
+const result = await autumn.attach({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan'
+});
+
+if (result.checkout_url) {
+  // Redirect to checkout to collect payment
+  window.location.href = result.checkout_url;
+} else {
+  console.log('Product attached successfully');
+}
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key='YOUR_API_KEY')
+
+result = autumn.attach(
+  customer_id='cus_123',
+  product_id='pro_plan'
+)
+
+if result.get('checkout_url'):
+    # Redirect to checkout to collect payment
+    print(f"Checkout URL: {result['checkout_url']}")
+else:
+    print('Product attached successfully')
+```
+
+```typescript React
+import { useAutumn } from '@useautumn/react';
+
+function UpgradeButton() {
+  const autumn = useAutumn();
+  const [loading, setLoading] = useState(false);
+
+  const handleUpgrade = async () => {
+    setLoading(true);
+    try {
+      const result = await autumn.attach({
+        customer_id: 'cus_123',
+        product_id: 'pro_plan',
+        options: [
+          {
+            feature_id: 'seats',
+            quantity: 5
+          }
+        ]
+      });
+
+      if (result.checkout_url) {
+        window.location.href = result.checkout_url;
+      } else {
+        alert('Upgraded successfully!');
+      }
+    } catch (error) {
+      console.error('Upgrade failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={handleUpgrade} disabled={loading}>
+      {loading ? 'Processing...' : 'Upgrade to Pro'}
+    </button>
+  );
+}
+```
+</CodeGroup>
+
+## Example Responses
+
+### Successful Attach
+
+```json
+{
+  "success": true,
+  "customer_id": "cus_123",
+  "product_ids": ["pro_plan"],
+  "code": "attached",
+  "message": "Product attached successfully",
+  "checkout_url": null
+}
+```
+
+### Checkout Required
+
+```json
+{
+  "success": true,
+  "customer_id": "cus_123",
+  "product_ids": ["pro_plan"],
+  "code": "checkout_required",
+  "message": "Payment information required",
+  "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_..."
+}
+```
+
+### Free Trial Started
+
+```json
+{
+  "success": true,
+  "customer_id": "cus_123",
+  "product_ids": ["pro_plan"],
+  "code": "trial_started",
+  "message": "Free trial started successfully",
+  "checkout_url": null
+}
+```
+
+## Common Use Cases
+
+### Simple Product Upgrade
+
+```typescript
+const result = await autumn.attach({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan'
+});
+```
+
+### Attach with Seat Quantity
+
+```typescript
+const result = await autumn.attach({
+  customer_id: 'cus_123',
+  product_id: 'team_plan',
+  options: [
+    {
+      feature_id: 'seats',
+      quantity: 10
+    }
+  ]
+});
+```
+
+### Attach Multiple Products
+
+```typescript
+const result = await autumn.attach({
+  customer_id: 'cus_123',
+  product_ids: ['pro_plan', 'addon_analytics', 'addon_api_access']
+});
+```
+
+### Start Free Trial
+
+```typescript
+const result = await autumn.attach({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan',
+  free_trial: true
+});
+```
+
+## Error Handling
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="code" type="string">
+      Error code identifying the type of error.
+      
+      Common error codes:
+      - `customer_not_found` - The specified customer does not exist
+      - `product_not_found` - The specified product does not exist
+      - `already_subscribed` - Customer already has this product
+      - `payment_failed` - Payment processing failed
+      - `invalid_request` - Invalid parameters provided
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Human-readable error message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Error Response
+
+```json
+{
+  "error": {
+    "code": "product_not_found",
+    "message": "Product 'pro_plan' does not exist"
+  }
+}
+```
+
+## Related Endpoints
+
+- [Checkout](/api-reference/core/checkout) - Create checkout session for new customers
+- [Cancel](/api-reference/core/cancel) - Cancel a product subscription
+- [Check](/api-reference/core/check) - Verify customer access to features
+- [Track](/api-reference/core/track) - Record usage events
+
+## Related Guides
+
+- [Attach Products](/guides/attach-products) - Complete guide to product attachment
+- [Subscriptions](/guides/subscriptions) - Managing customer subscriptions
+- [Free Trials](/guides/trials) - Implementing free trials

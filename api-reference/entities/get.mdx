@@ -1,0 +1,122 @@
+---
+title: 'Get Entity'
+openapi: 'GET /customers/{customer_id}/entities/{entity_id}'
+---
+
+## Overview
+
+Retrieve a specific entity by its ID. You can optionally expand the entity to include related data like subscriptions, balances, and invoices.
+
+## Query Parameters
+
+<ParamField query="expand" type="array">
+  Array of fields to expand in the response. Options:
+  - `invoices` - Include invoice data
+  - `subscriptions.plan` - Include subscription and plan data
+  - `balances.feature` - Include balance and feature data
+</ParamField>
+
+<ParamField query="skip_cache" type="boolean">
+  Skip cached data and fetch fresh data from the database
+</ParamField>
+
+<ParamField query="with_autumn_id" type="boolean">
+  Include the internal Autumn ID in the response
+</ParamField>
+
+## Response
+
+Returns the entity object with optionally expanded fields.
+
+<ResponseField name="id" type="string">
+  The unique identifier of the entity
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The name of the entity
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  The customer ID this entity belongs to
+</ResponseField>
+
+<ResponseField name="feature_id" type="string">
+  The feature ID this entity belongs to
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp (milliseconds) when the entity was created
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  The environment - either `sandbox` or `live`
+</ResponseField>
+
+<ResponseField name="subscriptions" type="array">
+  Plans associated with this entity (when `expand=subscriptions.plan`)
+</ResponseField>
+
+<ResponseField name="balances" type="object">
+  Features and their balance information (when `expand=balances.feature`)
+</ResponseField>
+
+<ResponseField name="invoices" type="array">
+  Invoice history for this entity (when `expand=invoices`)
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X GET 'https://api.useautumn.com/v1/customers/cus_123/entities/proj_456?expand=balances.feature' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY'
+```
+
+```typescript TypeScript
+const entity = await autumn.entities.get({
+  customer_id: 'cus_123',
+  entity_id: 'proj_456',
+  expand: ['balances.feature']
+});
+```
+
+```python Python
+entity = autumn.entities.get(
+  customer_id='cus_123',
+  entity_id='proj_456',
+  expand=['balances.feature']
+)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "id": "proj_456",
+  "name": "Project Alpha",
+  "customer_id": "cus_123",
+  "feature_id": "feat_projects",
+  "created_at": 1759247877000,
+  "env": "live",
+  "balances": {
+    "feat_api_calls": {
+      "current_balance": 850,
+      "included": 1000,
+      "usage": 150,
+      "unlimited": false,
+      "feature": {
+        "id": "feat_api_calls",
+        "name": "API Calls",
+        "type": "metered"
+      }
+    }
+  }
+}
+```
+
+## Notes
+
+- Use the `expand` parameter to reduce API calls by fetching related data in a single request
+- The `skip_cache` parameter is useful when you need real-time data
+- Multiple expand values can be combined: `expand=balances.feature,invoices`

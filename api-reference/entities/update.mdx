@@ -1,0 +1,104 @@
+---
+title: 'Update Entity'
+description: 'Update entity properties'
+---
+
+## Overview
+
+Currently, entities in Autumn are designed to be immutable once created. To modify an entity, you should delete the existing entity and create a new one with the updated properties.
+
+## Alternative: Delete and Recreate
+
+If you need to change entity properties:
+
+1. **Delete the existing entity**
+   ```bash
+   DELETE /customers/{customer_id}/entities/{entity_id}
+   ```
+
+2. **Create a new entity with updated data**
+   ```bash
+   POST /customers/{customer_id}/entities
+   ```
+
+<Note>
+When you delete and recreate an entity:
+- Historical usage data and events remain associated with the old entity ID
+- Any entity-scoped balances will need to be recreated
+- Active subscriptions tied to the entity may need to be reattached
+</Note>
+
+## Updating Custom Data
+
+If you only need to update the `customer_data` field without changing the entity structure:
+
+1. Fetch the entity
+2. Delete it
+3. Recreate it with the same `id` and `feature_id` but updated `customer_data`
+
+## Example Workflow
+
+<CodeGroup>
+```typescript TypeScript
+// 1. Get current entity
+const entity = await autumn.entities.get({
+  customer_id: 'cus_123',
+  entity_id: 'proj_456'
+});
+
+// 2. Delete existing entity
+await autumn.entities.delete({
+  customer_id: 'cus_123',
+  entity_id: 'proj_456'
+});
+
+// 3. Create new entity with updated properties
+const updatedEntity = await autumn.entities.create({
+  customer_id: 'cus_123',
+  id: 'proj_456',
+  name: 'Project Alpha - Updated', // Updated name
+  feature_id: entity.feature_id,
+  customer_data: {
+    ...entity.customer_data,
+    status: 'active' // Updated custom data
+  }
+});
+```
+
+```python Python
+# 1. Get current entity
+entity = autumn.entities.get(
+  customer_id='cus_123',
+  entity_id='proj_456'
+)
+
+# 2. Delete existing entity
+autumn.entities.delete(
+  customer_id='cus_123',
+  entity_id='proj_456'
+)
+
+# 3. Create new entity with updated properties
+updated_entity = autumn.entities.create(
+  customer_id='cus_123',
+  id='proj_456',
+  name='Project Alpha - Updated',  # Updated name
+  feature_id=entity.feature_id,
+  customer_data={
+    **entity.customer_data,
+    'status': 'active'  # Updated custom data
+  }
+)
+```
+</CodeGroup>
+
+## Future Support
+
+Direct entity updates may be supported in a future API version. If this is a critical feature for your use case, please reach out to the Autumn team.
+
+## Best Practices
+
+- **Plan your entity structure carefully** since updates require deletion and recreation
+- **Use descriptive entity IDs** that won't need to change
+- **Store mutable data in `customer_data`** if you anticipate frequent updates
+- **Consider using entity names for display purposes** rather than relying on entity IDs

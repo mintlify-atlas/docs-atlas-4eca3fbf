@@ -1,0 +1,126 @@
+---
+title: "Delete Customer"
+api: "DELETE /customers/:customer_id"
+---
+
+Permanently deletes a customer. This action cannot be undone.
+
+<Warning>
+  Deleting a customer will permanently remove all associated data including subscriptions, balances, and usage history. This action cannot be undone.
+</Warning>
+
+## Path Parameters
+
+<ParamField path="customer_id" type="string" required>
+  The unique identifier of the customer to delete.
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="delete_in_stripe" type="boolean" default={false}>
+  Whether to also delete the customer in Stripe. If `true`, Autumn will attempt to delete the associated Stripe customer. If the deletion fails in Stripe, the customer will still be deleted in Autumn.
+</ParamField>
+
+## Response
+
+Returns a deletion confirmation object.
+
+<ResponseField name="customer" type="object">
+  The deleted customer object (as it existed before deletion).
+</ResponseField>
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the deletion was fully successful. 
+  
+  - `true` - Customer was successfully deleted from Autumn (and Stripe if requested)
+  - `false` - Customer was deleted from Autumn but failed to delete from Stripe
+</ResponseField>
+
+## Deletion Behavior
+
+1. **Autumn Database**: The customer is permanently removed from Autumn's database
+2. **Cache**: All cached customer data is cleared
+3. **Stripe (Optional)**: If `delete_in_stripe=true`, Autumn attempts to delete the customer from Stripe
+4. **Stripe Failures**: If Stripe deletion fails, the operation continues and the customer is still deleted from Autumn. The response will have `success: false`.
+
+<Note>
+  Even if `success` is `false`, the customer has been deleted from Autumn. The `false` status only indicates that the Stripe deletion failed.
+</Note>
+
+<RequestExample>
+```bash cURL
+curl -X DELETE https://api.autumn.com/v1/customers/user_12345 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```bash cURL - Delete from Stripe too
+curl -X DELETE "https://api.autumn.com/v1/customers/user_12345?delete_in_stripe=true" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const result = await autumn.customers.delete('user_12345');
+```
+
+```javascript JavaScript - Delete from Stripe too
+const result = await autumn.customers.delete('user_12345', {
+  delete_in_stripe: true
+});
+```
+
+```python Python
+result = autumn.customers.delete('user_12345')
+```
+
+```python Python - Delete from Stripe too
+result = autumn.customers.delete(
+    'user_12345',
+    delete_in_stripe=True
+)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 - Successful deletion
+{
+  "customer": {
+    "id": "user_12345",
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "created_at": 1708473600,
+    "fingerprint": "device_abc123",
+    "stripe_id": "cus_PQr8sT9uVwX1yZ",
+    "env": "live",
+    "metadata": {
+      "user_tier": "premium"
+    },
+    "send_email_receipts": true
+  },
+  "success": true
+}
+```
+
+```json 200 - Deleted from Autumn, Stripe deletion failed
+{
+  "customer": {
+    "id": "user_12345",
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "created_at": 1708473600,
+    "stripe_id": "cus_PQr8sT9uVwX1yZ",
+    "env": "live"
+  },
+  "success": false
+}
+```
+
+```json 404
+{
+  "error": {
+    "message": "Customer not found",
+    "code": "customer_not_found",
+    "status": 404
+  }
+}
+```
+</ResponseExample>

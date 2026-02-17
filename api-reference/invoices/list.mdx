@@ -1,0 +1,243 @@
+---
+title: 'List Invoices'
+description: 'Retrieve invoice history for a customer or entity'
+---
+
+## Overview
+
+Invoices in Autumn are retrieved through the customer or entity expansion parameters. There is no dedicated list invoices endpoint.
+
+## Endpoints
+
+### List Customer Invoices
+
+```
+GET /customers/{customer_id}?expand=invoices
+```
+
+### List Entity Invoices
+
+```
+GET /customers/{customer_id}/entities/{entity_id}?expand=invoices
+```
+
+## Path Parameters
+
+<ParamField path="customer_id" type="string" required>
+  The unique identifier of the customer
+</ParamField>
+
+<ParamField path="entity_id" type="string">
+  The unique identifier of the entity (for entity-scoped invoices)
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="expand" type="string" required>
+  Set to `invoices` to include invoice data in the response
+</ParamField>
+
+## Response
+
+Returns a customer or entity object with an `invoices` array.
+
+### Invoice Object
+
+<ResponseField name="plan_ids" type="string[]">
+  Array of plan IDs included in this invoice
+</ResponseField>
+
+<ResponseField name="stripe_id" type="string">
+  The Stripe invoice ID
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  The status of the invoice (e.g., `paid`, `open`, `draft`, `void`)
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  The total amount of the invoice in cents
+</ResponseField>
+
+<ResponseField name="currency" type="string">
+  The currency code for the invoice (e.g., `usd`, `eur`)
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp (milliseconds) when the invoice was created
+</ResponseField>
+
+<ResponseField name="hosted_invoice_url" type="string">
+  URL to the Stripe-hosted invoice page (may be null)
+</ResponseField>
+
+## Example Requests
+
+### Get Customer Invoices
+
+<CodeGroup>
+```bash cURL
+curl -X GET 'https://api.useautumn.com/v1/customers/cus_123?expand=invoices' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY'
+```
+
+```typescript TypeScript
+const customer = await autumn.customers.get({
+  customer_id: 'cus_123',
+  expand: ['invoices']
+});
+
+const invoices = customer.invoices;
+```
+
+```python Python
+customer = autumn.customers.get(
+  customer_id='cus_123',
+  expand=['invoices']
+)
+
+invoices = customer.invoices
+```
+</CodeGroup>
+
+### Get Entity Invoices
+
+<CodeGroup>
+```bash cURL
+curl -X GET 'https://api.useautumn.com/v1/customers/cus_123/entities/proj_456?expand=invoices' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY'
+```
+
+```typescript TypeScript
+const entity = await autumn.entities.get({
+  customer_id: 'cus_123',
+  entity_id: 'proj_456',
+  expand: ['invoices']
+});
+
+const invoices = entity.invoices;
+```
+
+```python Python
+entity = autumn.entities.get(
+  customer_id='cus_123',
+  entity_id='proj_456',
+  expand=['invoices']
+)
+
+invoices = entity.invoices
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "id": "cus_123",
+  "name": "Acme Corp",
+  "invoices": [
+    {
+      "plan_ids": ["pro_plan", "addon_storage"],
+      "stripe_id": "in_1A2B3C4D5E6F7G8H",
+      "status": "paid",
+      "total": 4999,
+      "currency": "usd",
+      "created_at": 1759247877000,
+      "hosted_invoice_url": "https://invoice.stripe.com/i/acct_123/test_456"
+    },
+    {
+      "plan_ids": ["pro_plan"],
+      "stripe_id": "in_9H8G7F6E5D4C3B2A",
+      "status": "paid",
+      "total": 2999,
+      "currency": "usd",
+      "created_at": 1756569477000,
+      "hosted_invoice_url": "https://invoice.stripe.com/i/acct_123/test_789"
+    }
+  ]
+}
+```
+
+## Use Cases
+
+- **Billing history**: Display invoice history in your customer portal
+- **Payment reconciliation**: Match payments with invoices
+- **Support queries**: Help customers find their invoices
+- **Accounting**: Export invoice data for accounting systems
+- **Usage analysis**: Understand billing trends over time
+
+## Filtering and Processing
+
+Since invoices are returned as part of the customer/entity object, you may need to filter them in your application:
+
+<CodeGroup>
+```typescript TypeScript
+// Get paid invoices only
+const customer = await autumn.customers.get({
+  customer_id: 'cus_123',
+  expand: ['invoices']
+});
+
+const paidInvoices = customer.invoices?.filter(
+  invoice => invoice.status === 'paid'
+);
+
+// Get invoices from last 90 days
+const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+const recentInvoices = customer.invoices?.filter(
+  invoice => invoice.created_at > ninetyDaysAgo
+);
+
+// Calculate total paid
+const totalPaid = customer.invoices
+  ?.filter(inv => inv.status === 'paid')
+  ?.reduce((sum, inv) => sum + inv.total, 0);
+```
+
+```python Python
+# Get paid invoices only
+customer = autumn.customers.get(
+  customer_id='cus_123',
+  expand=['invoices']
+)
+
+paid_invoices = [
+  inv for inv in customer.invoices
+  if inv['status'] == 'paid'
+]
+
+# Get invoices from last 90 days
+import time
+ninety_days_ago = (time.time() * 1000) - (90 * 24 * 60 * 60 * 1000)
+recent_invoices = [
+  inv for inv in customer.invoices
+  if inv['created_at'] > ninety_days_ago
+]
+
+# Calculate total paid
+total_paid = sum(
+  inv['total'] for inv in customer.invoices
+  if inv['status'] == 'paid'
+)
+```
+</CodeGroup>
+
+## Notes
+
+- Invoices are ordered by creation date (most recent first)
+- The `hosted_invoice_url` may be null for draft invoices
+- Invoice amounts are in cents (e.g., 2999 = $29.99)
+- Only Stripe invoices are currently supported
+- Invoices are read-only through the Autumn API
+
+## Stripe Integration
+
+<Info>
+Invoices are managed through Stripe. To modify invoice details, use the Stripe dashboard or API directly. Changes will be reflected in Autumn automatically.
+</Info>
+
+## Related Endpoints
+
+- [Get Customer](/api-reference/customers/get) - Get customer with expanded data
+- [Get Entity](/api-reference/entities/get) - Get entity with expanded data
+- [Get Invoice](/api-reference/invoices/get) - Get a specific invoice by ID

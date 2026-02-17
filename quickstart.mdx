@@ -1,534 +1,351 @@
 ---
-title: "Quickstart"
-description: "Build your first billing integration with Autumn in under 10 minutes"
+title: 'Quickstart'
+description: 'Get up and running with Autumn in under 5 minutes'
+icon: 'rocket'
 ---
 
-## Overview
-
-This guide walks you through creating a simple freemium SaaS with usage-based AI tokens. You'll learn how to:
-
-- Set up Autumn (cloud or self-hosted)
-- Create products and features
-- Check access to features
-- Track usage
-- Handle upgrades
-
-By the end, you'll have a working billing system that tracks AI token usage and lets users upgrade to a paid plan.
-
-<Note>
-  This quickstart uses the Autumn cloud service for simplicity. For self-hosting, see the [Installation guide](/installation).
-</Note>
+This guide will walk you through setting up Autumn and implementing your first billing flow. We'll create a simple product, attach it to a customer, and check their access.
 
 ## Prerequisites
 
-Before you begin, make sure you have:
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node-js">
+    v18 or higher required
+  </Card>
+  <Card title="Stripe Account" icon="stripe">
+    Free account at stripe.com
+  </Card>
+</CardGroup>
 
-- A Stripe account ([sign up here](https://stripe.com))
-- Node.js 18+ or Python 3.8+ installed
-- Basic familiarity with REST APIs
-
-## Step 1: Sign Up for Autumn
+## Setup
 
 <Steps>
-  <Step title="Create an account">
-    Go to [app.useautumn.com](https://app.useautumn.com) and sign up with your email or Google account.
+  <Step title="Choose Your Environment">
+    You can use Autumn in two ways:
+
+    <Tabs>
+      <Tab title="Cloud (Fastest)">
+        Sign up for a free account at [app.useautumn.com](https://app.useautumn.com)
+
+        <Note>
+          The cloud version is production-ready and maintained by the Autumn team. No setup required.
+        </Note>
+      </Tab>
+      <Tab title="Self-Hosted">
+        See the [Self-Hosting Guide](/self-hosting) for detailed instructions on running Autumn locally or on your infrastructure.
+      </Tab>
+    </Tabs>
   </Step>
-  
+
   <Step title="Connect Stripe">
-    In the Autumn dashboard, navigate to **Settings** → **Integrations** and connect your Stripe account.
-    
+    In the Autumn dashboard, navigate to **Developer** → **Configure Stripe** and connect your Stripe account.
+
     <Warning>
-      Use Stripe test mode during development. You can switch to live mode later.
+      Use Stripe **test mode** for development. You can switch to live mode later.
     </Warning>
   </Step>
-  
-  <Step title="Get your API keys">
-    Navigate to **Settings** → **API Keys** and copy your **Secret Key**. You'll need this for API requests.
-    
-    ```bash
-    export AUTUMN_SECRET_KEY="sk_test_..."
+
+  <Step title="Get Your API Keys">
+    In **Developer** → **API Keys**, copy your:
+    - **Secret Key** (for server-side API calls)
+    - **Public Key** (for client-side SDK)
+
+    <CodeGroup>
+    ```bash .env
+    # Server-side
+    AUTUMN_API_KEY=sk_test_...
+
+    # Client-side (optional)
+    NEXT_PUBLIC_AUTUMN_PUBLIC_KEY=pk_test_...
     ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Install the SDK">
+    <CodeGroup>
+    ```bash npm
+    npm install autumn-js
+    ```
+
+    ```bash yarn
+    yarn add autumn-js
+    ```
+
+    ```bash pnpm
+    pnpm add autumn-js
+    ```
+
+    ```bash bun
+    bun add autumn-js
+    ```
+    </CodeGroup>
   </Step>
 </Steps>
 
-## Step 2: Create Your First Product
+## Create Your First Product
 
 <Steps>
-  <Step title="Navigate to Products">
-    In the dashboard, click **Products** in the sidebar.
-  </Step>
-  
-  <Step title="Create a Free plan">
-    Click **Create Product** and configure:
-    
-    - **Product ID**: `free`
-    - **Name**: "Free Plan"
-    - **Price**: $0.00 / month
-    - Click **Save**
-  </Step>
-  
-  <Step title="Add an AI Tokens feature">
-    Within the Free product, click **Add Feature**:
-    
-    - **Feature ID**: `ai_tokens`
-    - **Name**: "AI Tokens"
-    - **Type**: Usage-based
-    - **Limit**: 1000
-    - **Reset**: Monthly
-    - Click **Save**
-  </Step>
-  
-  <Step title="Create a Pro plan">
-    Click **Create Product** again:
-    
-    - **Product ID**: `pro`
+  <Step title="Create a Product">
+    Go to **Products** in the dashboard and click **Create Product**.
+
+    Example configuration:
     - **Name**: "Pro Plan"
-    - **Price**: $29.00 / month
-    - Click **Save**
+    - **ID**: `pro` (you'll use this in code)
+    - **Price**: $29/month
+    - **Billing Interval**: Monthly
   </Step>
-  
-  <Step title="Add Pro AI Tokens">
-    Within the Pro product, add a feature:
-    
-    - **Feature ID**: `ai_tokens`
-    - **Name**: "AI Tokens"
-    - **Type**: Usage-based
-    - **Limit**: 10000
-    - **Reset**: Monthly
+
+  <Step title="Add Features">
+    Click **Add Feature** to create features your product includes:
+
+    <Tabs>
+      <Tab title="Boolean Feature">
+        ```yaml
+        Name: "Priority Support"
+        ID: priority_support
+        Type: Boolean
+        ```
+        Users either have it or they don't.
+      </Tab>
+
+      <Tab title="Usage Feature">
+        ```yaml
+        Name: "API Calls"
+        ID: api_calls
+        Type: Usage
+        Limit: 10,000 per month
+        Reset: Monthly
+        ```
+        Track and limit usage over time.
+      </Tab>
+
+      <Tab title="Seat-Based Feature">
+        ```yaml
+        Name: "Team Members"
+        ID: team_members
+        Type: Seats
+        Price: $10 per seat
+        ```
+        Bill per user or entity.
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Publish the Product">
+    Click **Publish** to make the product available for purchase.
   </Step>
 </Steps>
 
-<Check>
-  You now have two products: a free tier with 1,000 AI tokens per month and a Pro tier with 10,000 tokens per month.
-</Check>
+## Implement Billing in Your App
 
-## Step 3: Install the SDK
+Now let's integrate Autumn into your application.
 
-Install the Autumn SDK for your preferred language:
+### Server-Side Integration
 
-<CodeGroup>
-```bash npm
-npm install autumn-js
-```
+<Tabs>
+  <Tab title="Next.js App Router">
+    <Steps>
+      <Step title="Create the API Handler">
+        ```typescript app/api/autumn/[...autumn]/route.ts
+        import { autumnHandler } from "autumn-js/next";
 
-```bash yarn
-yarn add autumn-js
-```
+        export const { GET, POST } = autumnHandler({
+          apiKey: process.env.AUTUMN_API_KEY!,
+          getCustomerId: async ({ req }) => {
+            // Return your user's ID from your auth system
+            // Example with next-auth:
+            // const session = await getServerSession();
+            // return session?.user?.id;
 
-```bash pnpm
-pnpm add autumn-js
-```
+            return "user_123"; // Replace with real user ID
+          },
+        });
+        ```
+      </Step>
 
-```bash python
-pip install autumn-python
-```
-</CodeGroup>
+      <Step title="Wrap Your App">
+        ```tsx app/layout.tsx
+        import { AutumnProvider } from "autumn-js/react";
 
-## Step 4: Check Feature Access
+        export default function RootLayout({ children }) {
+          return (
+            <html>
+              <body>
+                <AutumnProvider>
+                  {children}
+                </AutumnProvider>
+              </body>
+            </html>
+          );
+        }
+        ```
+      </Step>
+    </Steps>
+  </Tab>
 
-Let's verify if a user has access to AI tokens:
+  <Tab title="Express">
+    ```typescript server.ts
+    import express from "express";
+    import { autumnHandler } from "autumn-js/express";
 
-<CodeGroup>
-```typescript Node.js
-import Autumn from 'autumn-js';
+    const app = express();
 
-const autumn = new Autumn({
-  apiKey: process.env.AUTUMN_SECRET_KEY
-});
+    app.use("/api/autumn", autumnHandler({
+      apiKey: process.env.AUTUMN_API_KEY!,
+      getCustomerId: async ({ req }) => {
+        // Return user ID from your auth
+        return req.user?.id || "user_123";
+      },
+    }));
 
-// Check if user has AI tokens available
-const result = await autumn.check({
-  customer_id: 'user_123',
-  feature_id: 'ai_tokens',
-  required_balance: 100 // Check if they have at least 100 tokens
-});
+    app.listen(3000);
+    ```
+  </Tab>
 
-if (result.allowed) {
-  console.log(`Access granted. Remaining: ${result.balance.remaining}`);
-} else {
-  console.log('Insufficient tokens. Please upgrade.');
-  console.log(`Current balance: ${result.balance.remaining}`);
-}
-```
+  <Tab title="Node.js (Server-Only)">
+    ```typescript server.ts
+    import { Autumn } from "autumn-js";
 
-```python Python
-from autumn import Autumn
-import os
-
-autumn = Autumn(api_key=os.getenv('AUTUMN_SECRET_KEY'))
-
-# Check if user has AI tokens available
-result = autumn.check(
-    customer_id='user_123',
-    feature_id='ai_tokens',
-    required_balance=100  # Check if they have at least 100 tokens
-)
-
-if result['allowed']:
-    print(f"Access granted. Remaining: {result['balance']['remaining']}")
-else:
-    print('Insufficient tokens. Please upgrade.')
-    print(f"Current balance: {result['balance']['remaining']}")
-```
-
-```typescript React
-import { useAutumn } from 'autumn-js/react';
-
-function AIFeature() {
-  const autumn = useAutumn();
-  const [result, setResult] = useState(null);
-  
-  useEffect(() => {
-    async function checkAccess() {
-      const data = await autumn.check({
-        customer_id: 'user_123',
-        feature_id: 'ai_tokens',
-        required_balance: 100
-      });
-      setResult(data);
-    }
-    checkAccess();
-  }, []);
-  
-  if (!result) return <div>Loading...</div>;
-  
-  return (
-    <div>
-      {result.allowed ? (
-        <div>Access granted. {result.balance.remaining} tokens remaining</div>
-      ) : (
-        <div>Insufficient tokens. Please upgrade.</div>
-      )}
-    </div>
-  );
-}
-```
-</CodeGroup>
-
-<Info>
-  The first time you check access for a new customer, Autumn automatically creates the customer in your database and attaches them to the Free plan.
-</Info>
-
-## Step 5: Track Usage
-
-When a user consumes AI tokens, record the usage:
-
-<CodeGroup>
-```typescript Node.js
-// User generated AI content that used 100 tokens
-await autumn.track({
-  customer_id: 'user_123',
-  feature_id: 'ai_tokens',
-  value: 100
-});
-
-console.log('Usage tracked successfully');
-```
-
-```python Python
-# User generated AI content that used 100 tokens
-autumn.track(
-    customer_id='user_123',
-    feature_id='ai_tokens',
-    value=100
-)
-
-print('Usage tracked successfully')
-```
-
-```typescript React
-const handleGenerateAI = async () => {
-  // Check access first
-  const { allowed } = await autumn.check({
-    customer_id: currentUser.id,
-    feature_id: 'ai_tokens',
-    required_balance: 100
-  });
-  
-  if (!allowed) {
-    alert('Insufficient tokens');
-    return;
-  }
-  
-  // Generate AI content
-  const aiResult = await generateAIContent();
-  
-  // Track the usage
-  await autumn.track({
-    customer_id: currentUser.id,
-    feature_id: 'ai_tokens',
-    value: 100
-  });
-  
-  return aiResult;
-};
-```
-</CodeGroup>
-
-<Tip>
-  You can also use `send_event: true` with the `/check` endpoint to check access and track usage in a single API call.
-</Tip>
-
-## Step 6: Handle Upgrades
-
-Let users upgrade from Free to Pro:
-
-<CodeGroup>
-```typescript Node.js
-// Upgrade user to Pro plan
-const result = await autumn.attach({
-  customer_id: 'user_123',
-  product_id: 'pro'
-});
-
-if (result.checkout_url) {
-  // User needs to complete payment
-  console.log('Redirect to:', result.checkout_url);
-  // Redirect user to Stripe Checkout
-} else {
-  // Upgrade complete (e.g., for $0 upgrades)
-  console.log('Upgrade successful!');
-}
-```
-
-```python Python
-# Upgrade user to Pro plan
-result = autumn.attach(
-    customer_id='user_123',
-    product_id='pro'
-)
-
-if result.get('checkout_url'):
-    # User needs to complete payment
-    print(f"Redirect to: {result['checkout_url']}")
-    # Redirect user to Stripe Checkout
-else:
-    # Upgrade complete
-    print('Upgrade successful!')
-```
-
-```typescript React
-function UpgradeButton() {
-  const autumn = useAutumn();
-  
-  const handleUpgrade = async () => {
-    const result = await autumn.attach({
-      customer_id: currentUser.id,
-      product_id: 'pro'
+    const autumn = new Autumn({
+      apiKey: process.env.AUTUMN_API_KEY!,
     });
-    
-    if (result.checkout_url) {
-      // Redirect to Stripe Checkout
-      window.location.href = result.checkout_url;
-    } else {
-      // Upgrade successful
-      alert('Upgrade complete!');
+
+    // Use autumn.attach(), autumn.check(), autumn.track()
+    ```
+  </Tab>
+</Tabs>
+
+### Client-Side Usage
+
+<Tabs>
+  <Tab title="Handle Purchases">
+    ```tsx components/UpgradeButton.tsx
+    import { useCustomer } from "autumn-js/react";
+
+    export function UpgradeButton() {
+      const { attach, loading } = useCustomer();
+
+      const handleUpgrade = async () => {
+        const result = await attach({ productId: "pro" });
+
+        if (result.url) {
+          // Redirect to Stripe Checkout
+          window.location.href = result.url;
+        } else if (result.success) {
+          // Upgrade completed (no payment needed)
+          alert("Successfully upgraded!");
+        }
+      };
+
+      return (
+        <button onClick={handleUpgrade} disabled={loading}>
+          Upgrade to Pro
+        </button>
+      );
     }
-  };
-  
-  return (
-    <button onClick={handleUpgrade}>
-      Upgrade to Pro
-    </button>
-  );
-}
-```
-</CodeGroup>
+    ```
+  </Tab>
 
-<Info>
-  The `/attach` endpoint handles all purchase flows:
-  - New subscriptions (returns a Stripe Checkout URL)
-  - Upgrades (prorates automatically)
-  - Downgrades (schedules for next billing period)
-  - Free plan switches (immediate, no payment required)
-</Info>
+  <Tab title="Check Access">
+    ```tsx components/ProtectedFeature.tsx
+    import { useCustomer } from "autumn-js/react";
 
-## Step 7: Test the Complete Flow
+    export function ProtectedFeature() {
+      const { check } = useCustomer();
+      const [hasAccess, setHasAccess] = useState(false);
 
-Let's test the entire billing flow:
+      useEffect(() => {
+        async function checkAccess() {
+          const result = await check({ featureId: "priority_support" });
+          setHasAccess(result.allowed);
+        }
+        checkAccess();
+      }, []);
+
+      if (!hasAccess) {
+        return <div>Upgrade to Pro for priority support</div>;
+      }
+
+      return <div>Priority support enabled!</div>;
+    }
+    ```
+  </Tab>
+
+  <Tab title="Track Usage">
+    ```tsx components/ApiCallTracker.tsx
+    import { useCustomer } from "autumn-js/react";
+
+    export function ApiCallTracker() {
+      const { track, check } = useCustomer();
+
+      const makeApiCall = async () => {
+        // Check if user has remaining API calls
+        const access = await check({ featureId: "api_calls" });
+
+        if (!access.allowed) {
+          alert("API limit reached. Please upgrade.");
+          return;
+        }
+
+        // Make your API call...
+        await fetch("/api/your-endpoint");
+
+        // Track the usage
+        await track({
+          featureId: "api_calls",
+          value: 1,
+        });
+      };
+
+      return <button onClick={makeApiCall}>Make API Call</button>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Test Your Integration
 
 <Steps>
-  <Step title="Check initial access">
-    ```typescript
-    const check1 = await autumn.check({
-      customer_id: 'user_123',
-      feature_id: 'ai_tokens'
-    });
-    console.log(check1.balance.remaining); // 1000 (Free plan)
+  <Step title="Create a Test Customer">
+    In the dashboard, go to **Customers** → **Create Customer** to create a test customer with the same ID you're using in your code (`user_123`).
+  </Step>
+
+  <Step title="Test the Purchase Flow">
+    Click your "Upgrade" button and complete the test checkout with Stripe's test card:
+
+    ```
+    Card: 4242 4242 4242 4242
+    Expiry: Any future date
+    CVC: Any 3 digits
     ```
   </Step>
-  
-  <Step title="Track usage">
-    ```typescript
-    await autumn.track({
-      customer_id: 'user_123',
-      feature_id: 'ai_tokens',
-      value: 500
-    });
-    ```
+
+  <Step title="Verify Access">
+    After successful checkout, your access check should return `allowed: true`.
   </Step>
-  
-  <Step title="Verify balance decreased">
-    ```typescript
-    const check2 = await autumn.check({
-      customer_id: 'user_123',
-      feature_id: 'ai_tokens'
-    });
-    console.log(check2.balance.remaining); // 500
-    ```
-  </Step>
-  
-  <Step title="Upgrade to Pro">
-    ```typescript
-    const result = await autumn.attach({
-      customer_id: 'user_123',
-      product_id: 'pro'
-    });
-    // Complete Stripe Checkout flow
-    ```
-  </Step>
-  
-  <Step title="Verify new balance">
-    ```typescript
-    const check3 = await autumn.check({
-      customer_id: 'user_123',
-      feature_id: 'ai_tokens'
-    });
-    console.log(check3.balance.remaining); // 10000 (Pro plan)
-    ```
+
+  <Step title="Monitor in Dashboard">
+    View the customer's active products and usage in **Customers** → select your customer.
   </Step>
 </Steps>
-
-## Full Example Application
-
-Here's a complete Express.js API with all the billing logic:
-
-```typescript
-import express from 'express';
-import Autumn from 'autumn-js';
-
-const app = express();
-const autumn = new Autumn({
-  apiKey: process.env.AUTUMN_SECRET_KEY
-});
-
-app.use(express.json());
-
-// Check if user can generate AI content
-app.post('/api/ai/check', async (req, res) => {
-  const { userId } = req.body;
-  
-  try {
-    const result = await autumn.check({
-      customer_id: userId,
-      feature_id: 'ai_tokens',
-      required_balance: 100
-    });
-    
-    res.json({
-      allowed: result.allowed,
-      remaining: result.balance.remaining
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Generate AI content
-app.post('/api/ai/generate', async (req, res) => {
-  const { userId, prompt } = req.body;
-  
-  try {
-    // Check access
-    const { allowed, balance } = await autumn.check({
-      customer_id: userId,
-      feature_id: 'ai_tokens',
-      required_balance: 100
-    });
-    
-    if (!allowed) {
-      return res.status(403).json({
-        error: 'Insufficient tokens',
-        remaining: balance.remaining
-      });
-    }
-    
-    // Generate AI content (your logic here)
-    const aiResult = await generateAI(prompt);
-    
-    // Track usage
-    await autumn.track({
-      customer_id: userId,
-      feature_id: 'ai_tokens',
-      value: 100
-    });
-    
-    res.json({
-      result: aiResult,
-      remaining: balance.remaining - 100
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Upgrade to Pro
-app.post('/api/upgrade', async (req, res) => {
-  const { userId } = req.body;
-  
-  try {
-    const result = await autumn.attach({
-      customer_id: userId,
-      product_id: 'pro'
-    });
-    
-    res.json({
-      checkout_url: result.checkout_url,
-      success: !result.checkout_url // No URL = immediate success
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.listen(3000, () => {
-  console.log('Server running on port 3000');
-});
-```
 
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card
-    title="Understand Core Concepts"
-    icon="book"
-    href="/concepts/products-and-plans"
-  >
-    Learn about products, features, customers, and entities
+  <Card title="Core Concepts" icon="book" href="/concepts/products-and-plans">
+    Learn about products, features, and pricing models
   </Card>
-  <Card
-    title="Explore Pricing Models"
-    icon="dollar-sign"
-    href="/pricing-models/subscriptions"
-  >
-    Discover all supported pricing models
+  <Card title="API Reference" icon="code" href="/api-reference/core/attach">
+    Explore all available API endpoints
   </Card>
-  <Card
-    title="Handle Webhooks"
-    icon="webhook"
-    href="/guides/handling-webhooks"
-  >
-    Listen for billing events in your application
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    React to billing events in your app
   </Card>
-  <Card
-    title="Deploy to Production"
-    icon="rocket"
-    href="/installation"
-  >
-    Self-host Autumn or configure production settings
+  <Card title="Usage Analytics" icon="chart-line" href="/dashboard/analytics">
+    Track usage and revenue metrics
   </Card>
 </CardGroup>
 
-<Note>
-  Have questions? Join our [Discord community](https://discord.gg/53emPtY9tA) or email us at hey@useautumn.com.
-</Note>
+<Tip>
+  **Pro Tip**: Start with a simple boolean feature to test the flow, then add usage-based or seat-based features once you're comfortable.
+</Tip>

@@ -1,0 +1,190 @@
+---
+title: "Create Customer"
+api: "POST /customers"
+---
+
+Creates a new customer in Autumn. If a customer with the provided ID already exists, this endpoint returns the existing customer.
+
+## Request Body
+
+<ParamField body="id" type="string" required>
+  Your unique identifier for the customer. This will be used to reference the customer in future API calls.
+  
+  - Cannot contain @ symbol, spaces, or periods
+  - Only letters, numbers, underscores, and hyphens are allowed
+  - Cannot be an empty string
+</ParamField>
+
+<ParamField body="name" type="string">
+  Customer's name.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Customer's email address. Must be a valid email format.
+</ParamField>
+
+<ParamField body="fingerprint" type="string">
+  Unique identifier (e.g., device serial number) to detect duplicate customers and prevent free trial abuse.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  Additional metadata for the customer. Can store any key-value pairs.
+</ParamField>
+
+<ParamField body="stripe_id" type="string">
+  Stripe customer ID if you already have one. If provided, Autumn will link to this existing Stripe customer.
+</ParamField>
+
+<ParamField body="create_in_stripe" type="boolean">
+  Whether to create the customer in Stripe. Set to `true` to automatically create a corresponding Stripe customer.
+</ParamField>
+
+<ParamField body="auto_enable_plan_id" type="string">
+  The ID of the free plan to auto-enable for the customer upon creation.
+</ParamField>
+
+<ParamField body="send_email_receipts" type="boolean">
+  Whether to send email receipts to this customer for purchases and invoices.
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="expand" type="array">
+  Expandable fields to include in the response. See [Expandable Fields](#expandable-fields) below.
+</ParamField>
+
+## Response
+
+Returns the created [Customer](/api-reference/customers/get#response) object.
+
+<ResponseField name="id" type="string">
+  Your unique identifier for the customer.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Customer's name.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Customer's email address.
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp when the customer was created.
+</ResponseField>
+
+<ResponseField name="fingerprint" type="string">
+  Unique device identifier for the customer.
+</ResponseField>
+
+<ResponseField name="stripe_id" type="string">
+  Associated Stripe customer ID, if any.
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  Environment where the customer exists (e.g., `test` or `live`).
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Additional metadata stored for the customer.
+</ResponseField>
+
+<ResponseField name="send_email_receipts" type="boolean">
+  Whether email receipts are enabled for this customer.
+</ResponseField>
+
+<ResponseField name="subscriptions" type="array">
+  Array of active Subscription objects for this customer.
+</ResponseField>
+
+<ResponseField name="scheduled_subscriptions" type="array">
+  Array of scheduled Subscription objects that will activate in the future.
+</ResponseField>
+
+<ResponseField name="balances" type="object">
+  Object mapping feature IDs to Balance objects, representing the customer's available usage.
+</ResponseField>
+
+## Expandable Fields
+
+You can expand the following fields by passing them in the `expand` query parameter:
+
+- `invoices` - Include all invoices for the customer
+- `trials_used` - Include information about trials the customer has used
+- `rewards` - Include rewards and discounts applied to the customer
+- `entities` - Include associated entities
+- `referrals` - Include referral information
+- `payment_method` - Include the customer's payment method details
+- `subscriptions.plan` - Expand the plan details within each subscription
+- `balances.feature` - Expand the feature details within each balance
+
+Example: `?expand[]=invoices&expand[]=payment_method`
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.autumn.com/v1/customers \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "user_12345",
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "metadata": {
+      "user_tier": "premium",
+      "signup_source": "web"
+    },
+    "create_in_stripe": true,
+    "send_email_receipts": true
+  }'
+```
+
+```javascript JavaScript
+const customer = await autumn.customers.create({
+  id: 'user_12345',
+  name: 'John Doe',
+  email: 'john.doe@example.com',
+  metadata: {
+    user_tier: 'premium',
+    signup_source: 'web'
+  },
+  create_in_stripe: true,
+  send_email_receipts: true
+});
+```
+
+```python Python
+customer = autumn.customers.create(
+    id="user_12345",
+    name="John Doe",
+    email="john.doe@example.com",
+    metadata={
+        "user_tier": "premium",
+        "signup_source": "web"
+    },
+    create_in_stripe=True,
+    send_email_receipts=True
+)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "id": "user_12345",
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "created_at": 1708473600,
+  "fingerprint": null,
+  "stripe_id": "cus_PQr8sT9uVwX1yZ",
+  "env": "live",
+  "metadata": {
+    "user_tier": "premium",
+    "signup_source": "web"
+  },
+  "send_email_receipts": true,
+  "subscriptions": [],
+  "scheduled_subscriptions": [],
+  "balances": {}
+}
+```
+</ResponseExample>

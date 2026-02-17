@@ -1,339 +1,801 @@
 ---
 title: "Products and Plans"
-description: "Learn about products, plans, and how to structure your pricing"
+description: "Learn how products and plans structure your pricing and offerings"
 ---
 
 ## Overview
 
-Products are the core building blocks of your monetization strategy in Autumn. A **product** represents a subscription tier, plan, or offering that customers can purchase. Each product contains:
+**Products** (also called **Plans**) are the core building blocks of your pricing model in Autumn. They define:
 
-- **Prices**: The billing amounts and intervals
-- **Entitlements**: Feature access and allowances
-- **Free Trials**: Optional trial periods
-- **Metadata**: Custom attributes and configurations
+- What customers can subscribe to
+- How much it costs
+- What features and limits are included
+- Billing frequency and intervals
+- Free trial configurations
+
+Products bundle together features, pricing, and entitlements into a cohesive offering that customers can purchase.
 
 ## Product Structure
 
-Every product in Autumn has the following key attributes:
+Every product contains these core elements:
 
 <ParamField path="id" type="string" required>
-  Unique identifier for the product (e.g., `pro`, `enterprise`)
+  Unique identifier for the product (e.g., `starter`, `pro`, `enterprise`)
 </ParamField>
 
-<ParamField path="name" type="string">
+<ParamField path="name" type="string" required>
   Human-readable name displayed to customers
 </ParamField>
 
 <ParamField path="description" type="string">
-  Detailed description of the product offering
+  Optional description of what the product offers
 </ParamField>
 
-<ParamField path="is_add_on" type="boolean" default="false">
-  Whether this product is an add-on to another product
-</ParamField>
-
-<ParamField path="is_default" type="boolean" default="false">
-  Whether this is the default product for new customers
-</ParamField>
-
-<ParamField path="group" type="string">
-  Optional grouping for organizing related products
-</ParamField>
-
-## Product Types
-
-### Standard Products
-
-Standard products are standalone subscription tiers that customers can purchase independently.
-
-```json Example: Standard Product
-{
-  "id": "pro",
-  "name": "Pro Plan",
-  "description": "For growing teams",
-  "is_add_on": false,
-  "is_default": false
-}
-```
-
-### Add-On Products
-
-Add-on products extend existing subscriptions with additional features or capacity.
-
-```json Example: Add-On Product
-{
-  "id": "extra-storage",
-  "name": "Additional Storage",
-  "description": "100GB of extra storage",
-  "is_add_on": true,
-  "is_default": false
-}
-```
-
-<Note>
-Add-on products can be attached to customer subscriptions alongside their main product.
-</Note>
-
-## Product Components
-
-### Prices
-
-Each product can have multiple prices associated with it. Prices define:
-
-- **Amount**: The cost to charge
-- **Interval**: Billing frequency (monthly, yearly, one-time)
-- **Type**: Fixed or usage-based
-
-See [Pricing Models](/concepts/pricing-models) for detailed information.
-
-### Entitlements
-
-Entitlements define what features and allowances customers receive when they subscribe to a product. Each entitlement links:
-
-- A **feature** to the product
-- An **allowance** (quota or limit)
-- A **reset interval** for the allowance
-
-See [Features](/concepts/features) for more details.
-
-### Free Trials
-
-Products can include optional free trial periods:
-
-```typescript Example: Product with Trial
-{
-  "id": "pro",
-  "name": "Pro Plan",
-  "free_trial": {
-    "duration": 14,
-    "unit": "days"
-  }
-}
-```
-
-## Product Versions
-
-Products support versioning to handle plan changes over time:
-
-<ParamField path="version" type="number" default="1">
-  Version number for the product configuration
-</ParamField>
-
-<ParamField path="base_variant_id" type="string">
-  Reference to the base product this version extends
-</ParamField>
-
-<Info>
-Versioning allows you to migrate customers gradually while maintaining backward compatibility.
-</Info>
-
-## Product Groups
-
-Use the `group` field to organize related products:
-
-```json Example: Product Groups
-[
-  {
-    "id": "starter",
-    "name": "Starter",
-    "group": "saas-plans"
-  },
-  {
-    "id": "pro",
-    "name": "Pro",
-    "group": "saas-plans"
-  },
-  {
-    "id": "api-addon",
-    "name": "API Access",
-    "group": "addons"
-  }
-]
-```
-
-## External Processors
-
-Products can be synchronized with external payment processors:
-
-<ParamField path="processor" type="object">
-  External processor configuration (e.g., Stripe, RevenueCat)
+<ParamField path="price" type="object">
+  Base subscription price for the product
   
   <Expandable title="properties">
-    <ParamField path="type" type="string">
-      Processor type (e.g., `stripe`, `revenuecat`)
+    <ParamField path="amount" type="number">
+      Price in cents (e.g., 2900 for $29.00)
     </ParamField>
-    <ParamField path="id" type="string">
-      External product ID in the processor
+    <ParamField path="interval" type="string">
+      Billing frequency: `month`, `year`, `quarter`, `week`, `one_off`
+    </ParamField>
+    <ParamField path="interval_count" type="number">
+      Number of intervals between charges (e.g., 3 for quarterly)
     </ParamField>
   </Expandable>
 </ParamField>
 
-```json Example: Stripe Integration
+<ParamField path="items" type="array" required>
+  Array of plan items that define feature entitlements and pricing
+</ParamField>
+
+<ParamField path="add_on" type="boolean" default="false">
+  Whether this is an add-on product that can be attached alongside a main product
+</ParamField>
+
+<ParamField path="auto_enable" type="boolean" default="false">
+  Whether to automatically attach this product to all customers
+</ParamField>
+
+## Product Types
+
+### Main Products
+
+Main products are the primary subscriptions customers purchase:
+
+```json Example: Pro Plan
 {
   "id": "pro",
   "name": "Pro Plan",
-  "processor": {
-    "type": "stripe",
-    "id": "prod_abc123"
-  }
-}
-```
-
-## Environment Separation
-
-Products are environment-specific, allowing you to maintain separate configurations for development and production:
-
-<ParamField path="env" type="string" required>
-  Environment identifier (`development`, `production`, etc.)
-</ParamField>
-
-<Warning>
-Products with the same `id` but different `env` values are treated as separate products.
-</Warning>
-
-## Archiving Products
-
-Instead of deleting products, you can archive them:
-
-<ParamField path="archived" type="boolean" default="false">
-  Whether the product is archived and hidden from listings
-</ParamField>
-
-Archived products:
-- Remain accessible for existing subscriptions
-- Are hidden from new customer checkouts
-- Preserve historical data and analytics
-
-## Common Patterns
-
-### Three-Tier SaaS Pricing
-
-```json
-[
-  {
-    "id": "starter",
-    "name": "Starter",
-    "description": "Perfect for individuals",
-    "is_default": true
+  "description": "For growing teams",
+  "add_on": false,
+  "price": {
+    "amount": 2900,
+    "interval": "month"
   },
-  {
-    "id": "pro",
-    "name": "Pro",
-    "description": "For growing teams"
-  },
-  {
-    "id": "enterprise",
-    "name": "Enterprise",
-    "description": "For large organizations"
-  }
-]
-```
-
-### Usage-Based Product
-
-```json
-{
-  "id": "api-access",
-  "name": "API Access",
-  "description": "Pay per API call",
-  "prices": [
+  "items": [
     {
-      "type": "usage",
-      "billing_type": "end_of_period",
-      "feature_id": "api-calls"
+      "feature_id": "api-calls",
+      "included": 10000,
+      "unlimited": false,
+      "reset": {
+        "interval": "month"
+      }
     }
   ]
 }
 ```
 
-### Freemium with Add-Ons
+### Add-On Products
 
-```json
+Add-ons supplement main products with additional features or capacity:
+
+```json Example: Extra Storage Add-On
+{
+  "id": "extra-storage",
+  "name": "Extra Storage",
+  "add_on": true,
+  "price": {
+    "amount": 500,
+    "interval": "month"
+  },
+  "items": [
+    {
+      "feature_id": "storage-gb",
+      "included": 100,
+      "unlimited": false
+    }
+  ]
+}
+```
+
+<Note>
+Customers can have multiple add-ons but typically only one main product.
+</Note>
+
+### One-Off Products
+
+One-off products are purchased once without recurring billing:
+
+```json Example: Premium Support Package
+{
+  "id": "premium-support",
+  "name": "Premium Support Package",
+  "price": {
+    "amount": 49900,
+    "interval": "one_off"
+  }
+}
+```
+
+### Free Products
+
+Free products have no pricing but grant entitlements:
+
+```json Example: Free Plan
+{
+  "id": "free",
+  "name": "Free Plan",
+  "price": null,
+  "items": [
+    {
+      "feature_id": "api-calls",
+      "included": 1000,
+      "unlimited": false,
+      "reset": {
+        "interval": "month"
+      }
+    }
+  ]
+}
+```
+
+## Plan Items
+
+Plan items define the features included in a product and their configuration. Each item connects a feature to the product with specific entitlement rules.
+
+### Basic Plan Item
+
+<ParamField path="feature_id" type="string" required>
+  ID of the feature this item provides
+</ParamField>
+
+<ParamField path="included" type="number" required>
+  Quantity or allowance included (e.g., 10000 API calls)
+</ParamField>
+
+<ParamField path="unlimited" type="boolean" required>
+  Whether the feature has unlimited access
+</ParamField>
+
+<ParamField path="reset" type="object">
+  When the allowance resets
+  
+  <Expandable title="properties">
+    <ParamField path="interval" type="string">
+      Reset frequency: `month`, `year`, `week`, `day`, `hour`, `lifetime`
+    </ParamField>
+    <ParamField path="interval_count" type="number">
+      Number of intervals between resets
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+```json Example: Monthly API Allowance
+{
+  "feature_id": "api-calls",
+  "included": 10000,
+  "unlimited": false,
+  "reset": {
+    "interval": "month",
+    "interval_count": 1
+  }
+}
+```
+
+### Plan Items with Pricing
+
+Plan items can have their own pricing for usage-based billing:
+
+<ParamField path="price" type="object">
+  Usage-based pricing configuration
+  
+  <Expandable title="properties">
+    <ParamField path="amount" type="number">
+      Per-unit price in cents (for simple pricing)
+    </ParamField>
+    <ParamField path="tiers" type="array">
+      Volume-based pricing tiers (mutually exclusive with amount)
+    </ParamField>
+    <ParamField path="billing_method" type="string">
+      `prepaid` or `usage_based` (arrears)
+    </ParamField>
+    <ParamField path="billing_units" type="number">
+      How many units are billed together (e.g., 100 for per-hundred)
+    </ParamField>
+    <ParamField path="interval" type="string">
+      Billing frequency
+    </ParamField>
+    <ParamField path="max_purchase" type="number">
+      Maximum units that can be purchased (null for unlimited)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+```json Example: Prepaid API Calls
+{
+  "feature_id": "api-calls",
+  "included": 5000,
+  "unlimited": false,
+  "reset": {
+    "interval": "month"
+  },
+  "price": {
+    "amount": 10,
+    "billing_method": "prepaid",
+    "billing_units": 100,
+    "interval": "month",
+    "max_purchase": null
+  }
+}
+```
+
+<Info>
+In this example, customers get 5,000 API calls included, and can purchase additional blocks of 100 calls for $0.10 each.
+</Info>
+
+### Tiered Pricing
+
+Implement volume discounts with pricing tiers:
+
+```json Example: Tiered Usage Pricing
+{
+  "feature_id": "api-calls",
+  "included": 0,
+  "unlimited": false,
+  "price": {
+    "tiers": [
+      {
+        "to": 10000,
+        "amount": 10
+      },
+      {
+        "to": 100000,
+        "amount": 8
+      },
+      {
+        "to": "infinite",
+        "amount": 5
+      }
+    ],
+    "billing_method": "usage_based",
+    "billing_units": 1000,
+    "interval": "month"
+  }
+}
+```
+
+<Note>
+First 10k calls: $0.01 each<br/>
+10k-100k calls: $0.008 each<br/>
+100k+ calls: $0.005 each
+</Note>
+
+## Billing Methods
+
+Autumn supports two billing methods for usage-based charges:
+
+### Prepaid Billing
+
+Customers purchase capacity upfront:
+
+```json Example: Prepaid Credits
+{
+  "billing_method": "prepaid",
+  "amount": 1000,
+  "billing_units": 1000
+}
+```
+
+**Characteristics:**
+- Payment collected immediately
+- Balance decrements as usage occurs
+- Customer can purchase more at any time
+- No surprise bills at end of cycle
+
+### Usage-Based Billing (Arrears)
+
+Customers are billed for actual usage at period end:
+
+```json Example: Pay-as-you-go
+{
+  "billing_method": "usage_based",
+  "amount": 10,
+  "billing_units": 1
+}
+```
+
+**Characteristics:**
+- Usage tracked throughout billing cycle
+- Invoice generated at period end
+- Payment collected after consumption
+- Suitable for variable workloads
+
+## Billing Intervals
+
+Autumn supports multiple billing intervals:
+
+<ParamField path="interval" type="string">
+  Billing frequency options:
+  - `one_off` - Single payment, no recurrence
+  - `week` - Weekly billing
+  - `month` - Monthly billing
+  - `quarter` - Every 3 months
+  - `semi_annual` - Every 6 months
+  - `year` - Annual billing
+</ParamField>
+
+```json Example: Annual Plan with Discount
+{
+  "id": "pro-annual",
+  "name": "Pro Plan (Annual)",
+  "price": {
+    "amount": 29000,
+    "interval": "year"
+  }
+}
+```
+
+## Free Trials
+
+Offer free trial periods to new customers:
+
+<ParamField path="free_trial" type="object">
+  Free trial configuration
+  
+  <Expandable title="properties">
+    <ParamField path="duration_length" type="number">
+      Length of the trial period
+    </ParamField>
+    <ParamField path="duration_type" type="string">
+      Unit of duration: `day`, `week`, `month`
+    </ParamField>
+    <ParamField path="card_required" type="boolean">
+      Whether payment method is required upfront
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+```json Example: 14-Day Trial
+{
+  "id": "pro",
+  "name": "Pro Plan",
+  "price": {
+    "amount": 2900,
+    "interval": "month"
+  },
+  "free_trial": {
+    "duration_length": 14,
+    "duration_type": "day",
+    "card_required": false
+  }
+}
+```
+
+<Info>
+With `card_required: false`, customers get full access without payment info. Trial converts to paid subscription only after they add a payment method.
+</Info>
+
+## Rollover Configuration
+
+Allow unused allowances to carry over to the next period:
+
+<ParamField path="rollover" type="object">
+  Rollover configuration for plan items
+  
+  <Expandable title="properties">
+    <ParamField path="max" type="number">
+      Maximum amount that can roll over (null for unlimited)
+    </ParamField>
+    <ParamField path="expiry_duration_type" type="string">
+      When rolled over balance expires: `never`, `period`, `custom`
+    </ParamField>
+    <ParamField path="expiry_duration_length" type="number">
+      Number of periods before expiry (for custom)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+```json Example: Rollover with Cap
+{
+  "feature_id": "api-calls",
+  "included": 10000,
+  "reset": {
+    "interval": "month"
+  },
+  "rollover": {
+    "max": 5000,
+    "expiry_duration_type": "never"
+  }
+}
+```
+
+<Note>
+In this example, unused API calls roll over, but only up to 5,000 maximum.
+</Note>
+
+## Proration Settings
+
+Control how mid-cycle upgrades and downgrades are handled:
+
+<ParamField path="proration" type="object">
+  Proration behavior for plan item changes
+  
+  <Expandable title="properties">
+    <ParamField path="on_increase" type="string">
+      Behavior when upgrading:
+      - `bill_immediately` - Charge difference now
+      - `prorate_immediately` - Prorated charge now
+      - `prorate_next_cycle` - Credit on next invoice
+      - `bill_next_cycle` - Full charge next cycle
+    </ParamField>
+    <ParamField path="on_decrease" type="string">
+      Behavior when downgrading:
+      - `prorate` - Issue credit
+      - `prorate_immediately` - Immediate credit
+      - `prorate_next_cycle` - Credit next cycle
+      - `none` - No proration
+      - `no_prorations` - No credits issued
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+```json Example: Proration Configuration
+{
+  "proration": {
+    "on_increase": "prorate_immediately",
+    "on_decrease": "prorate_next_cycle"
+  }
+}
+```
+
+## Display Configuration
+
+Customize how products appear in pricing pages and UI:
+
+<ParamField path="display" type="object">
+  Display customization
+  
+  <Expandable title="properties">
+    <ParamField path="primary_text" type="string">
+      Main display text (e.g., "$29/month")
+    </ParamField>
+    <ParamField path="secondary_text" type="string">
+      Secondary text (e.g., "per user")
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+```json Example: Per-Seat Display
+{
+  "price": {
+    "amount": 2900,
+    "interval": "month",
+    "display": {
+      "primary_text": "$29",
+      "secondary_text": "per user/month"
+    }
+  }
+}
+```
+
+## Product Grouping
+
+Organize products into logical groups:
+
+<ParamField path="group" type="string">
+  Group identifier for organizing products (e.g., `main`, `add-ons`, `enterprise`)
+</ParamField>
+
+```json Example: Grouped Products
 [
   {
-    "id": "free",
-    "name": "Free",
-    "is_default": true,
-    "prices": [
+    "id": "starter",
+    "name": "Starter",
+    "group": "main"
+  },
+  {
+    "id": "pro",
+    "name": "Pro",
+    "group": "main"
+  },
+  {
+    "id": "extra-storage",
+    "name": "Extra Storage",
+    "group": "add-ons"
+  }
+]
+```
+
+## Product Versioning
+
+Track changes with product versions:
+
+<ParamField path="version" type="number">
+  Version number incremented on updates
+</ParamField>
+
+<ParamField path="base_variant_id" type="string">
+  Links product variants together (e.g., monthly vs annual versions)
+</ParamField>
+
+```json Example: Product Variants
+[
+  {
+    "id": "pro-monthly",
+    "name": "Pro (Monthly)",
+    "base_variant_id": "pro",
+    "version": 1
+  },
+  {
+    "id": "pro-annual",
+    "name": "Pro (Annual)",
+    "base_variant_id": "pro",
+    "version": 1
+  }
+]
+```
+
+## Environment and Archiving
+
+<ParamField path="env" type="string" required>
+  Environment identifier (e.g., `production`, `development`)
+</ParamField>
+
+<ParamField path="archived" type="boolean" default="false">
+  Whether the product is archived (hidden but not deleted)
+</ParamField>
+
+<ParamField path="created_at" type="number">
+  Unix timestamp of product creation
+</ParamField>
+
+<Warning>
+Archived products remain attached to existing customers but cannot be purchased by new customers.
+</Warning>
+
+## Customer Eligibility
+
+Products include eligibility information when retrieved in customer context:
+
+<ParamField path="customer_eligibility" type="object">
+  Customer-specific eligibility data
+  
+  <Expandable title="properties">
+    <ParamField path="trial_available" type="boolean">
+      Whether customer is eligible for free trial
+    </ParamField>
+    <ParamField path="scenario" type="string">
+      Attachment scenario: `new`, `upgrade`, `downgrade`, `addon`, `replace`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Common Patterns
+
+### Simple SaaS Pricing
+
+```json Three-Tier Model
+[
+  {
+    "id": "starter",
+    "name": "Starter",
+    "price": {
+      "amount": 900,
+      "interval": "month"
+    },
+    "items": [
       {
-        "type": "fixed",
-        "amount": 0,
-        "interval": "month"
+        "feature_id": "api-calls",
+        "included": 1000,
+        "unlimited": false,
+        "reset": { "interval": "month" }
       }
     ]
   },
   {
-    "id": "extra-seats",
-    "name": "Additional Seats",
-    "is_add_on": true
+    "id": "pro",
+    "name": "Pro",
+    "price": {
+      "amount": 2900,
+      "interval": "month"
+    },
+    "items": [
+      {
+        "feature_id": "api-calls",
+        "included": 10000,
+        "unlimited": false,
+        "reset": { "interval": "month" }
+      }
+    ]
+  },
+  {
+    "id": "enterprise",
+    "name": "Enterprise",
+    "price": {
+      "amount": 9900,
+      "interval": "month"
+    },
+    "items": [
+      {
+        "feature_id": "api-calls",
+        "unlimited": true
+      }
+    ]
   }
 ]
+```
+
+### Usage-Based Pricing
+
+```json Pay-as-You-Go Model
+{
+  "id": "usage-based",
+  "name": "Pay as You Go",
+  "price": null,
+  "items": [
+    {
+      "feature_id": "api-calls",
+      "included": 0,
+      "unlimited": false,
+      "price": {
+        "amount": 10,
+        "billing_method": "usage_based",
+        "billing_units": 1000,
+        "interval": "month"
+      }
+    }
+  ]
+}
+```
+
+### Hybrid Pricing
+
+```json Base + Usage Model
+{
+  "id": "hybrid",
+  "name": "Hybrid Plan",
+  "price": {
+    "amount": 1900,
+    "interval": "month"
+  },
+  "items": [
+    {
+      "feature_id": "api-calls",
+      "included": 5000,
+      "unlimited": false,
+      "reset": { "interval": "month" },
+      "price": {
+        "amount": 5,
+        "billing_method": "usage_based",
+        "billing_units": 1000,
+        "interval": "month"
+      }
+    }
+  ]
+}
+```
+
+<Info>
+Customers pay $19/month base fee + $5 per 1,000 API calls over the included 5,000.
+</Info>
+
+### Per-Seat Pricing
+
+```json Team Plan with Seats
+{
+  "id": "team",
+  "name": "Team Plan",
+  "price": {
+    "amount": 1500,
+    "interval": "month",
+    "display": {
+      "primary_text": "$15",
+      "secondary_text": "per user/month"
+    }
+  }
+}
 ```
 
 ## Frequently Asked Questions
 
 <AccordionGroup>
-  <Accordion title="Can I change a product's price after customers have subscribed?">
-    Yes, but existing subscriptions will maintain their original price. To change prices:
-    1. Create a new price on the product
-    2. Set it as the default for new subscriptions
-    3. Optionally migrate existing customers
-  </Accordion>
-
-  <Accordion title="How do I handle grandfathered pricing?">
-    Use product versioning to maintain legacy pricing:
-    1. Create a new version of the product
-    2. Update the `version` field
-    3. Keep the old version for existing customers
+  <Accordion title="What's the difference between 'product' and 'plan'?">
+    They're the same thing. Autumn uses both terms interchangeably:
+    - API endpoints use `/plans`
+    - Documentation often says "product"
+    - The data model is `product`
     
-    Existing subscriptions will continue using the old version.
+    We're standardizing on "product" but maintaining backward compatibility.
   </Accordion>
 
-  <Accordion title="What's the difference between products and plans?">
-    In Autumn, **products** and **plans** are the same concept. The terms are used interchangeably to describe subscription tiers or offerings.
-  </Accordion>
-
-  <Accordion title="Can a customer have multiple products?">
-    Yes! Customers can have:
-    - One main product subscription
-    - Multiple add-on products
-    - Subscriptions to different products for different entities
+  <Accordion title="Can I change product pricing for existing customers?">
+    No, pricing changes only affect new subscriptions. To change pricing:
+    1. Update the product's price
+    2. New customers get new pricing
+    3. Existing customers keep their original pricing
     
-    See [Customers](/concepts/customers) for more details.
+    To migrate existing customers, you need to:
+    1. Cancel their current subscription
+    2. Attach them to the updated product
   </Accordion>
 
-  <Accordion title="How do I create a custom enterprise plan?">
-    Create a product with custom pricing:
+  <Accordion title="How do I implement annual discount pricing?">
+    Create separate product variants:
     ```json
     {
-      "id": "enterprise-custom",
-      "name": "Enterprise Custom",
-      "prices": [
-        {
-          "is_custom": true,
-          "amount": 50000,
-          "interval": "year"
-        }
+      "id": "pro-monthly",
+      "price": { "amount": 2900, "interval": "month" },
+      "base_variant_id": "pro"
+    }
+    {
+      "id": "pro-annual",
+      "price": { "amount": 29000, "interval": "year" },
+      "base_variant_id": "pro"
+    }
+    ```
+    Annual saves $5,800 (17% discount).
+  </Accordion>
+
+  <Accordion title="Can a product include multiple features?">
+    Yes! Products typically include multiple features:
+    ```json
+    {
+      "items": [
+        { "feature_id": "api-calls", "included": 10000 },
+        { "feature_id": "storage-gb", "included": 50 },
+        { "feature_id": "team-members", "included": 5 }
       ]
     }
     ```
-    Use the `is_custom` flag to identify custom pricing.
+  </Accordion>
+
+  <Accordion title="What happens to plan items when interval and reset differ?">
+    They must match. If you set both `reset.interval` and `price.interval`, they must be the same value. This validation prevents inconsistent billing configurations.
+  </Accordion>
+
+  <Accordion title="How do I create a free plan with upgrade options?">
+    Create a free product with limited entitlements:
+    ```json
+    {
+      "id": "free",
+      "name": "Free Plan",
+      "price": null,
+      "items": [
+        { "feature_id": "api-calls", "included": 1000 }
+      ]
+    }
+    ```
+    
+    Then use `/attach` to upgrade customers to paid plans.
   </Accordion>
 </AccordionGroup>
 
 ## Related Resources
 
 <CardGroup cols={2}>
-  <Card title="Features" icon="puzzle-piece" href="/concepts/features">
-    Learn how features define product capabilities
+  <Card title="Features" icon="gauge" href="/concepts/features">
+    Learn about feature configuration
   </Card>
   <Card title="Pricing Models" icon="dollar-sign" href="/concepts/pricing-models">
-    Explore fixed and usage-based pricing
+    Explore different pricing strategies
   </Card>
-  <Card title="Create Product" icon="plus" href="/api/products/create">
-    Create a product via API
+  <Card title="Create Plan" icon="plus" href="/api/plans/create">
+    Create products via API
   </Card>
-  <Card title="List Products" icon="list" href="/api/products/list">
-    Retrieve all products
+  <Card title="Attach Product" icon="link" href="/api/billing/attach">
+    Subscribe customers to products
   </Card>
 </CardGroup>

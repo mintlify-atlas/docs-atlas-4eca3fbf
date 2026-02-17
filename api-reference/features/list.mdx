@@ -1,0 +1,96 @@
+---
+title: "List Features"
+openapi: "GET /features"
+---
+
+## Overview
+
+Retrieve all features in your workspace. Features define the building blocks of your pricing model, including metered usage, boolean access flags, and credit systems.
+
+## Response
+
+Returns an array of feature objects. Each feature includes its configuration, type, and tracking settings.
+
+### Feature Types
+
+The response will contain features of different types:
+
+- **`metered`**: Track consumable or allocated usage (API calls, storage, seats)
+- **`boolean`**: Simple on/off access control (feature flags)
+- **`credit_system`**: Universal currency that converts to metered features
+
+## Example Response
+
+```json
+{
+  "list": [
+    {
+      "id": "api-calls",
+      "name": "API Calls",
+      "type": "metered",
+      "consumable": true,
+      "event_names": ["api_call"],
+      "display": {
+        "singular": "API Call",
+        "plural": "API Calls"
+      },
+      "archived": false
+    },
+    {
+      "id": "advanced-analytics",
+      "name": "Advanced Analytics",
+      "type": "boolean",
+      "consumable": false,
+      "archived": false
+    },
+    {
+      "id": "credits",
+      "name": "Platform Credits",
+      "type": "credit_system",
+      "consumable": true,
+      "credit_schema": [
+        {
+          "metered_feature_id": "api-calls",
+          "credit_cost": 1
+        },
+        {
+          "metered_feature_id": "storage-gb",
+          "credit_cost": 100
+        }
+      ],
+      "display": {
+        "singular": "Credit",
+        "plural": "Credits"
+      },
+      "archived": false
+    }
+  ]
+}
+```
+
+## Filtering
+
+By default, archived features are excluded from the list. To include archived features, use the dashboard or query parameters (if supported).
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Product Builder" icon="box">
+    Load available features when configuring product plan items
+  </Card>
+  <Card title="Usage Dashboard" icon="chart-line">
+    Display all trackable features and their current usage
+  </Card>
+  <Card title="Feature Audit" icon="list-check">
+    Review all configured features and their types
+  </Card>
+  <Card title="Migration" icon="code-branch">
+    Export feature configurations for environment cloning
+  </Card>
+</CardGroup>
+
+## Related Endpoints
+
+<Card title="Get Feature" icon="magnifying-glass" href="/api-reference/features/get">
+  Retrieve a specific feature by ID
+</Card>

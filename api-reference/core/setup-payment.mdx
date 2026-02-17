@@ -1,0 +1,417 @@
+---
+title: 'Setup Payment Method'
+api: 'POST /setup_payment'
+description: 'Create a session for a customer to add or update their payment method without charging them'
+---
+
+## Overview
+
+The `/setup_payment` endpoint creates a Stripe setup session for a customer to add or update their payment method without making an immediate charge. This is useful for collecting payment information before subscription or for updating expired cards.
+
+<Note>
+  This endpoint collects payment information only - no charge is made. Use this when you want to save a payment method for future use.
+</Note>
+
+## When to Use
+
+**Use `/setup_payment` when:**
+- Collecting payment method before starting subscription
+- Updating expired or declined payment methods
+- Adding backup payment methods
+- Implementing "Save Card" functionality
+- Preparing for future charges without immediate billing
+
+**Use `/checkout` instead when:**
+- You want to collect payment AND charge immediately
+- Customer is purchasing a product now
+
+## Authentication
+
+This endpoint requires API key authentication:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer.
+
+  ```json
+  "cus_123"
+  ```
+</ParamField>
+
+<ParamField body="success_url" type="string">
+  URL to redirect to after successful payment setup. Must start with `http://` or `https://`.
+
+  ```json
+  "https://example.com/payment-setup-complete"
+  ```
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Customer properties to set if creating or updating the customer.
+
+  <Expandable title="Customer Data Properties">
+    <ParamField body="name" type="string">
+      Customer's full name
+    </ParamField>
+    <ParamField body="email" type="string">
+      Customer's email address
+    </ParamField>
+    <ParamField body="metadata" type="object">
+      Custom metadata
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="checkout_session_params" type="object">
+  Additional parameters for the Stripe Checkout session.
+
+  ```json
+  {
+    "locale": "es"
+  }
+  ```
+</ParamField>
+
+## Response
+
+<ResponseField name="customer_id" type="string">
+  The ID of the customer.
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  URL to the payment setup page. Redirect the customer to this URL to collect their payment information.
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.useautumn.com/setup_payment \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "success_url": "https://example.com/payment-complete"
+  }'
+```
+
+```typescript TypeScript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
+
+const result = await autumn.setupPayment({
+  customer_id: 'cus_123',
+  success_url: 'https://example.com/payment-complete'
+});
+
+// Redirect to payment setup
+window.location.href = result.url;
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key='YOUR_API_KEY')
+
+result = autumn.setup_payment(
+  customer_id='cus_123',
+  success_url='https://example.com/payment-complete'
+)
+
+# Redirect to payment setup
+print(f"Setup URL: {result['url']}")
+```
+
+```typescript React
+import { useAutumn } from '@useautumn/react';
+import { useState } from 'react';
+
+function AddPaymentMethod() {
+  const autumn = useAutumn();
+  const [loading, setLoading] = useState(false);
+
+  const handleAddPayment = async () => {
+    setLoading(true);
+    try {
+      const result = await autumn.setupPayment({
+        customer_id: 'cus_123',
+        success_url: `${window.location.origin}/payment-complete`
+      });
+
+      // Redirect to Stripe setup page
+      window.location.href = result.url;
+    } catch (error) {
+      console.error('Failed to setup payment:', error);
+      alert('Failed to initialize payment setup');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={handleAddPayment} disabled={loading}>
+      {loading ? 'Loading...' : 'Add Payment Method'}
+    </button>
+  );
+}
+```
+</CodeGroup>
+
+## Example Responses
+
+### Successful Setup Session
+
+```json
+{
+  "customer_id": "cus_123",
+  "url": "https://checkout.stripe.com/c/pay/cs_test_a1b2c3..."
+}
+```
+
+## Common Use Cases
+
+### Add Payment Method Before Trial Ends
+
+```typescript
+const setupPaymentForTrial = async () => {
+  const result = await autumn.setupPayment({
+    customer_id: 'cus_123',
+    success_url: 'https://example.com/trial-continue',
+    customer_data: {
+      email: 'user@example.com',
+      name: 'John Doe'
+    }
+  });
+
+  window.location.href = result.url;
+};
+```
+
+### Update Expired Payment Method
+
+```typescript
+const updateExpiredCard = async () => {
+  const result = await autumn.setupPayment({
+    customer_id: 'cus_123',
+    success_url: 'https://example.com/payment-updated'
+  });
+
+  // Show message to user
+  alert('Please update your payment method to continue your subscription.');
+  window.location.href = result.url;
+};
+```
+
+### Add Backup Payment Method
+
+```typescript
+const addBackupPayment = async () => {
+  const result = await autumn.setupPayment({
+    customer_id: 'cus_123',
+    success_url: 'https://example.com/account/billing'
+  });
+
+  window.location.href = result.url;
+};
+```
+
+### Setup Payment with Locale
+
+```typescript
+const result = await autumn.setupPayment({
+  customer_id: 'cus_123',
+  success_url: 'https://example.com/payment-complete',
+  checkout_session_params: {
+    locale: 'fr' // French
+  }
+});
+```
+
+## Best Practices
+
+### Handle Setup Completion via Webhooks
+
+```typescript
+app.post('/webhooks/autumn', async (req, res) => {
+  const event = req.body;
+
+  if (event.type === 'payment_method.attached') {
+    const { customer_id, payment_method } = event.data;
+
+    // Update customer status in your database
+    await db.customers.update({
+      where: { id: customer_id },
+      data: {
+        has_payment_method: true,
+        payment_method_last4: payment_method.last4,
+        payment_method_brand: payment_method.brand
+      }
+    });
+
+    // Send confirmation email
+    await sendEmail({
+      to: event.data.customer_email,
+      subject: 'Payment Method Added',
+      body: 'Your payment method has been successfully added.'
+    });
+  }
+
+  res.json({ received: true });
+});
+```
+
+### Verify Payment Method on Success Page
+
+```typescript
+// On success_url page
+const SuccessPage = () => {
+  useEffect(() => {
+    const verifyPaymentMethod = async () => {
+      const customer = await autumn.customers.retrieve('cus_123', {
+        expand: ['payment_method']
+      });
+
+      if (customer.payment_method) {
+        // Payment method successfully added
+        showSuccess('Payment method added successfully!');
+      }
+    };
+
+    verifyPaymentMethod();
+  }, []);
+
+  return <div>Setting up payment method...</div>;
+};
+```
+
+### Prompt Users with Failed Payments
+
+```typescript
+const checkPaymentStatus = async (customerId: string) => {
+  const customer = await autumn.customers.retrieve(customerId);
+
+  if (customer.payment_failed) {
+    // Prompt to update payment method
+    const result = await autumn.setupPayment({
+      customer_id: customerId,
+      success_url: 'https://example.com/payment-updated'
+    });
+
+    showModal({
+      title: 'Payment Failed',
+      message: 'Please update your payment method to continue your subscription.',
+      action: () => window.location.href = result.url
+    });
+  }
+};
+```
+
+### Pre-authorize for Free Trials
+
+```typescript
+// Collect payment method before starting free trial
+const startTrialWithPayment = async () => {
+  // Setup payment first
+  const setupResult = await autumn.setupPayment({
+    customer_id: 'cus_123',
+    success_url: 'https://example.com/trial-started'
+  });
+
+  window.location.href = setupResult.url;
+};
+
+// After payment setup completes, attach product with trial
+const attachTrialAfterSetup = async () => {
+  await autumn.attach({
+    customer_id: 'cus_123',
+    product_id: 'pro_plan',
+    free_trial: true
+  });
+};
+```
+
+## Payment Method Verification
+
+Stripe may require verification for certain payment methods:
+
+```typescript
+const setupWithVerification = async () => {
+  const result = await autumn.setupPayment({
+    customer_id: 'cus_123',
+    success_url: 'https://example.com/verified',
+    checkout_session_params: {
+      payment_method_types: ['card'], // Only allow cards
+      // Stripe will handle 3DS verification automatically
+    }
+  });
+
+  window.location.href = result.url;
+};
+```
+
+## Error Handling
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="code" type="string">
+      Error code identifying the type of error.
+      
+      Common error codes:
+      - `customer_not_found` - The specified customer does not exist
+      - `invalid_url` - success_url is invalid or missing protocol
+      - `stripe_error` - Error from Stripe API
+      - `invalid_request` - Invalid parameters provided
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Human-readable error message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Error Response
+
+```json
+{
+  "error": {
+    "code": "invalid_url",
+    "message": "success_url must start with http:// or https://"
+  }
+}
+```
+
+### Handling Errors
+
+```typescript
+try {
+  const result = await autumn.setupPayment({
+    customer_id: 'cus_123',
+    success_url: 'https://example.com/complete'
+  });
+  window.location.href = result.url;
+} catch (error) {
+  if (error.code === 'customer_not_found') {
+    // Create customer first
+    await autumn.customers.create({ id: 'cus_123' });
+    // Retry setup
+  } else {
+    console.error('Setup failed:', error);
+  }
+}
+```
+
+## Related Endpoints
+
+- [Checkout](/api-reference/core/checkout) - Create checkout with immediate payment
+- [Attach](/api-reference/core/attach) - Attach product after payment method is added
+- [Billing Portal](/api-reference/core/billing-portal) - Self-service payment management
+
+## Related Guides
+
+- [Free Trials](/guides/trials) - Implementing trials with payment collection
+- [Subscriptions](/guides/subscriptions) - Managing customer subscriptions

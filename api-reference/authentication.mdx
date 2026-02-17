@@ -1,0 +1,301 @@
+---
+title: 'Authentication'
+description: 'Learn how to authenticate your API requests with Autumn'
+---
+
+## Overview
+
+The Autumn API uses **Bearer token authentication** with API keys. All requests must include a valid API key in the Authorization header.
+
+## API Key Types
+
+Autumn supports two types of API keys:
+
+### Secret Keys (Full Access)
+
+Secret keys provide full access to all API endpoints and should only be used on your server.
+
+**Format**: `am_sk_{environment}_{random_string}`
+
+- **Test mode**: `am_sk_test_...`
+- **Live mode**: `am_sk_live_...`
+
+<Warning>
+  **Never expose secret keys in client-side code, mobile apps, or version control.** Secret keys can perform any API operation and should be kept secure.
+</Warning>
+
+### Publishable Keys (Limited Access)
+
+Publishable keys provide limited access to specific public endpoints and can be safely used in client-side applications.
+
+**Format**: `am_pk_{environment}_{random_string}`
+
+- **Test mode**: `am_pk_test_...`
+- **Live mode**: `am_pk_live_...`
+
+#### Allowed Endpoints for Publishable Keys
+
+<AccordionGroup>
+  <Accordion title="GET /v1/products">
+    List available products and plans
+  </Accordion>
+  <Accordion title="POST /v1/entitled">
+    Check if a customer has access to a feature
+  </Accordion>
+  <Accordion title="POST /v1/check">
+    Check feature access and usage limits
+  </Accordion>
+  <Accordion title="GET /v1/customers/:customer_id">
+    Retrieve customer information
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  Attempting to access other endpoints with a publishable key will return a `401 Unauthorized` error with code `endpoint_not_public`.
+</Note>
+
+## Making Authenticated Requests
+
+### Using Secret Keys
+
+Include your secret key in the `Authorization` header with the `Bearer` scheme:
+
+```bash
+curl https://api.useautumn.com/v1/customers \
+  -H "Authorization: Bearer am_sk_live_abc123def456..." \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d '{
+    "customer_id": "user_789",
+    "name": "Acme Corp",
+    "email": "billing@acme.com"
+  }'
+```
+
+### Using Publishable Keys
+
+Publishable keys use the same authentication format:
+
+```bash
+curl https://api.useautumn.com/v1/products \
+  -H "Authorization: Bearer am_pk_live_xyz789uvw456..." \
+  -H "Content-Type: application/json"
+```
+
+## Code Examples
+
+<CodeGroup>
+
+```javascript Node.js
+const axios = require('axios');
+
+const api = axios.create({
+  baseURL: 'https://api.useautumn.com/v1',
+  headers: {
+    'Authorization': `Bearer ${process.env.AUTUMN_SECRET_KEY}`,
+    'Content-Type': 'application/json'
+  }
+});
+
+// Create a customer
+const customer = await api.post('/customers', {
+  customer_id: 'user_789',
+  name: 'Acme Corp',
+  email: 'billing@acme.com'
+});
+```
+
+```python Python
+import os
+import requests
+
+class AutumnAPI:
+    def __init__(self, api_key):
+        self.base_url = 'https://api.useautumn.com/v1'
+        self.headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+    
+    def create_customer(self, customer_id, name, email):
+        response = requests.post(
+            f'{self.base_url}/customers',
+            headers=self.headers,
+            json={
+                'customer_id': customer_id,
+                'name': name,
+                'email': email
+            }
+        )
+        return response.json()
+
+# Initialize client
+autumn = AutumnAPI(os.environ['AUTUMN_SECRET_KEY'])
+
+# Create customer
+customer = autumn.create_customer(
+    customer_id='user_789',
+    name='Acme Corp',
+    email='billing@acme.com'
+)
+```
+
+```go Go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "os"
+)
+
+type AutumnClient struct {
+    APIKey  string
+    BaseURL string
+}
+
+func NewClient(apiKey string) *AutumnClient {
+    return &AutumnClient{
+        APIKey:  apiKey,
+        BaseURL: "https://api.useautumn.com/v1",
+    }
+}
+
+func (c *AutumnClient) CreateCustomer(customerID, name, email string) error {
+    data := map[string]string{
+        "customer_id": customerID,
+        "name":        name,
+        "email":       email,
+    }
+    jsonData, _ := json.Marshal(data)
+
+    req, _ := http.NewRequest("POST", c.BaseURL+"/customers", bytes.NewBuffer(jsonData))
+    req.Header.Set("Authorization", "Bearer "+c.APIKey)
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+
+    return nil
+}
+
+func main() {
+    client := NewClient(os.Getenv("AUTUMN_SECRET_KEY"))
+    client.CreateCustomer("user_789", "Acme Corp", "billing@acme.com")
+}
+```
+
+</CodeGroup>
+
+## Environment Modes
+
+Autumn supports two environment modes:
+
+<CardGroup cols={2}>
+  <Card title="Test Mode" icon="flask">
+    Use test keys (`am_sk_test_...`) for development and testing. Test mode uses a separate database and doesn't charge real payments.
+  </Card>
+  <Card title="Live Mode" icon="circle-check">
+    Use live keys (`am_sk_live_...`) for production. Live mode processes real transactions and charges actual payments.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Data created in test mode is completely separate from live mode. Switching between environments requires using the corresponding API key.
+</Warning>
+
+## Authentication Errors
+
+The API returns specific error codes for authentication failures:
+
+<ResponseField name="no_secret_key" type="401">
+  No Authorization header provided or Bearer token missing.
+  
+  ```json
+  {
+    "message": "Secret key not found in Authorization header",
+    "code": "no_secret_key"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="invalid_secret_key" type="401">
+  The provided API key is invalid or has been revoked.
+  
+  ```json
+  {
+    "message": "Invalid secret key: am_sk_***...",
+    "code": "invalid_secret_key"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="invalid_publishable_key" type="401">
+  The provided publishable key is invalid.
+  
+  ```json
+  {
+    "message": "Invalid publishable key",
+    "code": "invalid_publishable_key"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="endpoint_not_public" type="401">
+  Attempting to access a restricted endpoint with a publishable key.
+  
+  ```json
+  {
+    "message": "Endpoint /v1/customers not accessible via publishable key. Please try with a secret key instead.",
+    "code": "endpoint_not_public"
+  }
+  ```
+</ResponseField>
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="Store keys securely">
+    - Never commit API keys to version control
+    - Use environment variables or secure secret management systems
+    - Rotate keys periodically
+    - Revoke compromised keys immediately
+  </Accordion>
+  
+  <Accordion title="Use the right key type">
+    - Use secret keys only on your server
+    - Use publishable keys for client-side applications
+    - Never expose secret keys in mobile apps or browsers
+  </Accordion>
+  
+  <Accordion title="Separate test and live environments">
+    - Use test keys during development
+    - Keep test and live environments completely separate
+    - Test thoroughly before deploying to production
+  </Accordion>
+  
+  <Accordion title="Monitor API usage">
+    - Track API key usage for anomalies
+    - Set up alerts for suspicious activity
+    - Review access logs regularly
+  </Accordion>
+</AccordionGroup>
+
+## Getting Your API Keys
+
+You can find your API keys in the Autumn dashboard:
+
+1. Log in to your [Autumn dashboard](https://useautumn.com)
+2. Navigate to **Settings** → **API Keys**
+3. Copy your secret or publishable key
+4. Toggle between test and live mode to access different keys
+
+<Tip>
+  You can create multiple API keys for different purposes (e.g., separate keys for different services or team members). This makes it easier to track usage and revoke access if needed.
+</Tip>

@@ -1,0 +1,254 @@
+---
+title: 'Get Invoice'
+description: 'Retrieve a specific invoice by ID'
+---
+
+## Overview
+
+Retrieve a specific invoice by searching through customer or entity invoices. Currently, there is no direct endpoint to fetch an invoice by its ID alone.
+
+<Note>
+You must know the customer ID (and optionally entity ID) to retrieve a specific invoice. Invoice IDs alone cannot be used to fetch invoices directly.
+</Note>
+
+## Approach
+
+To get a specific invoice:
+
+1. Fetch the customer or entity with `expand=invoices`
+2. Filter the returned invoices array by the invoice ID you're looking for
+
+## Example Implementation
+
+<CodeGroup>
+```typescript TypeScript
+async function getInvoice({
+  customer_id,
+  invoice_id,
+  entity_id
+}: {
+  customer_id: string;
+  invoice_id: string;
+  entity_id?: string;
+}) {
+  if (entity_id) {
+    // Get entity with invoices
+    const entity = await autumn.entities.get({
+      customer_id,
+      entity_id,
+      expand: ['invoices']
+    });
+    
+    return entity.invoices?.find(
+      invoice => invoice.stripe_id === invoice_id
+    );
+  } else {
+    // Get customer with invoices
+    const customer = await autumn.customers.get({
+      customer_id,
+      expand: ['invoices']
+    });
+    
+    return customer.invoices?.find(
+      invoice => invoice.stripe_id === invoice_id
+    );
+  }
+}
+
+// Usage
+const invoice = await getInvoice({
+  customer_id: 'cus_123',
+  invoice_id: 'in_1A2B3C4D5E6F7G8H'
+});
+
+if (invoice) {
+  console.log('Invoice found:', invoice);
+} else {
+  console.log('Invoice not found');
+}
+```
+
+```python Python
+def get_invoice(
+  customer_id: str,
+  invoice_id: str,
+  entity_id: str = None
+):
+  if entity_id:
+    # Get entity with invoices
+    entity = autumn.entities.get(
+      customer_id=customer_id,
+      entity_id=entity_id,
+      expand=['invoices']
+    )
+    
+    return next(
+      (inv for inv in entity.invoices if inv['stripe_id'] == invoice_id),
+      None
+    )
+  else:
+    # Get customer with invoices
+    customer = autumn.customers.get(
+      customer_id=customer_id,
+      expand=['invoices']
+    )
+    
+    return next(
+      (inv for inv in customer.invoices if inv['stripe_id'] == invoice_id),
+      None
+    )
+
+# Usage
+invoice = get_invoice(
+  customer_id='cus_123',
+  invoice_id='in_1A2B3C4D5E6F7G8H'
+)
+
+if invoice:
+  print('Invoice found:', invoice)
+else:
+  print('Invoice not found')
+```
+</CodeGroup>
+
+## Invoice Object
+
+<ResponseField name="plan_ids" type="string[]">
+  Array of plan IDs included in this invoice
+</ResponseField>
+
+<ResponseField name="stripe_id" type="string">
+  The Stripe invoice ID (use this to match the invoice)
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  The status of the invoice (e.g., `paid`, `open`, `draft`, `void`)
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  The total amount of the invoice in cents
+</ResponseField>
+
+<ResponseField name="currency" type="string">
+  The currency code for the invoice (e.g., `usd`, `eur`)
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp (milliseconds) when the invoice was created
+</ResponseField>
+
+<ResponseField name="hosted_invoice_url" type="string">
+  URL to the Stripe-hosted invoice page (may be null)
+</ResponseField>
+
+## Example Response
+
+```json
+{
+  "plan_ids": ["pro_plan", "addon_storage"],
+  "stripe_id": "in_1A2B3C4D5E6F7G8H",
+  "status": "paid",
+  "total": 4999,
+  "currency": "usd",
+  "created_at": 1759247877000,
+  "hosted_invoice_url": "https://invoice.stripe.com/i/acct_123/test_456"
+}
+```
+
+## Alternative: Direct Stripe API
+
+If you have the Stripe invoice ID and need detailed invoice information, you can query the Stripe API directly:
+
+<CodeGroup>
+```typescript TypeScript
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+const invoice = await stripe.invoices.retrieve('in_1A2B3C4D5E6F7G8H');
+```
+
+```python Python
+import stripe
+
+stripe.api_key = os.environ['STRIPE_SECRET_KEY']
+
+invoice = stripe.Invoice.retrieve('in_1A2B3C4D5E6F7G8H')
+```
+
+```bash cURL
+curl https://api.stripe.com/v1/invoices/in_1A2B3C4D5E6F7G8H \
+  -u sk_test_your_stripe_secret_key:
+```
+</CodeGroup>
+
+<Tip>
+Using the Stripe API directly provides more detailed invoice information including line items, payment details, and more.
+</Tip>
+
+## Use Cases
+
+- **Invoice details page**: Display full invoice information to users
+- **Payment verification**: Check if a specific invoice has been paid
+- **Support**: Look up invoice details for customer inquiries
+- **PDF download**: Get the hosted invoice URL to provide customers
+- **Billing reconciliation**: Match internal records with Stripe invoices
+
+## Handling Not Found
+
+If an invoice is not found in the customer's invoice list:
+
+<CodeGroup>
+```typescript TypeScript
+const invoice = await getInvoice({
+  customer_id: 'cus_123',
+  invoice_id: 'in_1A2B3C4D5E6F7G8H'
+});
+
+if (!invoice) {
+  // Invoice might belong to a different customer
+  // or might not exist yet
+  console.error('Invoice not found');
+  
+  // Consider:
+  // 1. Check if customer_id is correct
+  // 2. Check if invoice belongs to an entity
+  // 3. Verify invoice exists in Stripe
+}
+```
+
+```python Python
+invoice = get_invoice(
+  customer_id='cus_123',
+  invoice_id='in_1A2B3C4D5E6F7G8H'
+)
+
+if not invoice:
+  # Invoice might belong to a different customer
+  # or might not exist yet
+  print('Invoice not found')
+  
+  # Consider:
+  # 1. Check if customer_id is correct
+  # 2. Check if invoice belongs to an entity
+  # 3. Verify invoice exists in Stripe
+```
+</CodeGroup>
+
+## Future Improvements
+
+A dedicated `/invoices/{invoice_id}` endpoint may be added in a future API version. If this is important for your use case, please reach out to the Autumn team.
+
+## Notes
+
+- Invoice IDs are the same as Stripe invoice IDs (`stripe_id` field)
+- Invoices are immutable once created
+- The `hosted_invoice_url` provides a Stripe-hosted page for the invoice
+- Invoice amounts are always in cents
+- For detailed invoice data, use the Stripe API directly
+
+## Related Endpoints
+
+- [List Invoices](/api-reference/invoices/list) - Get all invoices for a customer or entity
+- [Get Customer](/api-reference/customers/get) - Get customer with invoice expansion
+- [Get Entity](/api-reference/entities/get) - Get entity with invoice expansion

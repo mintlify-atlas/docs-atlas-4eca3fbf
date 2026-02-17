@@ -1,0 +1,403 @@
+---
+title: 'API Versioning'
+description: 'Understand how API versioning works in Autumn'
+---
+
+## Overview
+
+The Autumn API uses a sophisticated versioning system to ensure backward compatibility while allowing continuous improvements. Your API version determines the structure of request and response data.
+
+## Version Resolution
+
+Your API version is determined automatically using the following priority:
+
+<Steps>
+  <Step title="x-api-version header (highest priority)">
+    Explicitly set the version using the `x-api-version` header:
+    
+    ```bash
+    curl https://api.useautumn.com/v1/customers/cus_123 \
+      -H "Authorization: Bearer am_sk_live_abc123..." \
+      -H "x-api-version: 2025-01-15"
+    ```
+  </Step>
+  
+  <Step title="Organization creation date">
+    If no header is provided, your version is calculated from when your organization was created. This ensures you get the API version that existed when you integrated with Autumn.
+  </Step>
+  
+  <Step title="Default version">
+    If no organization is found, defaults to version `0.2` (earliest version).
+  </Step>
+</Steps>
+
+## Version Formats
+
+Autumn supports multiple version format styles:
+
+### CalVer (Calendar Versioning) - Recommended
+
+Format: `YYYY-MM-DD`
+
+```bash
+x-api-version: 2025-01-15
+x-api-version: 2024-12-01
+```
+
+<Tip>
+  CalVer is the recommended format as it clearly indicates when API changes were introduced.
+</Tip>
+
+### SemVer (Semantic Versioning)
+
+Format: `X.Y.Z`
+
+```bash
+x-api-version: 2.0.0
+x-api-version: 1.2.0
+```
+
+### Legacy Float Format
+
+Format: `X.Y`
+
+```bash
+x-api-version: 1.1
+x-api-version: 0.2
+```
+
+## Current API Versions
+
+<CardGroup cols={2}>
+  <Card title="2.0.0 (Latest)" icon="star">
+    **Released**: 2025-01-15
+    
+    Latest API version with all new features and improvements.
+  </Card>
+  
+  <Card title="1.2.0" icon="check">
+    **Released**: 2024-10-01
+    
+    Includes feature breakdown changes and expanded schema support.
+  </Card>
+  
+  <Card title="1.1.0" icon="check">
+    **Released**: 2024-06-01
+    
+    Legacy version with array-based feature representation.
+  </Card>
+  
+  <Card title="0.2" icon="archive">
+    **Released**: 2024-01-01
+    
+    Initial API version (deprecated).
+  </Card>
+</CardGroup>
+
+## How Versioning Works
+
+### Automatic Transformation
+
+When you request an older API version, Autumn automatically transforms the response to match that version's schema:
+
+```bash
+# Request with version 1.1
+curl https://api.useautumn.com/v1/customers/cus_123 \
+  -H "Authorization: Bearer am_sk_live_abc123..." \
+  -H "x-api-version: 1.1"
+
+# Response in 1.1 format (features as array)
+{
+  "id": "cus_123",
+  "features": [
+    {
+      "feature_id": "tokens",
+      "balance": 1000,
+      "interval": "month"
+    }
+  ]
+}
+```
+
+```bash
+# Request with version 2.0
+curl https://api.useautumn.com/v1/customers/cus_123 \
+  -H "Authorization: Bearer am_sk_live_abc123..." \
+  -H "x-api-version: 2.0.0"
+
+# Response in 2.0 format (features as object with breakdown)
+{
+  "id": "cus_123",
+  "features": {
+    "tokens": {
+      "id": "tokens",
+      "type": "usage",
+      "balance": 1000,
+      "breakdown": [
+        {
+          "interval": "month",
+          "balance": 1000,
+          "usage": 0
+        }
+      ]
+    }
+  }
+}
+```
+
+### Version Change Architecture
+
+<Note>
+  Autumn uses a compositional version change system. When schema components are shared across multiple resources, version transformations are applied consistently everywhere.
+</Note>
+
+#### Key Principles
+
+1. **Shared transformation logic** - Define transformation functions once, reuse across resources
+2. **Resource-level changes** - Each resource (Customer, CheckResult, etc.) has its own version changes
+3. **Schema composition drives changes** - Nested schemas are transformed at the outermost level
+4. **Automatic application** - Version changes are applied automatically based on your API version
+
+#### Example: Feature Schema Changes
+
+The `CoreCusFeatureSchema` is used in multiple places:
+- `Customer` object → `features` field
+- `CheckResult` object → extends feature fields directly
+
+When the feature schema changes in version 1.2, both resources are updated with separate but consistent transformations:
+
+```typescript
+// Customer version change
+V1_2_FeaturesArrayToObject: {
+  // Transforms features from object to array
+  // Uses shared featureTransformUtils
+}
+
+// CheckResult version change  
+V1_2_CheckResultFeatureFields: {
+  // Transforms feature fields in CheckResult
+  // Uses same shared featureTransformUtils
+}
+```
+
+## Version Change History
+
+### Version 2.0.0 (2025-01-15)
+
+<AccordionGroup>
+  <Accordion title="OpenAPI 3.1.0 Specification">
+    Complete OpenAPI specification for all endpoints with proper schemas and examples.
+  </Accordion>
+  
+  <Accordion title="Enhanced Type Safety">
+    Improved Zod schemas with better validation and type inference.
+  </Accordion>
+  
+  <Accordion title="Expanded Resources">
+    New endpoints for balances, events, and referrals.
+  </Accordion>
+</AccordionGroup>
+
+### Version 1.2.0 (2024-10-01)
+
+<AccordionGroup>
+  <Accordion title="Features: Array to Object Format">
+    **Breaking Change**: Customer features changed from array to object format with breakdown support.
+    
+    **Before (1.1)**:
+    ```json
+    {
+      "features": [
+        {
+          "feature_id": "tokens",
+          "balance": 1000,
+          "interval": "month"
+        }
+      ]
+    }
+    ```
+    
+    **After (1.2)**:
+    ```json
+    {
+      "features": {
+        "tokens": {
+          "id": "tokens",
+          "type": "usage",
+          "balance": 1000,
+          "breakdown": [
+            {
+              "interval": "month",
+              "interval_count": 1,
+              "balance": 1000,
+              "usage": 0
+            }
+          ]
+        }
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="CheckResult Feature Fields">
+    **Breaking Change**: `/check` endpoint response now includes feature breakdown.
+    
+    Version 1.1 responses are automatically transformed to match the old format for backward compatibility.
+  </Accordion>
+</AccordionGroup>
+
+### Version 1.1.0 (2024-06-01)
+
+<AccordionGroup>
+  <Accordion title="Initial Stable API">
+    First stable API version with core functionality for customers, products, and features.
+  </Accordion>
+</AccordionGroup>
+
+## Upgrading Your API Version
+
+<Warning>
+  Always test API version upgrades in test mode before deploying to production.
+</Warning>
+
+### Step 1: Review the Changelog
+
+Check the version change history above to understand what changed between your current version and the target version.
+
+### Step 2: Test in Test Mode
+
+Use the `x-api-version` header to test the new version with your test API key:
+
+```bash
+curl https://api.useautumn.com/v1/customers \
+  -H "Authorization: Bearer am_sk_test_..." \
+  -H "x-api-version: 2.0.0"
+```
+
+### Step 3: Update Your Code
+
+Update your application to handle the new response formats:
+
+```javascript
+// Before (version 1.1) - features as array
+const tokenFeature = customer.features.find(f => f.feature_id === 'tokens');
+const balance = tokenFeature?.balance;
+
+// After (version 2.0) - features as object
+const tokenFeature = customer.features['tokens'];
+const balance = tokenFeature?.balance;
+```
+
+### Step 4: Deploy Gradually
+
+Consider using the `x-api-version` header during migration:
+
+1. Deploy new code that supports the new version
+2. Use `x-api-version` header to request new format
+3. Once stable, remove the header to use the new version by default
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Pin versions explicitly" icon="thumbtack">
+    Use the `x-api-version` header to pin to a specific version during development and testing.
+  </Card>
+  
+  <Card title="Test thoroughly" icon="flask">
+    Always test version changes in test mode before deploying to production.
+  </Card>
+  
+  <Card title="Monitor after upgrades" icon="chart-line">
+    Watch for errors and unexpected behavior after upgrading API versions.
+  </Card>
+  
+  <Card title="Stay updated" icon="newspaper">
+    Subscribe to the [changelog](https://useautumn.com/changelog) to stay informed about new versions.
+  </Card>
+</CardGroup>
+
+## Backward Compatibility
+
+Autumn maintains backward compatibility through automatic response transformation:
+
+✅ **Guaranteed**:
+- Older versions continue to work indefinitely
+- Responses are automatically transformed to match your version
+- No forced upgrades
+
+⚠️ **Not guaranteed**:
+- New fields added to responses (safe to ignore)
+- New optional request parameters (won't affect existing requests)
+- Internal optimization changes (transparent to API consumers)
+
+## Deprecation Policy
+
+<Info>
+  Autumn does not deprecate API versions. Once a version is released, it continues to work indefinitely through automatic transformation.
+</Info>
+
+However, we recommend upgrading to newer versions to benefit from:
+- New features and capabilities
+- Performance improvements
+- Better error messages and validation
+- Enhanced type safety
+
+## Version Comparison
+
+<Accordion title="Compare versions side-by-side">
+
+| Feature | v1.1 | v1.2 | v2.0 |
+|---------|------|------|------|
+| **Features format** | Array | Object | Object |
+| **Feature breakdown** | ❌ | ✅ | ✅ |
+| **CheckResult fields** | Basic | With breakdown | With breakdown |
+| **OpenAPI spec** | ❌ | ❌ | ✅ |
+| **Balances API** | ❌ | ✅ | ✅ |
+| **Events API** | ❌ | ✅ | ✅ |
+| **Referrals API** | ❌ | ❌ | ✅ |
+
+</Accordion>
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Do I need to upgrade my API version?">
+    No, your current API version will continue to work indefinitely. However, upgrading gives you access to new features and improvements.
+  </Accordion>
+  
+  <Accordion title="Can I use different versions for different endpoints?">
+    Yes! You can specify the `x-api-version` header per-request to use different versions for different operations.
+  </Accordion>
+  
+  <Accordion title="What happens if I don't specify a version?">
+    Your version is automatically calculated from your organization's creation date, ensuring you get the API version that existed when you integrated.
+  </Accordion>
+  
+  <Accordion title="Will my old code break?">
+    No, Autumn maintains backward compatibility through automatic response transformation. Your old code will continue to work.
+  </Accordion>
+  
+  <Accordion title="How do I know which version I'm using?">
+    Check your API requests - if you're not sending an `x-api-version` header, your version is determined by your organization's creation date.
+  </Accordion>
+</AccordionGroup>
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="Versioning Guide" icon="book" href="https://github.com/useautumn/autumn/blob/main/shared/api/VERSIONING_GUIDE.md">
+    Deep dive into the versioning architecture
+  </Card>
+  
+  <Card title="API Changelog" icon="timeline" href="https://useautumn.com/changelog">
+    Complete history of API changes
+  </Card>
+  
+  <Card title="Migration Guides" icon="map" href="/guides/migration">
+    Step-by-step guides for upgrading versions
+  </Card>
+  
+  <Card title="OpenAPI Spec" icon="file-code" href="/api-reference/openapi.json">
+    Download the OpenAPI specification
+  </Card>
+</CardGroup>

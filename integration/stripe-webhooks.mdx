@@ -1,0 +1,605 @@
+---
+title: 'Stripe Webhooks'
+description: 'Understanding webhook event handling in Autumn'
+icon: 'webhook'
+---
+
+Autumn processes Stripe webhook events to keep billing data synchronized and trigger business logic. This guide explains how webhooks are handled, verified, and processed.
+
+## Webhook Endpoints
+
+Autumn exposes two webhook endpoints:
+
+### Legacy Endpoint (Secret Key)
+
+```
+POST /webhooks/stripe/:orgId/:env
+```
+
+For organizations that connected using their Stripe secret keys.
+
+**Parameters:**
+- `orgId`: Organization ID
+- `env`: Environment (`sandbox` or `live`)
+
+**Example:**
+```
+https://api.example.com/webhooks/stripe/org_abc123/sandbox
+```
+
+### Connect Endpoint (OAuth)
+
+```
+POST /webhooks/connect/:env
+```
+
+For organizations using Stripe Connect OAuth.
+
+**Parameters:**
+- `env`: Environment (`sandbox` or `live`)
+
+**Query Parameters:**
+- `org_id` (optional): Organization ID for webhook secret lookup
+
+**Example:**
+```
+https://api.example.com/webhooks/connect/live?org_id=org_abc123
+```
+
+## Webhook Processing Flow
+
+Autumn uses a middleware-based approach to process webhooks:
+
+<Steps>
+  <Step title="Seeder Middleware">
+    **Purpose:** Set up webhook context (org, features, Stripe client)
+    
+    - **Legacy:** `stripeLegacySeederMiddleware` - Gets org from URL params
+    - **Connect:** `stripeConnectSeederMiddleware` - Gets org from account ID
+    
+    **What it does:**
+    1. Verifies webhook signature
+    2. Looks up organization
+    3. Loads organization features
+    4. Creates Stripe client for the org
+    5. Parses webhook event
+    
+    **Code reference:**
+    ```typescript
+    server/src/external/stripe/webhookMiddlewares/stripeLegacySeederMiddleware.ts:21
+    server/src/external/stripe/webhookMiddlewares/stripeConnectSeederMiddleware.ts:26
+    ```
+  </Step>
+
+  <Step title="Refresh Middleware">
+    **Purpose:** Update cache after webhook processing
+    
+    ```typescript
+    server/src/external/stripe/webhookMiddlewares/stripeWebhookRefreshMiddleware.ts
+    ```
+    
+    Ensures cached customer data is refreshed after subscription changes.
+  </Step>
+
+  <Step title="Customer Mapping Middleware">
+    **Purpose:** Map Stripe customer to Autumn customer
+    
+    ```typescript
+    server/src/external/stripe/webhookMiddlewares/stripeToAutumnCustomerMiddleware.ts
+    ```
+    
+    Resolves the Autumn customer associated with the Stripe event.
+  </Step>
+
+  <Step title="Logger Middleware">
+    **Purpose:** Log webhook events for debugging
+    
+    ```typescript
+    server/src/external/stripe/webhookMiddlewares/stripeLoggerMiddleware.ts
+    ```
+    
+    Logs event type, timing, and key identifiers.
+  </Step>
+
+  <Step title="Idempotency Middleware">
+    **Purpose:** Prevent duplicate processing
+    
+    ```typescript
+    server/src/external/stripe/webhookMiddlewares/stripeIdempotencyMiddleware.ts
+    ```
+    
+    Uses Redis to track processed webhook events and prevent duplicates.
+  </Step>
+
+  <Step title="Event Handler">
+    **Purpose:** Process the specific event type
+    
+    ```typescript
+    server/src/external/stripe/handleStripeWebhookEvent.ts:28
+    ```
+    
+    Routes event to appropriate handler based on event type.
+  </Step>
+</Steps>
+
+## Supported Event Types
+
+Autumn handles the following Stripe events:
+
+### Subscription Events
+
+<AccordionGroup>
+  <Accordion title="customer.subscription.created">
+    **Triggered when:** A new subscription is created
+    
+    **What Autumn does:**
+    - Creates subscription record in database
+    - Links subscription to customer
+    - Initializes usage tracking for metered features
+    - Triggers customer product sync
+    
+    **Handler:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleSubCreated.ts
+    ```
+  </Accordion>
+
+  <Accordion title="customer.subscription.updated">
+    **Triggered when:** Subscription is modified (upgrade, downgrade, renewal)
+    
+    **What Autumn does:**
+    - Updates subscription in database
+    - Recalculates customer entitlements
+    - Handles proration logic
+    - Syncs customer products
+    - Triggers usage reset if needed
+    
+    **Handler:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleStripeSubscriptionUpdated/handleStripeSubscriptionUpdated.ts
+    ```
+    
+    **Context building:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleStripeSubscriptionUpdated/stripeSubscriptionUpdatedContext.ts
+    ```
+  </Accordion>
+
+  <Accordion title="customer.subscription.deleted">
+    **Triggered when:** Subscription is cancelled or ends
+    
+    **What Autumn does:**
+    - Marks subscription as cancelled
+    - Removes customer entitlements
+    - Archives usage data
+    - Triggers customer product update
+    
+    **Handler:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleStripeSubscriptionDeleted/handleStripeSubscriptionDeleted.ts
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Invoice Events
+
+<AccordionGroup>
+  <Accordion title="invoice.created">
+    **Triggered when:** A new invoice is generated
+    
+    **What Autumn does:**
+    - Creates invoice record
+    - Prepares usage-based billing data
+    - Calculates proration if applicable
+    
+    **Handler:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleStripeInvoiceCreated/handleStripeInvoiceCreated.ts
+    ```
+  </Accordion>
+
+  <Accordion title="invoice.finalized">
+    **Triggered when:** Invoice is finalized and ready to be paid
+    
+    **What Autumn does:**
+    - Finalizes usage charges
+    - Sends invoice notification (if configured)
+    - Updates invoice status
+    
+    **Handler:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleInvoiceFinalized.ts
+    ```
+  </Accordion>
+
+  <Accordion title="invoice.paid">
+    **Triggered when:** Customer successfully pays an invoice
+    
+    **What Autumn does:**
+    - Updates invoice payment status
+    - Activates paid features
+    - Resets usage counters for new period
+    - Triggers entitlement calculation
+    
+    **Handler:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleStripeInvoicePaid/handleStripeInvoicePaid.ts
+    ```
+  </Accordion>
+
+  <Accordion title="invoice.updated">
+    **Triggered when:** Invoice details change
+    
+    **What Autumn does:**
+    - Updates invoice record
+    - Handles payment status changes
+    - Recalculates totals if needed
+    
+    **Handler:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleInvoiceUpdated.ts
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Checkout Events
+
+<AccordionGroup>
+  <Accordion title="checkout.session.completed">
+    **Triggered when:** Checkout session is successfully completed
+    
+    **What Autumn does:**
+    - Links customer to subscription
+    - Updates customer metadata
+    - Processes one-time purchases
+    - Activates access to products
+    
+    **Handler:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleStripeCheckoutSessionCompleted/handleStripeCheckoutSessionCompleted.ts
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Schedule Events
+
+<AccordionGroup>
+  <Accordion title="subscription_schedule.canceled">
+    **Triggered when:** A subscription schedule is cancelled
+    
+    **What Autumn does:**
+    - Cancels scheduled subscription changes
+    - Updates schedule status
+    - Notifies customer (if configured)
+    
+    **Handler:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleSubScheduleCanceled.ts
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Discount Events
+
+<AccordionGroup>
+  <Accordion title="customer.discount.deleted">
+    **Triggered when:** A coupon/discount is removed from a customer
+    
+    **What Autumn does:**
+    - Updates pricing calculations
+    - Removes discount from customer record
+    - Triggers entitlement recalculation
+    
+    **Handler:**
+    ```typescript
+    server/src/external/stripe/webhookHandlers/handleCusDiscountDeleted.ts
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Webhook Verification
+
+Autumn verifies webhook authenticity using Stripe's signature verification:
+
+### Legacy Webhook Verification
+
+```typescript
+// Get webhook secret from organization config
+const webhookSecret = getStripeWebhookSecret(org, env);
+
+// Verify signature
+const event = await Stripe.webhooks.constructEventAsync(
+  rawBody,
+  signature,
+  webhookSecret
+);
+```
+
+**Implementation:**
+```typescript
+server/src/external/stripe/webhookMiddlewares/stripeLegacySeederMiddleware.ts:53
+```
+
+### Connect Webhook Verification
+
+```typescript
+// Use master Stripe client for verification
+const masterStripe = initMasterStripe();
+const webhookSecret = await getStripeWebhookSecret({ db, orgId, env });
+
+// Verify signature with master client
+const event = await masterStripe.webhooks.constructEventAsync(
+  rawBody,
+  signature,
+  webhookSecret
+);
+```
+
+**Implementation:**
+```typescript
+server/src/external/stripe/webhookMiddlewares/stripeConnectSeederMiddleware.ts:35
+```
+
+## Webhook Security
+
+<AccordionGroup>
+  <Accordion title="Signature Verification">
+    Every webhook is verified using Stripe's signing secret. Invalid signatures are rejected with a 400 error.
+  </Accordion>
+
+  <Accordion title="Idempotency">
+    Autumn tracks processed webhook IDs in Redis to prevent duplicate processing. Each event is processed exactly once.
+    
+    ```typescript
+    server/src/external/stripe/webhookMiddlewares/stripeIdempotencyMiddleware.ts
+    ```
+  </Accordion>
+
+  <Accordion title="Webhook Secrets">
+    Webhook secrets are:
+    - Stored encrypted in the database (for legacy webhooks)
+    - Loaded from environment variables (for Connect webhooks)
+    - Decrypted only when needed
+    - Rotated automatically when reconnecting
+  </Accordion>
+
+  <Accordion title="HTTPS Required">
+    Stripe only sends webhooks to HTTPS endpoints in production. For development, use a tunnel service.
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+Autumn implements robust error handling for webhooks:
+
+### Automatic Retry
+
+Autumn returns HTTP 200 for most errors to prevent Stripe retry storms. Actual errors are logged to Sentry:
+
+```typescript
+try {
+  // Process webhook
+} catch (error) {
+  Sentry.captureException(error, {
+    tags: { method: event.type, orgId: org.id }
+  });
+  
+  logger.error(`Stripe webhook error: ${error}`, { error });
+  return c.json({ message: "Webhook received, internal server error" }, 200);
+}
+```
+
+**Implementation:**
+```typescript
+server/src/external/stripe/handleStripeWebhookEvent.ts:89
+```
+
+### Special Error Cases
+
+<AccordionGroup>
+  <Accordion title="Missing Customer">
+    If Stripe references a customer that doesn't exist:
+    
+    ```typescript
+    if (error.message.includes("No such customer")) {
+      logger.warn(`stripe customer missing: ${error.message}`);
+      return c.json({ success: true }, 200);
+    }
+    ```
+    
+    Webhook is acknowledged to prevent retries.
+  </Accordion>
+
+  <Accordion title="Expired API Key">
+    If the API key is expired or revoked:
+    
+    ```typescript
+    if (error.message.includes("Expired API Key provided")) {
+      await unsetOrgStripeKeys({ db, org, env });
+      return c.json({ success: true }, 200);
+    }
+    ```
+    
+    Autumn automatically disconnects the integration.
+  </Accordion>
+
+  <Accordion title="Unlinked Account (Connect)">
+    If a Connect webhook references an unknown account:
+    
+    ```typescript
+    logger.error(`Account ID ${accountId} not linked to any org, skipping`);
+    return c.json({ message: "Account not linked" }, 200);
+    ```
+    
+    Webhook is skipped but acknowledged.
+  </Accordion>
+</AccordionGroup>
+
+## Testing Webhooks
+
+### Using Stripe CLI
+
+<Steps>
+  <Step title="Install Stripe CLI">
+    ```bash
+    brew install stripe/stripe-cli/stripe
+    # or
+    scoop install stripe
+    ```
+  </Step>
+
+  <Step title="Login to Stripe">
+    ```bash
+    stripe login
+    ```
+  </Step>
+
+  <Step title="Forward webhooks to localhost">
+    ```bash
+    # For legacy endpoint
+    stripe listen --forward-to localhost:8080/webhooks/stripe/your_org_id/sandbox
+    
+    # For Connect endpoint
+    stripe listen --forward-to localhost:8080/webhooks/connect/sandbox
+    ```
+  </Step>
+
+  <Step title="Trigger test events">
+    ```bash
+    stripe trigger customer.subscription.created
+    stripe trigger invoice.paid
+    stripe trigger checkout.session.completed
+    ```
+  </Step>
+</Steps>
+
+### Using Webhook Fixtures
+
+Create webhook test fixtures:
+
+```typescript
+import Stripe from 'stripe';
+
+const mockEvent: Stripe.Event = {
+  id: 'evt_test_123',
+  object: 'event',
+  type: 'customer.subscription.created',
+  data: {
+    object: {
+      id: 'sub_123',
+      customer: 'cus_123',
+      // ... subscription data
+    }
+  },
+  // ... other event fields
+};
+```
+
+## Webhook Monitoring
+
+### Logging
+
+All webhook events are logged with:
+- Event type
+- Organization ID
+- Customer ID
+- Processing time
+- Errors (if any)
+
+**Implementation:**
+```typescript
+server/src/external/stripe/webhookMiddlewares/stripeLoggerMiddleware.ts
+```
+
+### Metrics
+
+Key metrics to monitor:
+- Webhook success/failure rate
+- Processing latency
+- Idempotent rejections (duplicate events)
+- Signature verification failures
+
+### Stripe Dashboard
+
+Monitor webhooks in the [Stripe Dashboard](https://dashboard.stripe.com/webhooks):
+- View recent webhook deliveries
+- Check delivery success rates
+- Replay failed webhooks
+- View webhook logs
+
+## Code Reference
+
+Key files for webhook processing:
+
+| File | Purpose |
+|------|----------|
+| `server/src/external/stripe/stripeWebhookRouter.ts` | Webhook routing |
+| `server/src/external/stripe/handleStripeWebhookEvent.ts` | Event dispatcher |
+| `server/src/external/stripe/webhookMiddlewares/` | Middleware implementations |
+| `server/src/external/stripe/webhookHandlers/` | Event handlers |
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Return 200 Quickly" icon="bolt">
+    Process webhooks asynchronously when possible. Return 200 quickly to acknowledge receipt.
+  </Card>
+  <Card title="Use Idempotency Keys" icon="key">
+    Always check for duplicate events. Stripe may send the same event multiple times.
+  </Card>
+  <Card title="Verify Signatures" icon="shield-check">
+    Never skip signature verification. It's your primary defense against spoofed webhooks.
+  </Card>
+  <Card title="Log Everything" icon="file-lines">
+    Comprehensive logging is essential for debugging webhook issues in production.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Webhook Not Received
+
+1. **Check webhook endpoint configuration** in Stripe Dashboard
+2. **Verify URL is publicly accessible** (use ngrok/localtunnel for local dev)
+3. **Check firewall/security rules** aren't blocking Stripe IPs
+4. **Verify webhook is enabled** for the specific event type
+
+### Signature Verification Failed
+
+```
+Webhook Error: No signatures found matching the expected signature
+```
+
+**Causes:**
+- Wrong webhook secret
+- Request body was modified
+- Using wrong environment (test vs live)
+
+**Solution:** Verify webhook secret matches Stripe dashboard
+
+### Event Not Processed
+
+Check:
+1. **Event type is supported** - See supported events above
+2. **Handler exists** for the event type
+3. **Organization is active** and connected
+4. **Stripe client initialized** correctly
+
+### Duplicate Processing
+
+If events are being processed multiple times:
+
+1. Check idempotency middleware is enabled
+2. Verify Redis is connected and working
+3. Check webhook endpoint isn't registered multiple times
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Stripe Setup" icon="gear" href="/integration/stripe-setup">
+    Configure Stripe environment variables
+  </Card>
+  <Card title="Stripe Connect" icon="link" href="/integration/stripe-connect">
+    Learn about OAuth and connected accounts
+  </Card>
+</CardGroup>

@@ -1,0 +1,116 @@
+---
+title: 'List Entities'
+description: 'Retrieve a list of entities for a customer'
+---
+
+## Overview
+
+Entities in Autumn represent individual instances or units within a feature scope (e.g., projects, organizations, seats). To retrieve entities for a customer, you need to use the customer expansion parameter.
+
+## Endpoint
+
+```
+GET /customers/{customer_id}?expand=entities
+```
+
+### Path Parameters
+
+<ParamField path="customer_id" type="string" required>
+  The unique identifier of the customer
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="expand" type="string" required>
+  Set to `entities` to include entity data in the response
+</ParamField>
+
+## Response
+
+Returns a customer object with an `entities` array containing all entities associated with the customer.
+
+### Entity Object
+
+<ResponseField name="id" type="string">
+  The unique identifier of the entity
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The name of the entity
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  The customer ID this entity belongs to
+</ResponseField>
+
+<ResponseField name="feature_id" type="string">
+  The feature ID this entity belongs to
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp (milliseconds) when the entity was created
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  The environment - either `sandbox` or `live`
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X GET 'https://api.useautumn.com/v1/customers/cus_123?expand=entities' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY'
+```
+
+```typescript TypeScript
+const response = await autumn.customers.get({
+  customer_id: 'cus_123',
+  expand: ['entities']
+});
+
+const entities = response.entities;
+```
+
+```python Python
+response = autumn.customers.get(
+  customer_id='cus_123',
+  expand=['entities']
+)
+
+entities = response.entities
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "id": "cus_123",
+  "name": "Acme Corp",
+  "entities": [
+    {
+      "id": "proj_456",
+      "name": "Project Alpha",
+      "customer_id": "cus_123",
+      "feature_id": "feat_projects",
+      "created_at": 1759247877000,
+      "env": "live"
+    },
+    {
+      "id": "proj_789",
+      "name": "Project Beta",
+      "customer_id": "cus_123",
+      "feature_id": "feat_projects",
+      "created_at": 1759248000000,
+      "env": "live"
+    }
+  ]
+}
+```
+
+## Notes
+
+- Entities are scoped to specific features as defined by the `feature_id`
+- Use entity-scoped balances to track usage or limits per entity
+- The `expand` parameter can include multiple values: `expand=entities,invoices,balances`

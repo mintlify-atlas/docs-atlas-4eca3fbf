@@ -1,0 +1,336 @@
+---
+title: "SDK Overview"
+description: "Official client libraries for integrating Autumn into your application"
+icon: "code"
+---
+
+Autumn provides official SDKs to make billing and feature management seamless across different platforms. All SDKs share a consistent interface for the core operations: **attach**, **check**, and **track**.
+
+## Available SDKs
+
+<CardGroup cols={2}>
+  <Card title="TypeScript SDK" icon="node-js" href="/sdks/typescript">
+    Full-featured SDK for Node.js and TypeScript server applications
+  </Card>
+  <Card title="React SDK" icon="react" href="/sdks/react">
+    React hooks and components for client-side integration
+  </Card>
+</CardGroup>
+
+## Installation
+
+All Autumn SDKs are available through the `autumn-js` npm package:
+
+<CodeGroup>
+```bash npm
+npm install autumn-js
+```
+
+```bash yarn
+yarn add autumn-js
+```
+
+```bash pnpm
+pnpm add autumn-js
+```
+
+```bash bun
+bun add autumn-js
+```
+</CodeGroup>
+
+## Core Operations
+
+Every Autumn SDK is built around three main operations:
+
+### Attach
+
+Subscribe customers to products and manage subscriptions:
+- New subscriptions with Stripe Checkout
+- Plan upgrades and downgrades
+- Seat-based or quantity changes
+- Returns Stripe URL for payment or updates subscription immediately
+
+```typescript
+const { data } = await autumn.attach({
+  customerId: 'user_123',
+  productId: 'pro_plan',
+  successUrl: 'https://yourapp.com/success'
+});
+
+if (data.url) {
+  // Redirect to Stripe Checkout for payment
+  window.location.href = data.url;
+}
+```
+
+### Check
+
+Verify feature access and enforce limits:
+- Boolean feature gates
+- Usage limits and remaining balance
+- Seat availability
+- Real-time entitlement verification
+
+```typescript
+const { data } = await autumn.check({
+  customerId: 'user_123',
+  featureId: 'api_calls'
+});
+
+if (!data.allowed) {
+  throw new Error('Feature limit reached');
+}
+```
+
+### Track
+
+Record usage events for metered features:
+- Usage-based billing
+- Feature consumption tracking
+- Credit deduction
+- Automatic limit enforcement
+
+```typescript
+await autumn.track({
+  customerId: 'user_123',
+  featureId: 'api_calls',
+  value: 1
+});
+```
+
+## Authentication
+
+Autumn uses API keys for authentication. There are two types of keys depending on your use case:
+
+<Tabs>
+  <Tab title="Secret Key (Server-side)">
+    Use your **secret key** for all server-side operations. Secret keys have full access to your Autumn account.
+    
+    ```typescript
+import Autumn from 'autumn-js';
+
+const autumn = new Autumn({
+  secretKey: process.env.AUTUMN_SECRET_KEY
+});
+    ```
+    
+    <Warning>
+      Never expose secret keys in client-side code or commit them to version control.
+    </Warning>
+  </Tab>
+  
+  <Tab title="Public Key (Client-side)">
+    Use your **public key** for client-side operations through the React SDK. Public keys have limited permissions.
+    
+    ```tsx
+import { AutumnProvider } from 'autumn-js/react';
+
+function App() {
+  return (
+    <AutumnProvider publicKey={process.env.NEXT_PUBLIC_AUTUMN_PUBLIC_KEY}>
+      {children}
+    </AutumnProvider>
+  );
+}
+    ```
+    
+    <Info>
+      Public keys are safe to use in browsers and mobile apps. They're scoped to customer-specific operations only.
+    </Info>
+  </Tab>
+</Tabs>
+
+### Getting Your API Keys
+
+1. Log in to your [Autumn Dashboard](https://app.useautumn.com)
+2. Navigate to **Developer** → **API Keys**
+3. Copy your **Secret Key** for server-side use
+4. Copy your **Public Key** for client-side use
+
+<Note>
+  Use **test mode** keys during development. Switch to **live mode** keys in production.
+</Note>
+
+## Quick Start
+
+<Steps>
+  <Step title="Install the SDK">
+    ```bash
+    npm install autumn-js
+    ```
+  </Step>
+  
+  <Step title="Set Environment Variables">
+    ```bash .env
+    AUTUMN_SECRET_KEY=am_sk_test_...
+    ```
+  </Step>
+  
+  <Step title="Initialize the Client">
+    ```typescript
+    import Autumn from 'autumn-js';
+    
+    const autumn = new Autumn({
+      secretKey: process.env.AUTUMN_SECRET_KEY
+    });
+    ```
+  </Step>
+  
+  <Step title="Use Core Operations">
+    ```typescript
+    // Check feature access
+    const { data } = await autumn.check({
+      customerId: 'user_123',
+      featureId: 'premium_feature'
+    });
+    
+    if (data.allowed) {
+      // Allow access
+    }
+    ```
+  </Step>
+</Steps>
+
+## Common Patterns
+
+### Customer Identification
+
+All operations require a `customerId` to identify which customer is performing the action. Use your existing user or organization IDs:
+
+```typescript
+const customerId = req.user.id; // From your auth system
+
+await autumn.track({
+  customerId,
+  featureId: 'api_calls',
+  value: 1
+});
+```
+
+<Tip>
+  Autumn syncs with your authentication system. No need to create separate customer records manually.
+</Tip>
+
+### Error Handling
+
+All SDK methods return structured responses. Always handle errors appropriately:
+
+```typescript
+try {
+  const { data } = await autumn.check({
+    customerId: 'user_123',
+    featureId: 'api_calls'
+  });
+  
+  if (!data.allowed) {
+    // Handle feature limit
+    return { error: 'Limit reached', upgradeUrl: '/pricing' };
+  }
+} catch (error) {
+  console.error('Autumn API error:', error.message);
+  // Handle API errors
+}
+```
+
+### Check Before Track
+
+A common pattern is to check access before allowing an action, then track usage:
+
+```typescript
+// 1. Check access
+const { data: checkData } = await autumn.check({
+  customerId: 'user_123',
+  featureId: 'ai_generation'
+});
+
+if (!checkData.allowed) {
+  throw new Error('Generation limit reached');
+}
+
+// 2. Perform action
+const result = await generateWithAI();
+
+// 3. Track usage
+await autumn.track({
+  customerId: 'user_123',
+  featureId: 'ai_generation',
+  value: 1
+});
+```
+
+## SDK Comparison
+
+| Feature | TypeScript SDK | React SDK |
+|---------|----------------|------------|
+| **Environment** | Server-side (Node.js) | Client-side (Browser) |
+| **Authentication** | Secret Key | Public Key |
+| **Customer Management** | ✅ Full CRUD | ❌ Limited |
+| **Product Management** | ✅ Full CRUD | ❌ Read-only |
+| **Attach/Check/Track** | ✅ | ✅ |
+| **Webhooks** | ✅ | ❌ |
+| **React Hooks** | ❌ | ✅ |
+
+## Configuration Options
+
+Both SDKs support the following configuration:
+
+<ParamField path="secretKey" type="string">
+  Your Autumn secret key (server-side only)
+</ParamField>
+
+<ParamField path="publicKey" type="string">
+  Your Autumn public key (client-side only)
+</ParamField>
+
+<ParamField path="baseUrl" type="string" default="https://api.useautumn.com/v1">
+  API base URL. Override for self-hosted instances
+</ParamField>
+
+<ParamField path="timeout" type="number" default="30000">
+  Request timeout in milliseconds
+</ParamField>
+
+## TypeScript Support
+
+All Autumn SDKs are written in TypeScript and ship with complete type definitions:
+
+```typescript
+import type {
+  CheckParams,
+  CheckResult,
+  AttachParams,
+  AttachResult,
+  Customer,
+  Product
+} from 'autumn-js';
+
+const params: CheckParams = {
+  customerId: 'user_123',
+  featureId: 'api_calls'
+};
+
+const { data }: { data: CheckResult } = await autumn.check(params);
+```
+
+## Next Steps
+
+Choose the SDK that matches your environment:
+
+<CardGroup cols={2}>
+  <Card title="TypeScript SDK" icon="node-js" href="/sdks/typescript">
+    For Node.js backend and server-side operations
+  </Card>
+  <Card title="React SDK" icon="react" href="/sdks/react">
+    For React applications and client-side integration
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Get up and running in 5 minutes
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Explore all available endpoints
+  </Card>
+</CardGroup>

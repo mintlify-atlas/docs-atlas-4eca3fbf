@@ -1,0 +1,175 @@
+---
+title: "Get Feature"
+openapi: "GET /features/{feature_id}"
+---
+
+## Overview
+
+Retrieve a specific feature by its ID. Returns the complete feature configuration including type, tracking settings, and display options.
+
+## Path Parameters
+
+<ParamField path="feature_id" type="string" required>
+  The unique identifier of the feature to retrieve (e.g., `api-calls`, `storage-gb`).
+</ParamField>
+
+## Response
+
+Returns a feature object with all configured properties.
+
+## Example Response
+
+### Metered Feature
+
+```json
+{
+  "id": "api-calls",
+  "name": "API Calls",
+  "type": "metered",
+  "consumable": true,
+  "event_names": ["api_call"],
+  "display": {
+    "singular": "API Call",
+    "plural": "API Calls"
+  },
+  "archived": false
+}
+```
+
+### Boolean Feature
+
+```json
+{
+  "id": "advanced-analytics",
+  "name": "Advanced Analytics",
+  "type": "boolean",
+  "consumable": false,
+  "archived": false
+}
+```
+
+### Credit System Feature
+
+```json
+{
+  "id": "credits",
+  "name": "Platform Credits",
+  "type": "credit_system",
+  "consumable": true,
+  "credit_schema": [
+    {
+      "metered_feature_id": "api-calls",
+      "credit_cost": 1
+    },
+    {
+      "metered_feature_id": "storage-gb",
+      "credit_cost": 100
+    },
+    {
+      "metered_feature_id": "compute-hours",
+      "credit_cost": 50
+    }
+  ],
+  "display": {
+    "singular": "Credit",
+    "plural": "Credits"
+  },
+  "archived": false
+}
+```
+
+## Response Fields
+
+<ResponseField name="id" type="string">
+  Unique identifier for the feature
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Human-readable name of the feature
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Feature type: `metered`, `boolean`, or `credit_system`
+</ResponseField>
+
+<ResponseField name="consumable" type="boolean">
+  Whether the feature tracks consumable usage:
+  - `true`: Usage depletes a balance (API calls, credits)
+  - `false`: Usage is allocated/measured (seats, storage)
+</ResponseField>
+
+<ResponseField name="event_names" type="array">
+  Array of event names that trigger this feature's usage tracking
+</ResponseField>
+
+<ResponseField name="credit_schema" type="array">
+  For credit system features: conversion rates to metered features
+  
+  <Expandable title="Credit Schema Item">
+    <ResponseField name="metered_feature_id" type="string">
+      ID of the metered feature
+    </ResponseField>
+    
+    <ResponseField name="credit_cost" type="number">
+      Credits deducted per unit of the metered feature
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="display" type="object">
+  Display settings for the feature
+  
+  <Expandable title="properties">
+    <ResponseField name="singular" type="string">
+      Singular form (e.g., "API Call")
+    </ResponseField>
+    
+    <ResponseField name="plural" type="string">
+      Plural form (e.g., "API Calls")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="archived" type="boolean">
+  Whether the feature is archived
+</ResponseField>
+
+## Error Responses
+
+<ResponseField name="404" type="error">
+  Feature not found. The specified `feature_id` does not exist in your workspace.
+  
+  ```json
+  {
+    "message": "Feature with id api-calls not found",
+    "code": "feature_not_found"
+  }
+  ```
+</ResponseField>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Verify Configuration" icon="check">
+    Confirm feature settings before adding to a product
+  </Card>
+  <Card title="Debug Tracking" icon="bug">
+    Check event_names to troubleshoot usage tracking issues
+  </Card>
+  <Card title="Credit Schema Audit" icon="calculator">
+    Review credit conversion rates for credit system features
+  </Card>
+  <Card title="Display Names" icon="text">
+    Get proper singular/plural forms for UI display
+  </Card>
+</CardGroup>
+
+## Related Endpoints
+
+<Card title="List Features" icon="list" href="/api-reference/features/list">
+  Retrieve all features in your workspace
+</Card>
+
+<Card title="Update Feature" icon="pen" href="/api-reference/features/update">
+  Modify feature configuration
+</Card>

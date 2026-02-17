@@ -1,0 +1,90 @@
+---
+title: 'Delete Entity'
+openapi: 'DELETE /customers/{customer_id}/entities/{entity_id}'
+---
+
+## Overview
+
+Delete an entity from a customer's account. This removes the entity and its associated entity-scoped balances.
+
+<Warning>
+Deleting an entity is permanent and cannot be undone. Historical usage events and data associated with the entity ID will remain for record-keeping, but the entity itself and its balances will be removed.
+</Warning>
+
+## Response
+
+Returns a success response confirming the deletion.
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the deletion was successful
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE 'https://api.useautumn.com/v1/customers/cus_123/entities/proj_456' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY'
+```
+
+```typescript TypeScript
+const result = await autumn.entities.delete({
+  customer_id: 'cus_123',
+  entity_id: 'proj_456'
+});
+```
+
+```python Python
+result = autumn.entities.delete(
+  customer_id='cus_123',
+  entity_id='proj_456'
+)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true
+}
+```
+
+## What Gets Deleted
+
+When you delete an entity:
+
+- ✅ The entity record is removed
+- ✅ Entity-scoped balances are deleted
+- ✅ Active subscriptions scoped to the entity are cancelled
+- ❌ Historical events remain (for analytics and auditing)
+- ❌ Invoice records are preserved
+
+## Use Cases
+
+- **Project deactivation**: Remove a project entity when it's completed or archived
+- **Seat management**: Delete a seat entity when a user leaves
+- **Organization cleanup**: Remove organization entities that are no longer active
+- **Resource deprovisioning**: Clean up entities for deleted resources
+
+## Best Practices
+
+<Tip>
+Before deleting an entity, consider:
+1. Exporting any important data or analytics
+2. Notifying affected users if applicable
+3. Canceling any active subscriptions or features tied to the entity
+4. Checking for dependencies in your application
+</Tip>
+
+## Error Responses
+
+- **404 Not Found**: Entity does not exist
+- **403 Forbidden**: Insufficient permissions to delete the entity
+- **400 Bad Request**: Invalid customer ID or entity ID format
+
+## Notes
+
+- Deletion is immediate and cannot be reversed
+- Historical usage data tied to the entity ID remains accessible through analytics APIs
+- If you need to temporarily disable an entity, consider using custom `customer_data` flags instead of deletion

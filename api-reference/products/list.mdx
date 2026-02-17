@@ -1,0 +1,483 @@
+---
+title: "List Plans"
+api: "GET /plans"
+---
+
+Retrieves a list of all products (also known as plans) in your organization. Products define what customers can subscribe to and what features they'll receive.
+
+## Query Parameters
+
+<ParamField query="customer_id" type="string">
+  Filter plans by customer eligibility. Returns only plans that are eligible for the specified customer, taking into account trial availability and attachment scenarios.
+</ParamField>
+
+## Response
+
+Returns a list of [Product](#product-object) objects.
+
+<ResponseField name="list" type="array">
+  Array of Product objects.
+</ResponseField>
+
+### Product Object
+
+<ResponseField name="id" type="string">
+  Unique identifier for the product.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Display name for the product.
+</ResponseField>
+
+<ResponseField name="description" type="string | null">
+  Description of what this product includes.
+</ResponseField>
+
+<ResponseField name="group" type="string | null">
+  Optional grouping identifier to organize related products.
+</ResponseField>
+
+<ResponseField name="version" type="number">
+  Version number of this product. Incrementing versions allows you to update products while maintaining existing subscriptions.
+</ResponseField>
+
+<ResponseField name="add_on" type="boolean">
+  Whether this product is an add-on that can be purchased alongside a base plan.
+</ResponseField>
+
+<ResponseField name="default" type="boolean">
+  Whether this is the default plan that new customers should receive.
+</ResponseField>
+
+<ResponseField name="price" type="object | null">
+  Base price for the product subscription. If `null`, the product is free.
+  
+  <Expandable title="price properties">
+    <ResponseField name="amount" type="number">
+      Price in cents (e.g., 2999 for $29.99).
+    </ResponseField>
+    
+    <ResponseField name="interval" type="string">
+      Billing frequency. One of: `one_off`, `week`, `month`, `quarter`, `semi_annual`, `year`.
+    </ResponseField>
+    
+    <ResponseField name="interval_count" type="number">
+      Number of intervals between billings. For example, `interval_count: 3` with `interval: "month"` means every 3 months.
+    </ResponseField>
+    
+    <ResponseField name="display" type="object">
+      Optional custom display text for pricing.
+      
+      <Expandable title="display properties">
+        <ResponseField name="primary_text" type="string">
+          Main display text (e.g., "$29.99/month").
+        </ResponseField>
+        
+        <ResponseField name="secondary_text" type="string">
+          Additional context text (e.g., "Billed annually").
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="features" type="array">
+  Array of features included in this product. See [Product Item Object](#product-item-object) below.
+</ResponseField>
+
+<ResponseField name="free_trial" type="object | null">
+  Free trial configuration for this product.
+  
+  <Expandable title="free_trial properties">
+    <ResponseField name="duration_length" type="number">
+      Length of the free trial period.
+    </ResponseField>
+    
+    <ResponseField name="duration_type" type="string">
+      Unit of time for the trial. One of: `day`, `month`, `year`.
+    </ResponseField>
+    
+    <ResponseField name="card_required" type="boolean">
+      Whether a payment method is required to start the trial.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp when the product was created.
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  Environment where the product exists: `test` or `live`.
+</ResponseField>
+
+<ResponseField name="archived" type="boolean">
+  Whether this product is archived. Archived products can't be attached to new customers but existing subscriptions remain active.
+</ResponseField>
+
+<ResponseField name="base_variant_id" type="string | null">
+  If this product is a variant, this is the ID of the base product it's derived from.
+</ResponseField>
+
+<ResponseField name="customer_eligibility" type="object">
+  Customer-specific eligibility information (only present when `customer_id` is provided).
+  
+  <Expandable title="customer_eligibility properties">
+    <ResponseField name="trial_available" type="boolean">
+      Whether this customer is eligible for the product's free trial.
+    </ResponseField>
+    
+    <ResponseField name="scenario" type="string">
+      Attachment scenario indicating how this product can be attached. One of: `attach`, `attach_with_trial`, `switch`, `incompatible`, `already_attached`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Product Item Object
+
+Each feature in the `features` array represents usage limits and pricing for a specific feature.
+
+<ResponseField name="feature_id" type="string">
+  ID of the feature this item configures.
+</ResponseField>
+
+<ResponseField name="feature" type="object">
+  Expanded feature object containing feature details.
+</ResponseField>
+
+<ResponseField name="included" type="number">
+  Number of units included with the base product subscription.
+</ResponseField>
+
+<ResponseField name="unlimited" type="boolean">
+  Whether this feature has unlimited usage.
+</ResponseField>
+
+<ResponseField name="reset" type="object | null">
+  Usage reset configuration.
+  
+  <Expandable title="reset properties">
+    <ResponseField name="interval" type="string">
+      How often usage resets. One of: `one_off`, `minute`, `hour`, `day`, `week`, `month`, `quarter`, `semi_annual`, `year`.
+    </ResponseField>
+    
+    <ResponseField name="interval_count" type="number">
+      Number of intervals between resets.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="price" type="object | null">
+  Pricing for additional usage beyond the included amount.
+  
+  <Expandable title="price properties">
+    <ResponseField name="amount" type="number">
+      Flat price per billing unit (mutually exclusive with `tiers`).
+    </ResponseField>
+    
+    <ResponseField name="tiers" type="array">
+      Tiered pricing structure (mutually exclusive with `amount`).
+      
+      <Expandable title="tier properties">
+        <ResponseField name="to" type="number | 'infinite'">
+          Upper bound for this tier. Use `"infinite"` for the final tier.
+        </ResponseField>
+        
+        <ResponseField name="amount" type="number">
+          Price in cents for usage in this tier.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="interval" type="string">
+      Billing frequency. One of: `one_off`, `week`, `month`, `quarter`, `semi_annual`, `year`.
+    </ResponseField>
+    
+    <ResponseField name="interval_count" type="number">
+      Number of intervals between billings.
+    </ResponseField>
+    
+    <ResponseField name="billing_units" type="number">
+      Number of usage units per billable unit.
+    </ResponseField>
+    
+    <ResponseField name="billing_method" type="string">
+      How usage is billed. One of:
+      - `prepaid` - Customer purchases usage upfront
+      - `usage_based` - Customer is billed for actual usage at the end of the period
+    </ResponseField>
+    
+    <ResponseField name="max_purchase" type="number | null">
+      Maximum amount of additional usage that can be purchased.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="display" type="object">
+  Optional custom display text for this feature.
+  
+  <Expandable title="display properties">
+    <ResponseField name="primary_text" type="string">
+      Main display text.
+    </ResponseField>
+    
+    <ResponseField name="secondary_text" type="string">
+      Additional context text.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="rollover" type="object">
+  Configuration for rolling over unused usage to the next period.
+  
+  <Expandable title="rollover properties">
+    <ResponseField name="max" type="number | null">
+      Maximum amount that can roll over. If `null`, unlimited rollover.
+    </ResponseField>
+    
+    <ResponseField name="expiry_duration_type" type="string">
+      How long rolled-over usage lasts. One of: `month`, `forever`.
+    </ResponseField>
+    
+    <ResponseField name="expiry_duration_length" type="number">
+      Number of duration periods before rolled-over usage expires.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="proration" type="object">
+  Proration behavior when subscription changes mid-cycle.
+  
+  <Expandable title="proration properties">
+    <ResponseField name="on_increase" type="string">
+      Behavior when upgrading. One of: `bill_immediately`, `prorate_immediately`, `prorate_next_cycle`, `bill_next_cycle`.
+    </ResponseField>
+    
+    <ResponseField name="on_decrease" type="string">
+      Behavior when downgrading. One of: `prorate`, `prorate_immediately`, `prorate_next_cycle`, `none`, `no_prorations`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X GET https://api.autumn.com/v1/plans \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```bash cURL - Filter by customer
+curl -X GET "https://api.autumn.com/v1/plans?customer_id=user_12345" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await autumn.plans.list();
+console.log(`Found ${response.list.length} products`);
+```
+
+```javascript JavaScript - Filter by customer
+const response = await autumn.plans.list({
+  customer_id: 'user_12345'
+});
+
+// Check which plans have trials available
+response.list.forEach(plan => {
+  if (plan.customer_eligibility?.trial_available) {
+    console.log(`${plan.name} has trial available`);
+  }
+});
+```
+
+```python Python
+response = autumn.plans.list()
+print(f"Found {len(response.list)} products")
+```
+
+```python Python - Filter by customer
+response = autumn.plans.list(
+    customer_id='user_12345'
+)
+
+# Check which plans have trials available
+for plan in response.list:
+    if plan.customer_eligibility and plan.customer_eligibility.trial_available:
+        print(f"{plan.name} has trial available")
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "list": [
+    {
+      "id": "plan_starter",
+      "name": "Starter Plan",
+      "description": "Perfect for individuals and small teams",
+      "group": "subscription_plans",
+      "version": 1,
+      "add_on": false,
+      "default": true,
+      "price": {
+        "amount": 2900,
+        "interval": "month",
+        "interval_count": 1
+      },
+      "features": [
+        {
+          "feature_id": "api_calls",
+          "included": 10000,
+          "unlimited": false,
+          "reset": {
+            "interval": "month",
+            "interval_count": 1
+          },
+          "price": {
+            "amount": 100,
+            "interval": "month",
+            "interval_count": 1,
+            "billing_units": 1000,
+            "billing_method": "prepaid",
+            "max_purchase": 50000
+          },
+          "display": {
+            "primary_text": "10,000 API calls included",
+            "secondary_text": "$0.10 per 1,000 additional calls"
+          },
+          "rollover": {
+            "max": 5000,
+            "expiry_duration_type": "month",
+            "expiry_duration_length": 1
+          }
+        },
+        {
+          "feature_id": "team_members",
+          "included": 5,
+          "unlimited": false,
+          "reset": null,
+          "price": {
+            "amount": 500,
+            "interval": "month",
+            "interval_count": 1,
+            "billing_units": 1,
+            "billing_method": "prepaid",
+            "max_purchase": 20
+          }
+        }
+      ],
+      "free_trial": {
+        "duration_length": 14,
+        "duration_type": "day",
+        "card_required": false
+      },
+      "created_at": 1708473600,
+      "env": "live",
+      "archived": false,
+      "base_variant_id": null
+    },
+    {
+      "id": "plan_pro",
+      "name": "Pro Plan",
+      "description": "For growing businesses with advanced needs",
+      "group": "subscription_plans",
+      "version": 2,
+      "add_on": false,
+      "default": false,
+      "price": {
+        "amount": 9900,
+        "interval": "month",
+        "interval_count": 1,
+        "display": {
+          "primary_text": "$99/month",
+          "secondary_text": "Save 20% with annual billing"
+        }
+      },
+      "features": [
+        {
+          "feature_id": "api_calls",
+          "included": 100000,
+          "unlimited": false,
+          "reset": {
+            "interval": "month",
+            "interval_count": 1
+          },
+          "price": {
+            "tiers": [
+              {
+                "to": 50000,
+                "amount": 50
+              },
+              {
+                "to": "infinite",
+                "amount": 25
+              }
+            ],
+            "interval": "month",
+            "interval_count": 1,
+            "billing_units": 1000,
+            "billing_method": "usage_based",
+            "max_purchase": null
+          }
+        },
+        {
+          "feature_id": "team_members",
+          "included": 0,
+          "unlimited": true,
+          "reset": null,
+          "price": null
+        }
+      ],
+      "free_trial": null,
+      "created_at": 1708560000,
+      "env": "live",
+      "archived": false,
+      "base_variant_id": null
+    }
+  ]
+}
+```
+
+```json 200 - With customer filter
+{
+  "list": [
+    {
+      "id": "plan_starter",
+      "name": "Starter Plan",
+      "version": 1,
+      "add_on": false,
+      "default": true,
+      "price": {
+        "amount": 2900,
+        "interval": "month"
+      },
+      "features": [],
+      "created_at": 1708473600,
+      "env": "live",
+      "archived": false,
+      "customer_eligibility": {
+        "trial_available": true,
+        "scenario": "attach_with_trial"
+      }
+    },
+    {
+      "id": "plan_pro",
+      "name": "Pro Plan",
+      "version": 2,
+      "add_on": false,
+      "default": false,
+      "price": {
+        "amount": 9900,
+        "interval": "month"
+      },
+      "features": [],
+      "created_at": 1708560000,
+      "env": "live",
+      "archived": false,
+      "customer_eligibility": {
+        "trial_available": false,
+        "scenario": "attach"
+      }
+    }
+  ]
+}
+```
+</ResponseExample>

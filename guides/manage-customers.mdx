@@ -1,0 +1,446 @@
+---
+title: "Manage Customers"
+description: "Create, update, and manage customer records in Autumn"
+---
+
+## Overview
+
+Customers are the entities that subscribe to your products and consume features. Managing customers effectively is essential for billing, feature access control, and user provisioning.
+
+## Creating Customers
+
+<Steps>
+  <Step title="Create a customer record">
+    Create customers using the Customers API:
+
+    ```typescript
+    import { Autumn } from '@useautumn/sdk';
+
+    const autumn = new Autumn({ apiKey: process.env.AUTUMN_API_KEY });
+
+    const customer = await autumn.customers.create({
+      id: 'customer_123',  // Your unique identifier
+      name: 'Acme Corporation',
+      email: 'billing@acme.com'
+    });
+
+    console.log(customer.id); // "customer_123"
+    ```
+  </Step>
+
+  <Step title="Store the customer ID">
+    Store the customer ID in your database:
+
+    ```typescript
+    // When user signs up
+    async function createUser(userData) {
+      // Create user in your database
+      const user = await db.users.create({
+        email: userData.email,
+        name: userData.name
+      });
+
+      // Create corresponding Autumn customer
+      await autumn.customers.create({
+        id: user.id, // Use your user ID
+        name: userData.name,
+        email: userData.email
+      });
+
+      return user;
+    }
+    ```
+  </Step>
+</Steps>
+
+## Auto-Creating Customers
+
+Customers can be automatically created during check, track, or attach operations:
+
+```typescript
+// Customer is created if it doesn't exist
+const result = await autumn.check({
+  customer_id: 'new_customer_456',
+  feature_id: 'api_calls',
+  customer_data: {
+    name: 'Jane Smith',
+    email: 'jane@example.com'
+  }
+});
+
+// Customer now exists with basic information
+```
+
+<Info>
+Auto-creation is convenient for quick setup, but explicitly creating customers gives you more control over customer data.
+</Info>
+
+## Retrieving Customer Information
+
+Get detailed customer information including subscriptions and balances:
+
+```typescript
+const customer = await autumn.customers.get('customer_123');
+
+console.log(customer.name);
+console.log(customer.email);
+console.log(customer.subscriptions); // Active subscriptions
+console.log(customer.balances); // Feature balances
+```
+
+## Updating Customer Information
+
+Update customer details:
+
+```typescript
+await autumn.customers.update('customer_123', {
+  name: 'Acme Corp (Updated)',
+  email: 'billing-updated@acme.com'
+});
+```
+
+## Listing Customers
+
+List all customers with pagination:
+
+```typescript
+const response = await autumn.customers.list({
+  limit: 50,
+  starting_after: 'customer_100' // For pagination
+});
+
+for (const customer of response.data) {
+  console.log(customer.id, customer.name);
+}
+
+// Get next page
+if (response.has_more) {
+  const nextPage = await autumn.customers.list({
+    limit: 50,
+    starting_after: response.data[response.data.length - 1].id
+  });
+}
+```
+
+## Filtering Customers by Plan
+
+Find customers subscribed to specific plans:
+
+```typescript
+const response = await autumn.customers.list({
+  plans: [
+    { id: 'pro_plan' },
+    { id: 'enterprise_plan', versions: [1, 2] }
+  ],
+  subscription_status: 'active'
+});
+
+// Returns only customers with active subscriptions to specified plans
+```
+
+## Searching Customers
+
+Search customers by ID, name, or email:
+
+```typescript
+const response = await autumn.customers.list({
+  search: 'acme',
+  limit: 20
+});
+
+// Returns customers matching "acme" in ID, name, or email
+```
+
+## Customer Lifecycle Management
+
+### Onboarding Flow
+
+Complete customer onboarding with default plan:
+
+```typescript
+async function onboardCustomer(userData: {
+  email: string;
+  name: string;
+  plan: string;
+}) {
+  // 1. Create customer
+  const customer = await autumn.customers.create({
+    id: userData.email, // Using email as ID
+    name: userData.name,
+    email: userData.email
+  });
+
+  // 2. Attach default plan
+  await autumn.attach({
+    customer_id: customer.id,
+    product_id: userData.plan || 'free_plan'
+  });
+
+  // 3. Send welcome email
+  await sendWelcomeEmail({
+    to: customer.email,
+    name: customer.name,
+    plan: userData.plan
+  });
+
+  return customer;
+}
+```
+
+### Trial to Paid Conversion
+
+Convert trial customers to paid plans:
+
+```typescript
+async function convertToPayingCustomer(
+  customerId: string,
+  paidPlanId: string
+) {
+  // Get current customer info
+  const customer = await autumn.customers.get(customerId);
+
+  // Attach paid plan (replaces trial)
+  const result = await autumn.attach({
+    customer_id: customerId,
+    product_id: paidPlanId
+  });
+
+  if (result.payment_url) {
+    // Payment method needed - redirect to checkout
+    return {
+      status: 'payment_required',
+      checkout_url: result.payment_url
+    };
+  }
+
+  // Send confirmation email
+  await sendEmail({
+    to: customer.email,
+    template: 'trial_converted',
+    data: { plan: paidPlanId }
+  });
+
+  return { status: 'converted' };
+}
+```
+
+### Churning Customers
+
+Handle customer cancellations:
+
+```typescript
+async function handleCustomerChurn(customerId: string) {
+  // Cancel subscriptions
+  await autumn.cancel({
+    customer_id: customerId
+  });
+
+  // Send cancellation survey
+  await sendEmail({
+    to: customer.email,
+    template: 'cancellation_survey'
+  });
+
+  // Update internal systems
+  await db.users.update(
+    { autumnCustomerId: customerId },
+    { status: 'churned', churnedAt: new Date() }
+  );
+}
+```
+
+## Managing Customer Entities
+
+For multi-tenant applications, manage entities (workspaces, projects) per customer:
+
+```typescript
+// Create an entity for a customer
+const entity = await autumn.entities.create({
+  id: 'workspace_456',
+  customer_id: 'customer_123',
+  name: 'Acme Workspace',
+  external_id: 'workspace_456'
+});
+
+// Attach entity-scoped product
+await autumn.attach({
+  customer_id: 'customer_123',
+  entity_id: 'workspace_456',
+  product_id: 'workspace_pro'
+});
+
+// Check entity-scoped access
+const access = await autumn.check({
+  customer_id: 'customer_123',
+  entity_id: 'workspace_456',
+  feature_id: 'seats'
+});
+```
+
+## Customer Data Patterns
+
+### Syncing Customer Data
+
+Keep Autumn customer data in sync with your database:
+
+```typescript
+// Update customer data when user updates profile
+app.put('/api/profile', authenticate, async (req, res) => {
+  const { name, email } = req.body;
+
+  // Update your database
+  await db.users.update(req.user.id, { name, email });
+
+  // Sync to Autumn
+  await autumn.customers.update(req.user.autumnCustomerId, {
+    name,
+    email
+  });
+
+  res.json({ success: true });
+});
+```
+
+### Handling Deleted Users
+
+Clean up Autumn data when users are deleted:
+
+```typescript
+async function deleteUser(userId: string) {
+  const user = await db.users.findById(userId);
+
+  // Cancel all subscriptions first
+  await autumn.cancel({
+    customer_id: user.autumnCustomerId
+  });
+
+  // Delete customer from Autumn
+  await autumn.customers.delete(user.autumnCustomerId);
+
+  // Delete from your database
+  await db.users.delete(userId);
+}
+```
+
+## Customer Analytics
+
+Track customer metrics:
+
+```typescript
+async function getCustomerMetrics(customerId: string) {
+  const customer = await autumn.customers.get(customerId);
+
+  // Calculate metrics
+  const metrics = {
+    total_subscriptions: customer.subscriptions.length,
+    mrr: customer.subscriptions.reduce((sum, sub) => 
+      sum + (sub.amount || 0), 0
+    ),
+    feature_usage: Object.entries(customer.balances).map(([featureId, balance]) => ({
+      feature: featureId,
+      usage: balance.usage,
+      limit: balance.granted_balance,
+      utilization: balance.unlimited ? 0 : 
+        (balance.usage / balance.granted_balance) * 100
+    }))
+  };
+
+  return metrics;
+}
+```
+
+## Bulk Operations
+
+Perform bulk operations on customers:
+
+```typescript
+async function bulkUpdatePlan(
+  customerIds: string[],
+  newPlanId: string
+) {
+  const results = await Promise.allSettled(
+    customerIds.map(customerId =>
+      autumn.attach({
+        customer_id: customerId,
+        product_id: newPlanId
+      })
+    )
+  );
+
+  const succeeded = results.filter(r => r.status === 'fulfilled');
+  const failed = results.filter(r => r.status === 'rejected');
+
+  return {
+    total: customerIds.length,
+    succeeded: succeeded.length,
+    failed: failed.length,
+    errors: failed.map((r: any) => r.reason)
+  };
+}
+```
+
+## Testing Customer Flows
+
+Test customer management in development:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+
+describe('Customer Management', () => {
+  it('should create and retrieve customer', async () => {
+    const customer = await autumn.customers.create({
+      id: 'test_customer',
+      name: 'Test Customer',
+      email: 'test@example.com'
+    });
+
+    expect(customer.id).toBe('test_customer');
+    expect(customer.name).toBe('Test Customer');
+
+    const retrieved = await autumn.customers.get('test_customer');
+    expect(retrieved.email).toBe('test@example.com');
+  });
+
+  it('should update customer information', async () => {
+    await autumn.customers.update('test_customer', {
+      name: 'Updated Name'
+    });
+
+    const customer = await autumn.customers.get('test_customer');
+    expect(customer.name).toBe('Updated Name');
+  });
+});
+```
+
+## Best Practices
+
+<Card title="Use your own IDs" icon="fingerprint">
+  Use your application's user IDs as customer IDs for easy mapping between systems.
+</Card>
+
+<Card title="Sync customer data" icon="arrows-rotate">
+  Keep customer names and emails synchronized between your database and Autumn.
+</Card>
+
+<Card title="Handle deletions properly" icon="trash">
+  Cancel subscriptions before deleting customers to ensure clean termination.
+</Card>
+
+<Card title="Implement webhooks" icon="webhook">
+  Use webhooks to stay notified of subscription changes and keep your systems in sync.
+</Card>
+
+<Card title="Search efficiently" icon="magnifying-glass">
+  Use the search parameter when looking up customers by name or email.
+</Card>
+
+<Card title="Paginate lists" icon="list">
+  Always paginate customer lists to avoid performance issues with large datasets.
+</Card>
+
+## Related Resources
+
+- [Customers API Reference](/api-reference/customers/create)
+- [Attach Products Guide](/guides/attach-products)
+- [Entities Concept](/concepts/entities)
+- [Customers Concept](/concepts/customers)

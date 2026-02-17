@@ -29,97 +29,208 @@ Each event contains:
 - **Timestamp** - When the event occurred
 - **Usage** - Quantity consumed (for metered features)
 - **Properties** - Custom metadata about the event
+- **Entity ID** - Associated workspace/project (optional)
 
 ## Events Page
 
 Access the Events page from the main sidebar to view organization-wide event data:
 
-### Event List
+### Page Layout
 
-View recent events across all customers:
+The Events page is divided into two main sections:
 
-- **Event name** - Type of event tracked
-- **Customer** - Customer who triggered the event
-- **Timestamp** - When the event occurred
-- **Usage** - Quantity tracked
-- **Properties** - Custom event metadata
+**Usage Chart (top)**
+- Visual timeseries of event volume
+- 400px fixed height for consistent viewing
+- Interactive tooltips and filtering
 
-### Time Range Selection
+**Event Table (bottom)**
+- Detailed event log with all properties
+- Flexible height that grows with content
+- Pagination controls for large datasets
 
-Filter events by time period:
+### Query Topbar
 
-- **Last 7 days** - Recent usage
-- **Last 30 days** - Monthly trends
-- **Custom range** - Specific date range
+Powerful filtering controls above the chart:
+
+**Time range selector:**
+- Last 7 days
+- Last 30 days  
+- Last 90 days
+- Custom date range
+
+**Bin size selector:**
+- **Day** - Daily aggregation (default)
+- **Week** - Weekly rollups
+- **Month** - Monthly summaries
+
+**Event filter:**
+- Select specific events to display
+- Multi-select dropdown
+- Filter by feature key
+- Show all or specific events
+
+**Feature filter:**
+- Filter by feature ID
+- View usage for specific features
+- Combine with event filters
+
+**Group by dropdown:**
+- Group events by property
+- Split chart into multiple series
+- Available properties auto-detected
+- Includes `customer_id` and custom properties
 
 <Tip>
   Use shorter time ranges (7 days) for real-time monitoring and longer ranges (30 days) for trend analysis.
 </Tip>
 
-### Event Details
+### Usage Chart
 
-Click on any event to view the complete payload:
+Interactive bar chart showing event volume over time:
 
-```json
-{
-  "id": "evt_abc123",
-  "event_name": "api-calls",
-  "customer_id": "cus_123",
-  "timestamp": "2024-02-17T10:30:00Z",
-  "usage": 1,
-  "properties": {
-    "endpoint": "/api/users",
-    "method": "GET",
-    "responseTime": 245,
-    "statusCode": 200
-  },
-  "entity_id": "ent_workspace_456"
-}
-```
+**Chart features:**
+- Color-coded bars for each event type
+- Stacked bars when multiple events selected
+- Hover tooltips with exact counts
+- Responsive design adapts to screen size
+- Smooth animations on data updates
 
-## Customer Analytics
+**Multiple series:**
+When grouping by property:
+- Each unique value gets its own color
+- Legend shows all groups
+- Click legend items to toggle visibility
+- Top 10 groups by volume (if >10 exist)
 
-Each customer page includes a dedicated Usage section with event analytics:
+**Empty states:**
+- "No events found" when filters return nothing
+- Helpful message suggests widening filters
+- Prompt to select events if none chosen
+
+<Warning>
+  When grouped data has too many unique values (>10), only the top groups by volume are shown. A toast notification alerts you to this truncation.
+</Warning>
 
 ### Event Table
 
-View events for a specific customer:
+Detailed, paginated log of all events:
 
-- Filter by time range (7 days, 30 days)
-- See all tracked events chronologically
-- View event properties inline
-- Export data for external analysis
+**Base columns:**
+- **Event name** - Feature key or event type
+- **Timestamp** - When event occurred (with timezone)
+- **Customer ID** - Who triggered the event
+- **Usage** - Quantity tracked (for metered events)
 
-**Dynamic columns:**
-
+**Dynamic property columns:**
 The table automatically generates columns from event properties:
+- Common properties (appearing in multiple events) become columns
+- `properties.endpoint` → "Endpoint" column
+- `properties.method` → "Method" column  
+- Custom properties from your events
+- Nested properties flattened (e.g., `properties.user.id`)
 
-- **Base columns** - Event name, timestamp, usage
-- **Property columns** - Custom properties appear as additional columns
-- **Column visibility** - Show/hide columns based on your needs
+**Column visibility:**
+Hide or show columns as needed:
+- Click column visibility button
+- Toggle individual columns
+- Changes persist across sessions
+
+**Pagination controls:**
+- Page size selector (500, 1000, 2000)
+- Next/previous page buttons
+- Current page indicator
+- Total event count
 
 <Note>
-  Property columns are generated dynamically based on the events in the selected time range. Common properties across multiple events appear as dedicated columns.
+  The event table uses AG Grid for high performance. It can handle thousands of events with smooth scrolling and sorting.
 </Note>
 
-### Usage Chart
+### Group By Analysis
 
-Visualize event frequency over time:
+Powerful feature to segment event data:
 
-- **Line chart** - Shows event count per day
-- **Multiple series** - Up to 5 event types displayed
-- **Hover details** - View exact counts for each day
-- **Time range sync** - Chart updates with table filters
+**How it works:**
+1. Select property from **Group by** dropdown
+2. Chart splits into series per unique value
+3. Each series gets a distinct color
+4. Table shows property as a column
+5. Filter to specific group value
 
-**Chart features:**
-- Color-coded lines for each event type
-- Automatic scaling based on data range
-- Responsive design for mobile and desktop
-- Interactive tooltips with detailed breakdowns
+**Example: Group by endpoint**
+```
+Chart shows:
+- Blue bars: /api/users
+- Green bars: /api/posts  
+- Red bars: /api/comments
+
+Table adds "Endpoint" column showing value per event
+```
+
+**Group filter:**
+After grouping, filter to specific value:
+- Dropdown appears with available groups
+- Select one to show only that group's data
+- Chart and table both filter
+- Clear to show all groups again
+
+**Available properties:**
+- `customer_id` (always available)
+- Any property sent in event `properties`
+- Extracted from recent events
+- Updates as new events arrive
 
 <Tip>
-  Use the chart to identify usage spikes, growth trends, and potential issues. Sudden drops may indicate integration problems or customer churn.
+  Group by endpoint to see which APIs are most used. Group by customer_id to compare customer activity. Group by custom properties for business-specific insights.
 </Tip>
+
+### Truncation Handling
+
+When grouped data has >10 unique values:
+
+- Only top 10 by volume are shown
+- Toast notification informs you
+- Use group filter to see specific values
+- Or adjust date range to reduce cardinality
+
+## Customer-Specific Analytics
+
+Each customer page includes a dedicated Usage section:
+
+### Analytics View
+
+Same powerful interface scoped to one customer:
+
+**URL parameters:**
+- `/events?customer_id=cus_123` - Filter to customer
+- All other filters work the same
+- Group by still available
+- Entity-level analysis (if using entities)
+
+**Usage chart:**
+- Shows only this customer's events
+- Compare feature usage for the customer
+- Identify usage patterns and trends
+- Detect anomalies or spikes
+
+**Event table:**
+- All events for the customer
+- Full property visibility
+- Export customer data
+- Audit trail of activity
+
+### Entity-Level Analytics
+
+For multi-tenant customers:
+
+- View usage per entity (workspace, project)
+- Group by `entity_id` to compare entities
+- Track which workspaces use most resources
+- Identify inactive entities
+
+<Card title="Learn about entities" icon="building" href="/concepts/entities">
+  Understand entity-based usage tracking
+</Card>
 
 ## Event Properties
 
@@ -134,6 +245,7 @@ Common properties for all events:
 - **usage** - Quantity consumed (defaults to 1)
 - **timestamp** - When it occurred (defaults to now)
 - **entity_id** - Which workspace/project (for multi-tenant apps)
+- **idempotency_key** - Prevent duplicate events
 
 ### Custom Properties
 
@@ -165,45 +277,79 @@ await autumn.track({
 });
 ```
 
+**Property types:**
+- **Strings** - Text values, IDs, names
+- **Numbers** - Metrics, counts, durations
+- **Booleans** - Flags, toggles
+- **Dates** - ISO 8601 strings
+- **Arrays** - Lists of values (flattened in table)
+- **Objects** - Nested data (flattened with dot notation)
+
 **Best practices for properties:**
 - Use consistent naming conventions (camelCase or snake_case)
 - Keep property names descriptive but concise
-- Avoid deeply nested objects
-- Don't include sensitive data (passwords, tokens, etc.)
+- Avoid deeply nested objects (2-3 levels max)
+- Don't include sensitive data (passwords, tokens, PII)
 - Use numbers for metrics that you may want to aggregate
+- Standardize property names across events
 
 <Warning>
   Event properties are stored as-is and cannot be modified after the event is created. Ensure you're not logging sensitive information.
 </Warning>
 
-## Aggregated Analytics
+## Performance and Storage
 
-Autumn automatically aggregates events for performance:
+### ClickHouse Integration
 
-### Pre-aggregated Data
-
-For timeseries charts, Autumn uses pre-computed aggregations:
-
-- **Daily rollups** - Event counts per day
-- **Feature breakdowns** - Usage by feature type
-- **Customer segments** - Aggregates by customer groups
+Autumn uses ClickHouse for fast event analytics:
 
 **Benefits:**
-- Fast chart rendering
-- Reduced database load
-- Historical data always available
+- Sub-second queries on millions of events
+- Real-time aggregations
+- Efficient columnar storage
+- Automatic data compression
 
-### Raw Events
+**Pre-aggregated data:**
+For timeseries charts:
+- Daily rollups computed automatically
+- Feature breakdowns pre-calculated
+- Faster chart rendering
+- Reduced query load
 
-For detailed analysis, access raw event data:
-
-- **Event table** - Shows individual events
-- **Full properties** - All custom metadata
-- **Exact timestamps** - Precise timing information
+**Raw events:**
+For detailed analysis:
+- Individual event records
+- Full property access
+- Exact timestamps
+- Complete audit trail
 
 <Note>
-  Raw events are retained based on your plan. Contact support to increase retention period or export historical data.
+  If ClickHouse is not enabled for your organization, the Analytics page will display a message. Contact support to enable event analytics.
 </Note>
+
+### Retention Periods
+
+Event data is retained based on your plan:
+
+- **Sandbox** - 30 days of events
+- **Starter** - 90 days of events
+- **Pro** - 1 year of events
+- **Enterprise** - Custom retention (up to 5 years)
+
+<Tip>
+  Export historical data regularly if you need longer retention than your plan provides.
+</Tip>
+
+### Query Optimization
+
+For best performance:
+
+- Use shorter time ranges when possible (7-30 days)
+- Limit custom properties to essential data
+- Avoid deeply nested property objects
+- Use consistent property types
+- Batch track calls when tracking multiple events
+- Set appropriate bin sizes (day for <30 days, week for >30 days)
 
 ## Use Cases
 
@@ -227,10 +373,11 @@ await autumn.track({
 ```
 
 **Dashboard benefits:**
-- See which endpoints are most popular
+- See which endpoints are most popular (group by endpoint)
 - Identify customers approaching limits
-- Detect unusual usage patterns
+- Detect unusual usage patterns (spikes, drops)
 - Optimize infrastructure based on trends
+- Track error rates by status code
 
 ### Track Feature Adoption
 
@@ -255,6 +402,7 @@ await autumn.track({
 - Identify underutilized features
 - Validate product roadmap decisions
 - Calculate feature ROI
+- Compare adoption across customer segments
 
 ### Analyze User Behavior
 
@@ -279,55 +427,30 @@ await autumn.track({
 - Understand common workflows
 - Detect friction points
 - Personalize onboarding
+- Predict churn risk
 
-## Event Filtering
+### Performance Monitoring
 
-Filter events to focus on specific data:
+Track application performance:
 
-### By Customer
+```typescript
+await autumn.track({
+  customerId: user.id,
+  featureKey: "page-view",
+  usage: 1,
+  properties: {
+    page: "/dashboard",
+    loadTime: 1250,
+    browserCached: true
+  }
+});
+```
 
-View events for a single customer:
-- Navigate to customer page
-- Scroll to Usage Analytics section
-- Events are automatically filtered
-
-### By Time Range
-
-Adjust the time window:
-- Select 7 days for recent activity
-- Select 30 days for monthly trends
-- Use custom ranges for specific periods
-
-### By Event Type
-
-Focus on specific features:
-- Use column visibility to show relevant properties
-- Sort by event name to group similar events
-- Click event names to filter (coming soon)
-
-## Performance Considerations
-
-### Retention Periods
-
-Event data is retained based on your plan:
-
-- **Sandbox** - 30 days
-- **Starter** - 90 days
-- **Pro** - 1 year
-- **Enterprise** - Custom retention
-
-<Tip>
-  Export historical data regularly if you need longer retention than your plan provides.
-</Tip>
-
-### Query Optimization
-
-For best performance:
-
-- Use shorter time ranges when possible
-- Limit custom properties to essential data
-- Avoid deeply nested property objects
-- Batch track calls when tracking multiple events
+**Dashboard benefits:**
+- Monitor response times (average responseTime property)
+- Identify slow endpoints
+- Track cache hit rates
+- Detect performance regressions
 
 ## Best Practices
 
@@ -337,6 +460,7 @@ For best performance:
 - Use kebab-case for consistency
 - Match feature keys for metered features
 - Avoid generic names like `event` or `action`
+- Be specific: `document-created` not `create`
 
 ### Property Design
 
@@ -344,6 +468,8 @@ For best performance:
 - Use consistent types (always string, always number, etc.)
 - Flatten nested objects when possible
 - Document property meanings for your team
+- Create a property schema or dictionary
+- Use enums for categorical data
 
 ### Monitoring Strategy
 
@@ -351,17 +477,48 @@ For best performance:
 - Set up alerts for usage anomalies (via webhooks)
 - Review customer usage before renewal dates
 - Use trends to inform product decisions
+- Compare week-over-week growth
+- Track feature adoption rates
+
+### Dashboard Usage
+
+- Save common filter combinations
+- Use grouping to segment data
+- Export data for deeper analysis
+- Share insights with your team
+- Set up regular reporting cadences
+
+## Empty States
+
+If no events are found:
+
+**No data message:**
+- Appears when filters return no results
+- Suggests widening date range
+- Prompts to select events if none chosen
+- Links to integration documentation
+
+**Getting started:**
+If you haven't tracked events yet:
+1. Integrate the Autumn SDK
+2. Call `autumn.track()` in your application
+3. Events appear within seconds
+4. Start analyzing usage patterns
+
+<Card title="Track API" icon="chart-line" href="/api-reference/core/track">
+  Learn how to track usage events
+</Card>
 
 ## Related Resources
 
 <CardGroup cols={2}>
-  <Card title="Track API" icon="chart-line" href="/api/track">
+  <Card title="Track API" icon="chart-line" href="/api-reference/core/track">
     Track usage events programmatically
   </Card>
-  <Card title="Events API" icon="list" href="/api/events/list">
+  <Card title="Events API" icon="list" href="/api-reference/events/list">
     Query events via API
   </Card>
-  <Card title="Metered Features" icon="gauge" href="/guides/metered-features">
+  <Card title="Metered Features" icon="gauge" href="/guides/track-usage">
     Learn about usage-based features
   </Card>
   <Card title="Webhooks" icon="webhook" href="/guides/webhooks">

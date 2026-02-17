@@ -1,632 +1,426 @@
 ---
-title: Self-Hosting
-description: Deploy Autumn on your own infrastructure with full control
+title: 'Self-Hosting Guide'
+description: 'Deploy Autumn on your own infrastructure'
+icon: 'server'
 ---
 
-## Overview
-
-Autumn is designed to be self-hosted, giving you complete control over your billing infrastructure. This guide covers installation, configuration, and deployment options for production environments.
+This guide covers how to self-host Autumn in your own environment. Autumn is fully open-source and can be deployed on any infrastructure that supports Docker and PostgreSQL.
 
 <Note>
-  Looking for a managed solution? Check out [Autumn Cloud](https://app.useautumn.com) for a fully hosted option with zero infrastructure management.
+  **Prefer Managed Hosting?** Use [Autumn Cloud](https://app.useautumn.com) for a fully managed, production-ready service with zero setup.
 </Note>
 
 ## Prerequisites
 
-Before deploying Autumn, ensure you have:
-
-- **Bun** (v1.0 or later) - Runtime and package manager
-- **PostgreSQL** (v14 or later) - Primary database
-- **Redis/Valkey** - For caching and real-time usage metering
-- **Docker** (optional) - For containerized deployments
-- **Stripe Account** - For payment processing
-
-## Architecture
-
-Autumn consists of four main components:
-
 <CardGroup cols={2}>
-  <Card title="API Server" icon="server">
-    Hono-based HTTP server handling API requests on port 8080
+  <Card title="Bun Runtime" icon="package">
+    v1.0 or higher ([install](https://bun.sh))
   </Card>
-  <Card title="Dashboard (Vite)" icon="gauge">
-    React frontend for managing products, customers, and analytics on port 3000
+  <Card title="Docker" icon="docker">
+    For containerized deployment
   </Card>
-  <Card title="Workers" icon="gears">
-    BullMQ background processors for async jobs like webhooks and billing cycles
+  <Card title="PostgreSQL" icon="database">
+    v14 or higher (or use Supabase)
   </Card>
-  <Card title="Valkey/Redis" icon="database">
-    In-memory store for caching, rate limiting, and usage metering
+  <Card title="Redis" icon="memory">
+    v6 or higher (optional but recommended)
   </Card>
 </CardGroup>
 
-## Environment Configuration
-
-### Required Environment Variables
-
-Create a `server/.env` file with the following required variables:
-
-```bash server/.env
-# Authentication
-BETTER_AUTH_SECRET=<64-byte-base64-secret>
-BETTER_AUTH_URL=https://api.yourdomain.com
-CLIENT_URL=https://app.yourdomain.com
-
-# Database
-DATABASE_URL=postgresql://user:password@host:5432/autumn
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# Stripe Webhooks
-ENCRYPTION_IV=<16-byte-base64-secret>
-ENCRYPTION_PASSWORD=<64-byte-base64-secret>
-STRIPE_WEBHOOK_URL=https://api.yourdomain.com
-LOCALTUNNEL_RESERVED_KEY=<optional-for-production>
-```
-
-<Tip>
-  Run `bun setup` to automatically generate secure secrets for `BETTER_AUTH_SECRET`, `ENCRYPTION_IV`, and `ENCRYPTION_PASSWORD`.
-</Tip>
-
-### Optional Environment Variables
-
-```bash server/.env
-# Google OAuth (recommended for production)
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-
-# Email via Resend (recommended for production)
-RESEND_API_KEY=your_resend_api_key
-RESEND_DOMAIN=yourdomain.com
-
-# Supabase Storage
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your_service_key
-
-# Webhooks via Svix
-SVIX_API_KEY=your_svix_api_key
-
-# Analytics via ClickHouse
-CLICKHOUSE_URL=https://your-clickhouse-instance.com
-CLICKHOUSE_USERNAME=default
-CLICKHOUSE_PASSWORD=your_password
-CLICKHOUSE_SKIP_ENSURES=false  # Set to true after first run
-
-# AI Features via Anthropic
-ANTHROPIC_API_KEY=your_anthropic_api_key
-
-# Logging via Axiom
-AXIOM_TOKEN=your_axiom_token
-```
-
-### Frontend Environment Variables
-
-Create a `vite/.env` file:
-
-```bash vite/.env
-VITE_FRONTEND_URL=https://app.yourdomain.com
-VITE_BACKEND_URL=https://api.yourdomain.com
-```
-
-## Database Setup
+## Quick Start (Local Development)
 
 <Steps>
-  <Step title="Create PostgreSQL Database">
-    Create a new PostgreSQL database for Autumn:
-
-    ```sql
-    CREATE DATABASE autumn;
-    CREATE USER autumn_user WITH PASSWORD 'secure_password';
-    GRANT ALL PRIVILEGES ON DATABASE autumn TO autumn_user;
-    ```
-  </Step>
-
-  <Step title="Configure Connection String">
-    Add your database URL to `server/.env`:
-
+  <Step title="Clone the Repository">
     ```bash
-    DATABASE_URL=postgresql://autumn_user:secure_password@your-db-host:5432/autumn
+    git clone https://github.com/useautumn/autumn.git
+    cd autumn
     ```
-
-    <Warning>
-      For production, use connection pooling (like Supabase Pooler or PgBouncer) to handle concurrent connections efficiently.
-    </Warning>
   </Step>
 
-  <Step title="Generate and Run Migrations">
-    Generate Drizzle ORM types and create database tables:
-
-    ```bash
-    bun db:generate
-    bun db:migrate
-    ```
-
-    This creates all necessary tables including:
-    - Organizations, users, and authentication
-    - Products, plans, and features
-    - Customers and subscriptions
-    - Invoices and payment events
-    - Usage tracking and entitlements
-  </Step>
-</Steps>
-
-## Deployment Options
-
-### Option 1: Docker Compose (Recommended for Quick Setup)
-
-The simplest way to deploy Autumn is using Docker Compose:
-
-<Steps>
-  <Step title="Configure Environment">
-    Ensure your `server/.env` and `vite/.env` files are properly configured with production values.
-  </Step>
-
-  <Step title="Build and Start Services">
-    <CodeGroup>
-      ```bash Windows
-      docker compose -f docker-compose.dev.yml up -d
-      ```
-
-      ```bash macOS/Linux
-      docker compose -f docker-compose.unix.yml up -d
-      ```
-    </CodeGroup>
-
-    The `-d` flag runs containers in detached mode.
-  </Step>
-
-  <Step title="Verify Services">
-    Check that all services are running:
-
-    ```bash
-    docker compose ps
-    ```
-
-    You should see:
-    - `valkey` - Redis-compatible cache
-    - `server` - API server
-    - `vite` - Frontend dashboard
-    - `workers` - Background job processors
-    - `localtunnel` - (Optional) For webhook forwarding in development
-  </Step>
-</Steps>
-
-<Tip>
-  For production, consider removing the `localtunnel` service from your docker-compose file and configuring your Stripe webhook endpoint directly to your public API URL.
-</Tip>
-
-### Option 2: Native Bun Deployment
-
-For more control, run services directly with Bun:
-
-<Steps>
   <Step title="Install Dependencies">
     ```bash
     bun install
     ```
+
+    <Note>
+      Autumn uses **Bun** as its package manager and runtime. The setup script requires Bun to be installed.
+    </Note>
   </Step>
 
-  <Step title="Build Frontend">
+  <Step title="Run Setup Script">
     ```bash
-    bun -F @autumn/vite build:bun
+    bun setup
     ```
 
-    This creates an optimized production build in `vite/dist/`.
+    This interactive script will:
+    - Generate secure environment variables (auth secrets, encryption keys)
+    - Set up a local tunnel for Stripe webhooks
+    - Optionally create a Supabase database instance
+    - Configure environment files
+
+    <Accordion title="Setup Script Output">
+      The script generates:
+      - `BETTER_AUTH_SECRET` — Authentication secret
+      - `ENCRYPTION_IV` and `ENCRYPTION_PASSWORD` — For encrypting Stripe credentials
+      - `LOCALTUNNEL_RESERVED_KEY` — For Stripe webhook delivery
+      - `STRIPE_WEBHOOK_URL` — Public URL for webhooks
+    </Accordion>
   </Step>
 
-  <Step title="Start API Server">
-    ```bash
-    cd server
-    bun src/index.ts
-    ```
+  <Step title="Configure Database">
+    You have three options:
 
-    The server starts on port 8080 (configurable via environment).
+    <Tabs>
+      <Tab title="Supabase (Recommended)">
+        The setup script can create a free Supabase database automatically:
+
+        1. Select **"Set up Supabase (Cloud) for Autumn"**
+        2. Follow the prompts to authenticate
+        3. The script will create a project and configure the `DATABASE_URL`
+
+        The generated URL will look like:
+        ```bash
+        DATABASE_URL=postgresql://postgres.xxxxx:password@aws-1-region.pooler.supabase.com:5432/postgres
+        ```
+      </Tab>
+
+      <Tab title="Your Own PostgreSQL">
+        If you have an existing PostgreSQL instance:
+
+        1. Create a database: `CREATE DATABASE autumn;`
+        2. Add the connection string to `server/.env`:
+
+        ```bash
+        DATABASE_URL=postgresql://user:password@localhost:5432/autumn
+        ```
+      </Tab>
+
+      <Tab title="Configure Later">
+        Skip database setup and add it later to `server/.env`
+      </Tab>
+    </Tabs>
   </Step>
 
-  <Step title="Start Workers">
-    In a separate process:
-
+  <Step title="Generate Database Schema">
     ```bash
-    cd server
-    bun src/workers.ts
+    bun db:generate && bun db:migrate
     ```
 
-    Workers process background jobs from BullMQ queues.
+    This creates all required tables, indexes, and functions in your PostgreSQL database.
+
+    <Tip>
+      If you encounter a `SyntaxError: Unexpected end of JSON input` error, you may need to clear your database tables first. This is a [known issue](https://github.com/drizzle-team/drizzle-orm/issues/4529) when running migrations multiple times.
+    </Tip>
   </Step>
 
-  <Step title="Serve Frontend">
-    Serve the built frontend with any static file server:
+  <Step title="Start Autumn">
+    <Tabs>
+      <Tab title="macOS/Linux">
+        ```bash
+        docker compose -f docker-compose.unix.yml up
+        ```
+      </Tab>
 
-    ```bash
-    cd vite
-    bunx serve -s dist -p 3000
-    ```
+      <Tab title="Windows">
+        ```bash
+        docker compose -f docker-compose.dev.yml up
+        ```
+      </Tab>
+    </Tabs>
 
-    Or use Nginx, Caddy, or your preferred web server.
+    This starts:
+    - **Vite frontend** on `http://localhost:3000`
+    - **API server** on `http://localhost:8080`
+    - **Valkey (Redis)** on `localhost:6379`
+    - **BullMQ workers** for background jobs
+    - **Localtunnel** for webhook delivery
+  </Step>
+
+  <Step title="Access the Dashboard">
+    Open [http://localhost:3000](http://localhost:3000)
+
+    <Warning>
+      **Authentication Note**: Enter any email at the sign-in page. The OTP will appear in your terminal/console logs (not sent via email in development mode).
+
+      To enable real email delivery, configure [Resend](#optional-email-with-resend) in your `.env` file.
+    </Warning>
   </Step>
 </Steps>
 
-### Option 3: Container Registry Deployment
+## Environment Variables
 
-Build and push Autumn to your container registry:
+### Required Variables
 
-```bash
-# Build production image
-docker build -f docker/Dockerfile -t your-registry.com/autumn:latest .
+These are automatically generated by `bun setup`:
 
-# Push to registry
-docker push your-registry.com/autumn:latest
+```bash server/.env
+# Authentication
+BETTER_AUTH_SECRET=<generated>
+BETTER_AUTH_URL=http://localhost:8080
+CLIENT_URL=http://localhost:3000
+
+# Stripe Encryption
+ENCRYPTION_IV=<generated>
+ENCRYPTION_PASSWORD=<generated>
+
+# Stripe Webhooks
+STRIPE_WEBHOOK_URL=<generated>
+LOCALTUNNEL_RESERVED_KEY=<generated>
+
+# Database
+DATABASE_URL=postgresql://...
+
+# Redis (optional but recommended)
+REDIS_URL=redis://localhost:6379
 ```
 
-Then deploy using your orchestration platform:
-
-<CodeGroup>
-```yaml Kubernetes
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: autumn-server
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: autumn-server
-  template:
-    metadata:
-      labels:
-        app: autumn-server
-    spec:
-      containers:
-      - name: server
-        image: your-registry.com/autumn:latest
-        ports:
-        - containerPort: 8080
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: autumn-secrets
-              key: database-url
-        - name: REDIS_URL
-          value: redis://autumn-redis:6379
+```bash vite/.env
+VITE_FRONTEND_URL=http://localhost:3000
+VITE_BACKEND_URL=http://localhost:8080
 ```
 
-```yaml Docker Compose
-version: '3.8'
-services:
-  server:
-    image: your-registry.com/autumn:latest
-    ports:
-      - "8080:8080"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=redis://valkey:6379
-    depends_on:
-      - valkey
-      
-  workers:
-    image: your-registry.com/autumn:latest
-    command: bun src/workers.ts
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=redis://valkey:6379
-    depends_on:
-      - valkey
-      
-  vite:
-    image: your-registry.com/autumn-frontend:latest
-    ports:
-      - "3000:3000"
-      
-  valkey:
-    image: valkey/valkey:8.0
-    ports:
-      - "6379:6379"
-```
-</CodeGroup>
+### Optional Variables
 
-## Redis/Valkey Configuration
+<AccordionGroup>
+  <Accordion title="Google OAuth" icon="google">
+    Enable Google sign-in:
 
-Autumn uses Redis (or Valkey, a Redis-compatible fork) for:
+    ```bash
+    GOOGLE_CLIENT_ID=your-client-id
+    GOOGLE_CLIENT_SECRET=your-client-secret
+    ```
 
-- **Rate Limiting** - API request throttling
-- **Caching** - Performance optimization
-- **Usage Metering** - Real-time feature consumption tracking
-- **Job Queues** - BullMQ background processing
+    Get these from [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+  </Accordion>
 
-### Self-Managed Redis
+  <Accordion title="Email with Resend" icon="envelope">
+    Send OTP emails and transactional messages:
 
-Run Redis locally or on your infrastructure:
+    ```bash
+    RESEND_API_KEY=re_...
+    RESEND_DOMAIN=yourdomain.com
+    ```
 
-```bash
-# Docker
-docker run -d -p 6379:6379 redis:7-alpine
+    Sign up at [resend.com](https://resend.com) for a free API key.
+  </Accordion>
 
-# Or use Valkey
-docker run -d -p 6379:6379 valkey/valkey:8.0
-```
+  <Accordion title="Webhooks with Svix" icon="webhook">
+    Enable webhook delivery to your users:
 
-Update `REDIS_URL` in `server/.env`:
+    ```bash
+    SVIX_API_KEY=sk_...
+    ```
 
-```bash
-REDIS_URL=redis://your-redis-host:6379
-```
+    Get an API key at [svix.com](https://www.svix.com).
+  </Accordion>
 
-### Managed Redis Providers
+  <Accordion title="Usage Analytics with ClickHouse" icon="chart-line">
+    Store usage events for analytics:
 
-For production, consider managed Redis services:
+    ```bash
+    CLICKHOUSE_URL=https://your-instance.clickhouse.cloud
+    CLICKHOUSE_USERNAME=default
+    CLICKHOUSE_PASSWORD=...
+    CLICKHOUSE_SKIP_ENSURES=false  # Set to true after first run
+    ```
+  </Accordion>
 
-<CardGroup cols={3}>
-  <Card title="Upstash" icon="cloud" href="https://upstash.com">
-    Serverless Redis with per-request pricing
-  </Card>
-  <Card title="Redis Cloud" icon="database" href="https://redis.com/cloud">
-    Official Redis managed service
-  </Card>
-  <Card title="AWS ElastiCache" icon="aws" href="https://aws.amazon.com/elasticache/">
-    Managed Redis on AWS
-  </Card>
-</CardGroup>
+  <Accordion title="Logging with Axiom" icon="file-lines">
+    Send structured logs to Axiom:
 
-## Stripe Webhook Configuration
+    ```bash
+    AXIOM_TOKEN=xaat-...
+    ```
+  </Accordion>
+
+  <Accordion title="AI Features with Anthropic" icon="robot">
+    Generate singular/plural feature names:
+
+    ```bash
+    ANTHROPIC_API_KEY=sk-ant-...
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Production Deployment
+
+### Docker Deployment
 
 <Steps>
-  <Step title="Create Webhook Endpoint">
-    In your [Stripe Dashboard](https://dashboard.stripe.com/webhooks), create a new webhook endpoint:
-
+  <Step title="Build the Docker Image">
+    ```bash
+    docker build -f docker/Dockerfile -t autumn:latest .
     ```
-    https://api.yourdomain.com/webhooks/stripe
+
+    The Dockerfile:
+    - Uses `oven/bun:1.3.2` as base image
+    - Installs all workspace dependencies
+    - Exposes port 8080 for the API server
+  </Step>
+
+  <Step title="Run the Container">
+    ```bash
+    docker run -p 8080:8080 \
+      -e DATABASE_URL="postgresql://..." \
+      -e REDIS_URL="redis://..." \
+      -e BETTER_AUTH_SECRET="..." \
+      -e ENCRYPTION_IV="..." \
+      -e ENCRYPTION_PASSWORD="..." \
+      autumn:latest
     ```
   </Step>
 
-  <Step title="Select Events">
-    Subscribe to the following events:
+  <Step title="Run Workers (Optional but Recommended)">
+    Start background workers for async tasks:
 
-    - `checkout.session.completed`
-    - `customer.subscription.created`
-    - `customer.subscription.updated`
-    - `customer.subscription.deleted`
-    - `invoice.paid`
-    - `invoice.payment_failed`
-    - `payment_intent.succeeded`
-    - `payment_intent.payment_failed`
-  </Step>
-
-  <Step title="Configure Webhook Secret">
-    Stripe will provide a webhook signing secret (starts with `whsec_`). Store this securely—Autumn retrieves it via your Stripe API keys and stores it encrypted in the database.
+    ```bash
+    docker run \
+      -e DATABASE_URL="postgresql://..." \
+      -e REDIS_URL="redis://..." \
+      autumn:latest \
+      bun workers
+    ```
   </Step>
 </Steps>
 
-<Warning>
-  Never commit webhook secrets or API keys to version control. Use environment variables or a secrets management service.
-</Warning>
+### Database Migrations
 
-## Monitoring and Observability
-
-### Application Logs
-
-Autumn uses [Pino](https://getpino.io/) for structured logging. Logs are written to stdout by default.
-
-**Optional**: Configure Axiom for log aggregation:
-
-```bash server/.env
-AXIOM_TOKEN=your_axiom_token
-```
-
-### Error Tracking
-
-Autumn includes Sentry integration for error tracking:
-
-```bash server/.env
-SENTRY_DSN=your_sentry_dsn
-```
-
-### Usage Analytics
-
-For advanced usage analytics, configure ClickHouse:
-
-```bash server/.env
-CLICKHOUSE_URL=https://your-instance.clickhouse.cloud
-CLICKHOUSE_USERNAME=default
-CLICKHOUSE_PASSWORD=your_password
-CLICKHOUSE_SKIP_ENSURES=false
-```
-
-On first startup, Autumn creates necessary SQL views and functions. After initial setup, set `CLICKHOUSE_SKIP_ENSURES=true` to skip this step on subsequent restarts.
-
-## Scaling Considerations
-
-### Horizontal Scaling
-
-**API Server**: Stateless - scale horizontally by running multiple instances behind a load balancer.
-
-```yaml
-# Kubernetes HPA example
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: autumn-server
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: autumn-server
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-```
-
-**Workers**: Scale worker processes independently based on queue depth.
-
-### Database Connection Pooling
-
-Use connection pooling to handle concurrent requests efficiently:
-
-- **PgBouncer** - Standalone connection pooler
-- **Supabase Pooler** - Built-in if using Supabase
-- **AWS RDS Proxy** - Managed pooling for RDS
-
-### Redis High Availability
-
-For production resilience:
-
-- **Redis Sentinel** - Automatic failover
-- **Redis Cluster** - Horizontal scaling and sharding
-- **Managed Services** - Upstash, Redis Cloud, ElastiCache with built-in HA
-
-## Security Best Practices
-
-<AccordionGroup>
-  <Accordion title="Use HTTPS Everywhere" icon="lock">
-    Always use HTTPS for both API and dashboard in production. Configure SSL/TLS certificates using:
-    - Let's Encrypt (free)
-    - Cloudflare
-    - AWS ACM
-    - Your hosting provider's SSL solution
-  </Accordion>
-
-  <Accordion title="Secure Environment Variables" icon="key">
-    Never commit `.env` files to version control. Use:
-    - Kubernetes Secrets
-    - AWS Secrets Manager
-    - Hashicorp Vault
-    - Doppler or Infisical
-  </Accordion>
-
-  <Accordion title="Enable Rate Limiting" icon="shield">
-    Autumn includes built-in rate limiting via Redis. Ensure `REDIS_URL` is configured to enable protection against abuse.
-  </Accordion>
-
-  <Accordion title="Restrict Database Access" icon="database">
-    Configure PostgreSQL to only accept connections from:
-    - Your application servers
-    - Your VPC/private network
-    - Specific IP allowlists
-  </Accordion>
-
-  <Accordion title="Rotate Secrets Regularly" icon="rotate">
-    Implement a rotation policy for:
-    - `BETTER_AUTH_SECRET`
-    - Database credentials
-    - API keys (Stripe, Resend, etc.)
-  </Accordion>
-</AccordionGroup>
-
-## Backup and Disaster Recovery
-
-### Database Backups
-
-Schedule regular PostgreSQL backups:
+When deploying updates, run migrations:
 
 ```bash
-# Automated daily backup
-pg_dump -h your-db-host -U autumn_user autumn > backup-$(date +%Y%m%d).sql
+bun db:generate && bun db:migrate
 ```
 
-Or use managed backup solutions:
-- **Supabase** - Automatic daily backups
-- **AWS RDS** - Automated snapshots
-- **Cloud SQL** - Point-in-time recovery
-
-### Redis Persistence
-
-Configure Redis persistence for job queue durability:
+Or in Docker:
 
 ```bash
-# redis.conf
-save 900 1
-save 300 10
-save 60 10000
-
-appendonly yes
-appendfsync everysec
+docker exec autumn-server bun -F @autumn/shared db:migrate
 ```
 
-## Troubleshooting Production Issues
-
-<AccordionGroup>
-  <Accordion title="High API Latency">
-    **Check**:
-    - Database connection pool exhaustion
-    - Redis connection issues
-    - Network latency to external services (Stripe)
-    
-    **Solutions**:
-    - Increase database connection pool size
-    - Scale Redis or use a managed service with more resources
-    - Enable request caching
-  </Accordion>
-
-  <Accordion title="Worker Jobs Failing">
-    **Check**:
-    - Worker logs for error details
-    - Redis connection and memory
-    - External service availability (Stripe, webhooks)
-    
-    **Solutions**:
-    - Increase worker concurrency
-    - Add retry logic with exponential backoff
-    - Monitor BullMQ dashboard for job status
-  </Accordion>
-
-  <Accordion title="Database Migration Issues">
-    **Check**:
-    - Current schema version
-    - Migration logs
-    - Database permissions
-    
-    **Solutions**:
-    - Run migrations manually: `bun db:migrate`
-    - Check for schema conflicts
-    - Ensure database user has DDL permissions
-  </Accordion>
-</AccordionGroup>
-
-## Support and Resources
+### Architecture Components
 
 <CardGroup cols={2}>
-  <Card title="Documentation" icon="book" href="/introduction">
-    Complete guides and API reference
+  <Card title="API Server" icon="server">
+    **Port**: 8080
+
+    Handles all API requests, authentication, and Stripe integration.
   </Card>
-  
-  <Card title="Discord Community" icon="discord" href="https://discord.gg/53emPtY9tA">
-    Get help from the Autumn community
+
+  <Card title="Frontend Dashboard" icon="chart-mixed">
+    **Port**: 3000
+
+    Admin interface for managing products, customers, and analytics.
   </Card>
-  
-  <Card title="GitHub Issues" icon="github" href="https://github.com/useautumn/autumn/issues">
-    Report bugs and request features
+
+  <Card title="Background Workers" icon="gears">
+    Processes async jobs: webhooks, usage aggregation, and invoice generation.
   </Card>
-  
-  <Card title="Email Support" icon="envelope" href="mailto:hey@useautumn.com">
-    Direct support from the Autumn team
+
+  <Card title="Redis (Valkey)" icon="memory">
+    **Port**: 6379
+
+    Required for background job queue (BullMQ) and rate limiting.
   </Card>
 </CardGroup>
+
+## Configuration for Production
+
+<Warning>
+  **Security Checklist**:
+  - Use strong, unique secrets for `BETTER_AUTH_SECRET`
+  - Store all credentials in a secret manager (not in code)
+  - Enable HTTPS/TLS for all public endpoints
+  - Use connection pooling for PostgreSQL (e.g., Supabase Pooler)
+  - Restrict database access to your application's IP
+  - Enable Redis authentication if exposed
+</Warning>
+
+### Recommended Stack
+
+- **Database**: Supabase, AWS RDS, or any managed PostgreSQL
+- **Redis**: Upstash, AWS ElastiCache, or self-hosted Valkey
+- **Container Orchestration**: Kubernetes, AWS ECS, or Railway
+- **Monitoring**: Sentry, Axiom, or your preferred logging service
+
+### Stripe Webhooks
+
+For production, configure a real webhook endpoint:
+
+1. Deploy your API server to a public URL
+2. In Stripe Dashboard → **Developers** → **Webhooks**, add:
+   ```
+   https://your-domain.com/webhooks/stripe
+   ```
+3. Update `server/.env`:
+   ```bash
+   STRIPE_WEBHOOK_URL=https://your-domain.com/webhooks/stripe
+   ```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Database Migration Errors">
+    If you see `SyntaxError: Unexpected end of JSON input`:
+
+    1. Connect to your database
+    2. Drop all tables: `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`
+    3. Run migrations again: `bun db:generate && bun db:migrate`
+
+    This is a [known Drizzle issue](https://github.com/drizzle-team/drizzle-orm/issues/4529).
+  </Accordion>
+
+  <Accordion title="Localtunnel Connection Issues">
+    If Stripe webhooks aren't being delivered locally:
+
+    1. Check that localtunnel service is running in Docker logs
+    2. Verify `LOCALTUNNEL_RESERVED_KEY` matches in `.env`
+    3. Test the tunnel URL manually in your browser
+  </Accordion>
+
+  <Accordion title="Port Conflicts">
+    If ports 3000 or 8080 are in use:
+
+    1. Stop the conflicting services
+    2. Or modify port mappings in `docker-compose.*.yml`
+  </Accordion>
+
+  <Accordion title="Authentication Issues">
+    If you can't sign in:
+
+    1. Check console logs for the OTP code
+    2. Verify `BETTER_AUTH_SECRET` is set
+    3. Ensure `BETTER_AUTH_URL` and `CLIENT_URL` match your deployment URLs
+  </Accordion>
+</AccordionGroup>
+
+## Updating Autumn
+
+To update to the latest version:
+
+```bash
+git pull origin main
+bun install
+bun db:generate && bun db:migrate
+docker compose -f docker-compose.unix.yml up --build
+```
 
 ## Next Steps
 
-Now that you have Autumn deployed:
-
 <CardGroup cols={2}>
-  <Card title="Connect Stripe" icon="stripe">
-    Configure your Stripe account in the dashboard settings
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Get your first billing flow working
   </Card>
-  
-  <Card title="Create Products" icon="box" href="/concepts/products-and-plans">
-    Set up your pricing models
+  <Card title="Stripe Setup" icon="stripe" href="/integration/stripe-setup">
+    Connect your Stripe account
   </Card>
-  
-  <Card title="Integrate Your App" icon="code" href="/sdks/introduction">
-    Add Autumn SDK to your application
+  <Card title="API Keys" icon="key" href="/api-reference/authentication">
+    Generate API keys for your app
   </Card>
-  
-  <Card title="Monitor Usage" icon="chart-line" href="/dashboard/analytics">
-    Track billing metrics and customer usage
+  <Card title="GitHub Repository" icon="github" href="https://github.com/useautumn/autumn">
+    View source code and contribute
   </Card>
 </CardGroup>
+
+<Tip>
+  **Need Help?** Join our [Discord community](https://discord.gg/53emPtY9tA) or email [hey@useautumn.com](mailto:hey@useautumn.com) for support.
+</Tip>

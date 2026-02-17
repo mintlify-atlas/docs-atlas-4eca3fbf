@@ -1,5 +1,5 @@
 ---
-title: "Webhooks"
+title: "Handle Webhooks"
 description: "Listen to billing events and automate workflows with real-time webhooks"
 ---
 
@@ -14,7 +14,7 @@ Webhooks notify your application when important events happen in Autumn. Use web
 - **Send notifications** - Email customers about billing changes
 - **Update analytics** - Track subscription metrics in real-time
 
-Autumn sends HTTP POST requests to your webhook endpoint whenever events occur.
+Autumn sends HTTP POST requests to your webhook endpoint using Svix for secure, reliable delivery.
 
 ## Setting Up Webhooks
 
@@ -61,107 +61,87 @@ Autumn sends HTTP POST requests to your webhook endpoint whenever events occur.
   </Step>
 
   <Step title="Test the integration">
-    Send a test event from the dashboard to verify your endpoint is working:
-
-    ```bash
-    # The dashboard will send a test event
-    # Check your logs to confirm receipt
-    ```
+    Send a test event from the dashboard to verify your endpoint is working.
   </Step>
 </Steps>
 
 ## Webhook Events
 
-Autumn sends webhooks for the following events:
-
 ### Customer Product Events
 
 **`customer.product.created`** - Customer subscribed to a product
 
-```json
+```typescript
 {
-  "type": "customer.product.created",
-  "data": {
-    "customer_id": "customer_123",
-    "product_id": "pro_plan",
-    "status": "active",
-    "scenario": "subscription_started"
+  type: "customer.product.created",
+  data: {
+    customer_id: "customer_123",
+    product_id: "pro_plan",
+    status: "active",
+    scenario: "subscription_started",
+    updated_product: {
+      id: "pro_plan",
+      name: "Pro Plan"
+    }
   }
 }
 ```
 
 **`customer.product.updated`** - Product status or configuration changed
 
-```json
+```typescript
 {
-  "type": "customer.product.updated",
-  "data": {
-    "customer_id": "customer_123",
-    "product_id": "pro_plan",
-    "status": "active",
-    "scenario": "subscription_renewed"
+  type: "customer.product.updated",
+  data: {
+    customer_id: "customer_123",
+    product_id: "pro_plan",
+    status: "active",
+    scenario: "subscription_renewed",
+    updated_product: {
+      id: "pro_plan",
+      name: "Pro Plan"
+    }
   }
 }
 ```
+
+Common scenarios:
+- `subscription_started` - New subscription activated
+- `subscription_renewed` - Subscription renewed for new period
+- `subscription_upgraded` - Customer upgraded to higher tier
+- `subscription_downgraded` - Customer downgraded to lower tier
+- `subscription_canceled` - Subscription canceled
 
 **`customer.product.deleted`** - Subscription canceled or expired
 
-```json
+```typescript
 {
-  "type": "customer.product.deleted",
-  "data": {
-    "customer_id": "customer_123",
-    "product_id": "pro_plan",
-    "status": "canceled",
-    "canceled_at": "2026-02-17T12:00:00Z"
+  type: "customer.product.deleted",
+  data: {
+    customer_id: "customer_123",
+    product_id: "pro_plan",
+    status: "canceled",
+    canceled_at: "2026-02-17T12:00:00Z"
   }
 }
 ```
-
-### Subscription Lifecycle Events
-
-**`subscription.created`** - New subscription started
-
-**`subscription.updated`** - Subscription modified (upgrade, downgrade, etc.)
-
-**`subscription.trial_ending`** - Trial period ending soon (3 days before)
-
-**`subscription.trial_ended`** - Trial period ended
-
-**`subscription.renewed`** - Subscription renewed for new period
-
-**`subscription.canceled`** - Subscription canceled
-
-**`subscription.expired`** - Subscription expired without renewal
-
-### Payment Events
-
-**`invoice.created`** - New invoice generated
-
-**`invoice.paid`** - Invoice paid successfully
-
-**`invoice.payment_failed`** - Payment failed
-
-**`payment.succeeded`** - Payment processed successfully
-
-**`payment.failed`** - Payment failed
 
 ### Usage Events
 
 **`customer.threshold_reached`** - Customer hit usage threshold
 
-```json
+```typescript
 {
-  "type": "customer.threshold_reached",
-  "data": {
-    "customer_id": "customer_123",
-    "feature": {
-      "id": "api_calls",
-      "name": "API Calls"
+  type: "customer.threshold_reached",
+  data: {
+    customer_id: "customer_123",
+    feature: {
+      id: "api_calls",
+      name: "API Calls"
     },
-    "threshold": 90,
-    "current_usage": 9000,
-    "limit": 10000
+    threshold: 90,
+    current_usage: 9000,
+    limit: 10000
   }
 }
 ```
@@ -173,7 +153,7 @@ Autumn sends webhooks for the following events:
 Grant access when customers subscribe:
 
 ```typescript
-async function handleWebhookEvent(event) {
+async function handleWebhookEvent(event: { type: string; data: any }) {
   switch (event.type) {
     case "customer.product.created":
       if (event.data.scenario === "subscription_started") {
@@ -186,18 +166,25 @@ async function handleWebhookEvent(event) {
   }
 }
 
-async function provisionAccess({ customerId, productId }) {
+async function provisionAccess({ customerId, productId }: {
+  customerId: string;
+  productId: string;
+}) {
   // Enable features in your system
   await db.users.update(
     { autumnCustomerId: customerId },
     { plan: productId, accessGranted: true }
   );
 
+  // Get user email
+  const user = await db.users.findOne({ autumnCustomerId: customerId });
+
   // Send welcome email
   await sendEmail({
     to: user.email,
     subject: "Welcome to Pro!",
-    template: "subscription_started"
+    template: "subscription_started",
+    data: { productId }
   });
 }
 ```
@@ -216,12 +203,18 @@ case "customer.product.deleted":
   }
   break;
 
-async function revokeAccess({ customerId, productId }) {
+async function revokeAccess({ customerId, productId }: {
+  customerId: string;
+  productId: string;
+}) {
   // Disable features
   await db.users.update(
     { autumnCustomerId: customerId },
     { plan: "free", accessGranted: false }
   );
+
+  // Get user email
+  const user = await db.users.findOne({ autumnCustomerId: customerId });
 
   // Send cancellation email
   await sendEmail({
@@ -232,30 +225,35 @@ async function revokeAccess({ customerId, productId }) {
 }
 ```
 
-### Handling Failed Payments
+### Handling Upgrades and Downgrades
 
-Notify customers and prevent access loss:
+Update access when customers change plans:
 
 ```typescript
-case "invoice.payment_failed":
-  const customer = await getCustomer(event.data.customer_id);
+case "customer.product.updated":
+  const { scenario, customer_id, updated_product } = event.data;
   
-  // Send payment failure email
-  await sendEmail({
-    to: customer.email,
-    subject: "Payment Failed - Action Required",
-    template: "payment_failed",
-    data: {
-      amount: event.data.amount,
-      retryDate: event.data.next_retry
-    }
-  });
-
-  // Set grace period (don't revoke immediately)
-  await db.users.update(
-    { autumnCustomerId: event.data.customer_id },
-    { paymentStatus: "past_due", gracePeriodEnd: addDays(new Date(), 3) }
-  );
+  if (scenario === "subscription_upgraded") {
+    // Grant additional features
+    await updateFeatureAccess(customer_id, updated_product.id);
+    
+    await sendEmail({
+      to: await getCustomerEmail(customer_id),
+      template: "plan_upgraded",
+      data: { plan: updated_product.name }
+    });
+  }
+  
+  if (scenario === "subscription_downgraded") {
+    // Remove premium features (may happen at period end)
+    await updateFeatureAccess(customer_id, updated_product.id);
+    
+    await sendEmail({
+      to: await getCustomerEmail(customer_id),
+      template: "plan_downgraded",
+      data: { plan: updated_product.name }
+    });
+  }
   break;
 ```
 
@@ -266,6 +264,8 @@ Notify customers when approaching limits:
 ```typescript
 case "customer.threshold_reached":
   const { customer_id, feature, threshold, current_usage, limit } = event.data;
+  
+  const customer = await autumn.customers.get(customer_id);
   
   await sendEmail({
     to: customer.email,
@@ -284,21 +284,32 @@ case "customer.threshold_reached":
 
 ## Webhook Verification
 
-Always verify webhook signatures to ensure requests are from Autumn:
+Always verify webhook signatures using Svix:
 
 ```typescript
 import { Webhook } from "svix";
 
-function verifyWebhook(rawBody, headers) {
-  const wh = new Webhook(process.env.AUTUMN_WEBHOOK_SECRET);
+function verifyWebhook(
+  rawBody: string,
+  headers: Record<string, string | undefined>
+) {
+  const wh = new Webhook(process.env.AUTUMN_WEBHOOK_SECRET!);
+  
+  const svixId = headers["svix-id"];
+  const svixTimestamp = headers["svix-timestamp"];
+  const svixSignature = headers["svix-signature"];
+
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    throw new Error("Missing svix headers");
+  }
   
   try {
     const event = wh.verify(rawBody, {
-      "svix-id": headers["svix-id"],
-      "svix-timestamp": headers["svix-timestamp"],
-      "svix-signature": headers["svix-signature"]
+      "svix-id": svixId,
+      "svix-timestamp": svixTimestamp,
+      "svix-signature": svixSignature
     });
-    return event;
+    return event as { type: string; data: Record<string, unknown> };
   } catch (err) {
     throw new Error("Invalid webhook signature");
   }
@@ -311,11 +322,11 @@ Never process unverified webhooks. Attackers could send fake events to manipulat
 
 ## Retry Logic
 
-If your endpoint returns an error or times out, Autumn automatically retries:
+Autumn automatically retries failed webhook deliveries:
 
 - Immediate retry
 - After 5 minutes
-- After 15 minutes
+- After 15 minutes  
 - After 1 hour
 - After 3 hours
 - After 6 hours
@@ -333,15 +344,14 @@ app.post("/webhooks/autumn", async (req, res) => {
     // Acknowledge immediately
     return res.status(200).json({ received: true });
   } catch (err) {
-    // Return 200 even if processing fails to stop retries
-    console.error("Webhook processing error:", err);
-    return res.status(200).json({ error: err.message });
+    console.error("Webhook verification error:", err);
+    return res.status(400).json({ error: err.message });
   }
 });
 ```
 
 <Tip>
-Respond quickly (< 3 seconds) to acknowledge the webhook, then process events asynchronously to avoid timeouts.
+Respond quickly (within 3 seconds) to acknowledge the webhook, then process events asynchronously to avoid timeouts.
 </Tip>
 
 ## Idempotency
@@ -349,7 +359,7 @@ Respond quickly (< 3 seconds) to acknowledge the webhook, then process events as
 Webhooks may be delivered more than once. Make your handlers idempotent:
 
 ```typescript
-async function handleWebhookEvent(event) {
+async function handleWebhookEvent(event: any) {
   // Check if already processed
   const existing = await db.webhookEvents.findOne({
     eventId: event.id
@@ -386,43 +396,74 @@ npm install -g ngrok
 ngrok http 3000
 
 # Use the ngrok URL in Autumn dashboard
-https://abc123.ngrok.io/webhooks/autumn
+# https://abc123.ngrok.io/webhooks/autumn
 ```
 
 ### Test Events
 
-Send test events from the dashboard or using CLI:
+Send test events from the dashboard to verify your handler:
 
-```bash
-# Send test event
-curl -X POST https://yourapp.com/webhooks/autumn \
-  -H "Content-Type: application/json" \
-  -H "svix-id: test_123" \
-  -H "svix-timestamp: 1234567890" \
-  -H "svix-signature: test_signature" \
-  -d '{
-    "type": "customer.product.created",
-    "data": {
-      "customer_id": "test_customer",
-      "product_id": "test_product"
-    }
-  }'
+```typescript
+// Your handler should process test events
+if (event.type === "customer.product.created") {
+  console.log("Processing test event:", event.data);
+}
 ```
 
-## Monitoring Webhooks
+## Complete Example
 
-Track webhook delivery in the Autumn dashboard:
+Full webhook handler with all patterns:
 
-- Delivery status (success/failure)
-- Response times
-- Error messages
-- Retry attempts
-- Event payload
+```typescript
+import express from "express";
+import { Webhook } from "svix";
 
-Set up alerts for:
-- High failure rate
-- Slow response times
-- Consecutive failures
+const app = express();
+
+app.post("/webhooks/autumn", 
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    try {
+      // Verify webhook
+      const wh = new Webhook(process.env.AUTUMN_WEBHOOK_SECRET!);
+      const event = wh.verify(req.body.toString(), {
+        "svix-id": req.headers["svix-id"] as string,
+        "svix-timestamp": req.headers["svix-timestamp"] as string,
+        "svix-signature": req.headers["svix-signature"] as string
+      }) as { type: string; data: any };
+
+      // Handle event
+      switch (event.type) {
+        case "customer.product.created":
+          if (event.data.scenario === "subscription_started") {
+            await provisionAccess(event.data);
+          }
+          break;
+
+        case "customer.product.updated":
+          await updateFeatureAccess(event.data);
+          break;
+
+        case "customer.product.deleted":
+          await revokeAccess(event.data);
+          break;
+
+        case "customer.threshold_reached":
+          await sendUsageAlert(event.data);
+          break;
+
+        default:
+          console.log("Unhandled event type:", event.type);
+      }
+
+      res.json({ received: true });
+    } catch (error) {
+      console.error("Webhook error:", error);
+      res.status(400).json({ error: "Webhook processing failed" });
+    }
+  }
+);
+```
 
 ## Best Practices
 
@@ -431,7 +472,7 @@ Set up alerts for:
 </Card>
 
 <Card title="Verify signatures" icon="shield">
-  Always verify webhook signatures before processing. Never trust unverified requests.
+  Always verify webhook signatures using Svix before processing. Never trust unverified requests.
 </Card>
 
 <Card title="Handle duplicates" icon="copy">
@@ -443,19 +484,16 @@ Set up alerts for:
 </Card>
 
 <Card title="Handle errors gracefully" icon="triangle-exclamation">
-  Return 200 even if processing fails. Use a dead letter queue for failed events.
+  Return 200 for successful verification but log processing errors separately.
 </Card>
 
 <Card title="Monitor delivery" icon="chart-line">
-  Set up alerts for webhook failures. Check the dashboard regularly for delivery issues.
-</Card>
-
-<Card title="Version your handlers" icon="code-branch">
-  Support multiple webhook versions to avoid breaking changes when updating your endpoint.
+  Check the Svix dashboard regularly for delivery issues and failed webhooks.
 </Card>
 
 ## Related Resources
 
-- [Subscriptions Guide](/guides/subscriptions)
+- [Attach Products Guide](/guides/attach-products)
+- [Manage Customers Guide](/guides/manage-customers)
 - [Customers Concept](/concepts/customers)
 - [Products and Plans](/concepts/products-and-plans)

@@ -1,0 +1,910 @@
+---
+title: "RevenueCat Integration"
+description: "Accept iOS and Android in-app purchases with RevenueCat and manage mobile subscriptions in Autumn"
+---
+
+## Overview
+
+RevenueCat is a subscription platform for mobile apps that handles iOS App Store and Google Play Store in-app purchases. Integrate RevenueCat with Autumn to:
+
+- **Unify billing logic** - Manage mobile and web subscriptions from one system
+- **Cross-platform support** - Handle iOS, Android, and web customers consistently
+- **Simplified compliance** - Let RevenueCat handle App Store and Play Store requirements
+- **Feature gating** - Control access to features based on mobile subscriptions
+- **Analytics** - Track mobile subscription metrics alongside web subscriptions
+
+Autumn receives webhook events from RevenueCat and maintains the source of truth for customer entitlements, allowing you to check access using the same API regardless of payment source.
+
+## Prerequisites
+
+<Steps>
+  <Step title="RevenueCat Account">
+    Create a [RevenueCat account](https://app.revenuecat.com) and set up your mobile app project.
+  </Step>
+
+  <Step title="App Store Configuration">
+    Configure in-app purchases in App Store Connect (iOS) and/or Google Play Console (Android).
+  </Step>
+
+  <Step title="Autumn Instance">
+    Have an Autumn instance running (cloud or self-hosted) with API access.
+  </Step>
+</Steps>
+
+## Configuration
+
+### 1. Get RevenueCat Credentials
+
+Collect the following from your RevenueCat dashboard:
+
+<Steps>
+  <Step title="Project ID">
+    Go to **Project Settings** → **API Keys** in RevenueCat dashboard.
+
+    Copy your Project ID (looks like `proj_abc123`).
+  </Step>
+
+  <Step title="API Key">
+    Generate a new API key with read permissions:
+
+    - Click **Generate New API Key**
+    - Select **Read** scope
+    - Copy the API key (starts with `sk_revenuecat_`)
+  </Step>
+
+  <Step title="Webhook Secret">
+    We'll configure this in the next section after setting up the webhook endpoint.
+  </Step>
+</Steps>
+
+### 2. Configure Autumn
+
+Add RevenueCat configuration to your Autumn organization:
+
+<Tabs>
+  <Tab title="Dashboard">
+    Configure via the Autumn dashboard:
+
+    1. Go to **Settings** → **Payment Providers**
+    2. Select **RevenueCat**
+    3. Enter credentials:
+       - **Project ID** - Your RevenueCat project ID
+       - **API Key** - Your RevenueCat API key
+       - **Webhook Secret** - Leave blank for now
+    4. For sandbox environment:
+       - **Sandbox Project ID** - Your sandbox project ID
+       - **Sandbox API Key** - Your sandbox API key
+    5. Click **Save**
+  </Tab>
+
+  <Tab title="Self-Hosted">
+    Add environment variables to your Autumn instance:
+
+    ```bash .env
+    # Production
+    REVENUECAT_PROJECT_ID=proj_abc123
+    REVENUECAT_API_KEY=sk_revenuecat_...
+
+    # Sandbox/Test
+    REVENUECAT_SANDBOX_PROJECT_ID=proj_sandbox_xyz
+    REVENUECAT_SANDBOX_API_KEY=sk_revenuecat_test_...
+    ```
+
+    Store these values in your organization's `processor_configs`:
+
+    ```typescript
+    await db.organizations.update(
+      { id: orgId },
+      {
+        processor_configs: {
+          revenuecat: {
+            project_id: process.env.REVENUECAT_PROJECT_ID,
+            api_key: encryptData(process.env.REVENUECAT_API_KEY),
+            sandbox_project_id: process.env.REVENUECAT_SANDBOX_PROJECT_ID,
+            sandbox_api_key: encryptData(process.env.REVENUECAT_SANDBOX_API_KEY)
+          }
+        }
+      }
+    );
+    ```
+  </Tab>
+</Tabs>
+
+### 3. Configure Webhook
+
+Set up RevenueCat to send webhook events to Autumn:
+
+<Steps>
+  <Step title="Get Webhook URL">
+    Your Autumn webhook URL follows this format:
+
+    ```bash
+    https://your-autumn-instance.com/webhooks/revenuecat/:orgId/:env
+    ```
+
+    Replace:
+    - `your-autumn-instance.com` - Your Autumn domain
+    - `:orgId` - Your Autumn organization ID
+    - `:env` - `live` or `sandbox`
+
+    Example:
+    ```bash
+    https://api.useautumn.com/webhooks/revenuecat/org_abc123/live
+    ```
+  </Step>
+
+  <Step title="Add Webhook in RevenueCat">
+    In RevenueCat dashboard:
+
+    1. Go to **Project Settings** → **Integrations**
+    2. Click **Add Integration**
+    3. Select **Webhooks**
+    4. Enter your Autumn webhook URL
+    5. Click **Add Webhooks Integration**
+    6. Copy the webhook authorization token
+  </Step>
+
+  <Step title="Save Webhook Secret">
+    Add the webhook secret to Autumn:
+
+    **Dashboard**: Update the **Webhook Secret** field in Payment Providers settings.
+
+    **Self-Hosted**: Add to environment variables:
+
+    ```bash .env
+    REVENUECAT_WEBHOOK_SECRET=your_webhook_token
+    REVENUECAT_SANDBOX_WEBHOOK_SECRET=your_sandbox_webhook_token
+    ```
+
+    Store in organization config:
+
+    ```typescript
+    await db.organizations.update(
+      { id: orgId },
+      {
+        processor_configs: {
+          revenuecat: {
+            ...existing,
+            webhook_secret: process.env.REVENUECAT_WEBHOOK_SECRET,
+            sandbox_webhook_secret: process.env.REVENUECAT_SANDBOX_WEBHOOK_SECRET
+          }
+        }
+      }
+    );
+    ```
+  </Step>
+</Steps>
+
+## Product Mapping
+
+Map RevenueCat product identifiers to Autumn products:
+
+### 1. Create Autumn Products
+
+First, define your products in Autumn:
+
+```typescript
+import Autumn from 'autumn-js';
+
+const autumn = new Autumn({
+  secretKey: process.env.AUTUMN_SECRET_KEY
+});
+
+// Create a product
+const { data } = await autumn.products.create({
+  id: 'pro_plan',
+  name: 'Pro Plan',
+  description: 'Full access to all premium features',
+  prices: [
+    {
+      amount: 999, // $9.99
+      currency: 'USD',
+      interval: 'month',
+      interval_count: 1
+    }
+  ],
+  features: [
+    { id: 'api_calls', limit: 10000 },
+    { id: 'premium_support', limit: 1 }
+  ]
+});
+```
+
+### 2. Map RevenueCat Products
+
+Create mappings between RevenueCat product IDs and Autumn products:
+
+<Tabs>
+  <Tab title="API">
+    Use the Autumn API to create mappings:
+
+    ```typescript
+    // Map RevenueCat products to Autumn product
+    await fetch('https://api.useautumn.com/v1/integrations/revenuecat/mappings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.AUTUMN_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        autumn_product_id: 'pro_plan',
+        revenuecat_product_ids: [
+          'com.yourapp.pro.monthly',    // iOS monthly
+          'com.yourapp.pro.yearly',     // iOS yearly
+          'yourapp_pro_monthly',        // Android monthly
+          'yourapp_pro_yearly'          // Android yearly
+        ]
+      })
+    });
+    ```
+  </Tab>
+
+  <Tab title="Dashboard">
+    Configure mappings in the Autumn dashboard:
+
+    1. Go to **Settings** → **Payment Providers** → **RevenueCat**
+    2. Click **Product Mappings**
+    3. Select an Autumn product
+    4. Add RevenueCat product IDs:
+       - iOS: Bundle ID + product ID (e.g., `com.yourapp.pro.monthly`)
+       - Android: Product ID from Play Console (e.g., `yourapp_pro_monthly`)
+    5. Click **Save Mapping**
+  </Tab>
+
+  <Tab title="Database">
+    Directly insert into the `revenuecat_mappings` table:
+
+    ```typescript
+    import { db } from './database';
+    import { revenuecatMappings } from '@autumn/shared';
+
+    await db.insert(revenuecatMappings).values({
+      org_id: 'org_abc123',
+      env: 'live',
+      autumn_product_id: 'pro_plan',
+      revenuecat_product_ids: [
+        'com.yourapp.pro.monthly',
+        'com.yourapp.pro.yearly',
+        'yourapp_pro_monthly',
+        'yourapp_pro_yearly'
+      ]
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+  Multiple RevenueCat product IDs can map to a single Autumn product. This allows you to have different pricing for iOS, Android, monthly, and yearly plans while treating them as the same product tier.
+</Info>
+
+## Webhook Events
+
+Autumn handles the following RevenueCat webhook events:
+
+### Initial Purchase
+
+**Event**: `INITIAL_PURCHASE`
+
+Fired when a customer makes their first purchase.
+
+```json RevenueCat Event
+{
+  "event": {
+    "type": "INITIAL_PURCHASE",
+    "app_user_id": "user_123",
+    "product_id": "com.yourapp.pro.monthly",
+    "period_type": "NORMAL",
+    "purchased_at_ms": 1708185600000,
+    "expiration_at_ms": 1710777600000,
+    "store": "APP_STORE",
+    "price": 9.99,
+    "currency": "USD"
+  }
+}
+```
+
+**Autumn Processing**:
+
+1. Maps `com.yourapp.pro.monthly` to `pro_plan` using product mappings
+2. Creates or fetches customer with ID `user_123`
+3. Creates a new `customer_product` record with status `active`
+4. Grants access to all features in `pro_plan`
+
+See implementation: `handleRevenuecatInitialPurchase.ts:22`
+
+### Renewal
+
+**Event**: `RENEWAL`
+
+Fired when a subscription renews successfully.
+
+```json
+{
+  "event": {
+    "type": "RENEWAL",
+    "app_user_id": "user_123",
+    "product_id": "com.yourapp.pro.monthly",
+    "period_type": "NORMAL",
+    "purchased_at_ms": 1710777600000,
+    "expiration_at_ms": 1713369600000
+  }
+}
+```
+
+**Autumn Processing**:
+
+- If customer has active subscription: No action needed (extends access automatically)
+- If customer was past due: Updates status to `active`
+- If customer upgraded/downgraded: Creates new `customer_product` and expires old one
+
+See implementation: `handleRevenucatRenewal.ts:21`
+
+### Cancellation
+
+**Event**: `CANCELLATION`
+
+Fired when a customer cancels their subscription (access continues until expiration).
+
+```json
+{
+  "event": {
+    "type": "CANCELLATION",
+    "app_user_id": "user_123",
+    "product_id": "com.yourapp.pro.monthly",
+    "expiration_at_ms": 1713369600000
+  }
+}
+```
+
+**Autumn Processing**:
+
+1. Marks the `customer_product` as canceled
+2. Sets `canceled_at` timestamp
+3. Sets `ended_at` to the expiration date
+4. Customer retains access until expiration
+
+See implementation: `handleRevenuecatCancellation.ts:8`
+
+### Expiration
+
+**Event**: `EXPIRATION`
+
+Fired when a subscription expires (either canceled or unpaid).
+
+```json
+{
+  "event": {
+    "type": "EXPIRATION",
+    "app_user_id": "user_123",
+    "product_id": "com.yourapp.pro.monthly",
+    "expiration_at_ms": 1713369600000
+  }
+}
+```
+
+**Autumn Processing**:
+
+1. Updates `customer_product` status to `expired`
+2. Sets `ended_at` timestamp
+3. Revokes access to product features
+4. Activates default/free product if configured
+
+See implementation: `handleRevenuecatExpiration.ts:9`
+
+### Billing Issue
+
+**Event**: `BILLING_ISSUE`
+
+Fired when a subscription renewal payment fails.
+
+```json
+{
+  "event": {
+    "type": "BILLING_ISSUE",
+    "app_user_id": "user_123",
+    "product_id": "com.yourapp.pro.monthly"
+  }
+}
+```
+
+**Autumn Processing**:
+
+1. Updates `customer_product` status to `past_due`
+2. Customer may retain temporary access based on grace period settings
+3. Access will be revoked if payment is not resolved
+
+See implementation: `handleRevenuecatBillingIssue.ts:13`
+
+### Uncancellation
+
+**Event**: `UNCANCELLATION`
+
+Fired when a customer reactivates a previously canceled subscription.
+
+```json
+{
+  "event": {
+    "type": "UNCANCELLATION",
+    "app_user_id": "user_123",
+    "product_id": "com.yourapp.pro.monthly",
+    "expiration_at_ms": 1713369600000
+  }
+}
+```
+
+**Autumn Processing**:
+
+1. Removes `canceled_at` timestamp
+2. Clears `ended_at` date
+3. Reactivates subscription
+4. Restores access to product features
+
+### Non-Renewing Purchase
+
+**Event**: `NON_RENEWING_PURCHASE`
+
+Fired for one-time in-app purchases (consumables or non-consumables).
+
+```json
+{
+  "event": {
+    "type": "NON_RENEWING_PURCHASE",
+    "app_user_id": "user_123",
+    "product_id": "com.yourapp.credits.100",
+    "purchased_at_ms": 1708185600000,
+    "price": 4.99
+  }
+}
+```
+
+**Autumn Processing**:
+
+1. Creates a one-time `customer_product` (no expiration)
+2. Grants credits or one-time access
+3. Does not auto-renew
+
+## Mobile App Integration
+
+### iOS (Swift)
+
+Integrate RevenueCat in your iOS app:
+
+```swift AppDelegate.swift
+import RevenueCat
+
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    
+    // Configure RevenueCat
+    Purchases.configure(withAPIKey: "appl_abc123", appUserID: "user_123")
+    
+    return true
+}
+```
+
+### Purchase Flow
+
+```swift PurchaseManager.swift
+import RevenueCat
+
+class PurchaseManager {
+    func purchaseProPlan() async throws {
+        // Fetch offerings
+        let offerings = try await Purchases.shared.offerings()
+        
+        guard let package = offerings.current?.availablePackages.first else {
+            throw PurchaseError.noPackages
+        }
+        
+        // Make purchase
+        let result = try await Purchases.shared.purchase(package: package)
+        
+        // Purchase successful!
+        // Autumn will receive webhook and grant access
+        print("Purchased: \(result.customerInfo.entitlements)")
+    }
+}
+```
+
+### Check Entitlements
+
+```swift FeatureGate.swift
+import RevenueCat
+
+func checkPremiumAccess() async -> Bool {
+    do {
+        let customerInfo = try await Purchases.shared.customerInfo()
+        
+        // Check if user has pro entitlement
+        return customerInfo.entitlements["pro"]?.isActive == true
+    } catch {
+        print("Error checking entitlements: \(error)")
+        return false
+    }
+}
+
+// Usage in view
+Button("Premium Feature") {
+    Task {
+        if await checkPremiumAccess() {
+            // Allow access
+            showPremiumFeature()
+        } else {
+            // Show paywall
+            showPaywall()
+        }
+    }
+}
+```
+
+### Android (Kotlin)
+
+```kotlin MainActivity.kt
+import com.revenuecat.purchases.Purchases
+import com.revenuecat.purchases.PurchasesConfiguration
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Configure RevenueCat
+        Purchases.configure(
+            PurchasesConfiguration.Builder(this, "goog_abc123")
+                .appUserID("user_123")
+                .build()
+        )
+    }
+}
+```
+
+### Purchase Flow
+
+```kotlin PurchaseManager.kt
+import com.revenuecat.purchases.Purchases
+import com.revenuecat.purchases.awaitOfferings
+import com.revenuecat.purchases.awaitPurchase
+
+class PurchaseManager {
+    suspend fun purchaseProPlan() {
+        try {
+            // Fetch offerings
+            val offerings = Purchases.sharedInstance.awaitOfferings()
+            val package = offerings.current?.availablePackages?.firstOrNull()
+                ?: throw Exception("No packages available")
+            
+            // Make purchase
+            val (transaction, customerInfo) = Purchases.sharedInstance.awaitPurchase(package)
+            
+            // Purchase successful
+            println("Purchased: ${customerInfo.entitlements}")
+        } catch (e: Exception) {
+            println("Purchase failed: ${e.message}")
+        }
+    }
+}
+```
+
+## Server-Side Access Control
+
+Use Autumn's API to check customer access from your backend:
+
+```typescript api/features/premium.ts
+import Autumn from 'autumn-js';
+
+const autumn = new Autumn({
+  secretKey: process.env.AUTUMN_SECRET_KEY
+});
+
+export async function checkPremiumAccess(userId: string): Promise<boolean> {
+  try {
+    const { data } = await autumn.check({
+      customerId: userId,
+      featureId: 'premium_features'
+    });
+    
+    return data.allowed;
+  } catch (error) {
+    console.error('Failed to check access:', error);
+    return false; // Fail closed
+  }
+}
+
+// Usage in API endpoint
+app.get('/api/premium-content', async (req, res) => {
+  const userId = req.user.id;
+  
+  const hasAccess = await checkPremiumAccess(userId);
+  
+  if (!hasAccess) {
+    return res.status(403).json({
+      error: 'Premium subscription required',
+      upgrade_url: '/pricing'
+    });
+  }
+  
+  // Return premium content
+  res.json({ data: premiumContent });
+});
+```
+
+<Info>
+  Always verify access on the server side. Client-side checks (iOS/Android) can be bypassed, so critical features should be gated by your backend.
+</Info>
+
+## Customer Identification
+
+### App User ID
+
+RevenueCat uses an `app_user_id` to identify customers. This should match your Autumn customer ID:
+
+```typescript
+// When user signs up
+const userId = 'user_123';
+
+// Create Autumn customer
+await autumn.customers.create({
+  id: userId,
+  email: 'user@example.com',
+  name: 'John Doe'
+});
+
+// Configure RevenueCat with same ID
+// iOS:
+Purchases.configure(withAPIKey: "key", appUserID: userId)
+
+// Android:
+Purchases.configure(
+  PurchasesConfiguration.Builder(context, "key")
+    .appUserID(userId)
+    .build()
+)
+```
+
+### Anonymous Users
+
+Handle anonymous users who later sign in:
+
+```typescript
+// 1. User starts with anonymous ID in app
+// RevenueCat generates: $RCAnonymousID:abc123
+
+// 2. User signs in
+const userId = 'user_456';
+
+// 3. Transfer RevenueCat user
+await Purchases.shared.logIn(userId);
+
+// 4. Create/update Autumn customer
+await autumn.customers.create({
+  id: userId,
+  email: user.email
+});
+
+// RevenueCat will send webhook with new app_user_id
+// Autumn will attach subscriptions to the new customer
+```
+
+## Testing
+
+### Sandbox Environment
+
+Test RevenueCat integration using sandbox:
+
+<Steps>
+  <Step title="Configure Sandbox">
+    Add sandbox credentials to Autumn (see Configuration section).
+  </Step>
+
+  <Step title="Use Sandbox Accounts">
+    iOS: Create sandbox tester accounts in App Store Connect.
+
+    Android: Use test accounts in Google Play Console.
+  </Step>
+
+  <Step title="Test Purchase Flow">
+    Make test purchases in your app using sandbox accounts.
+  </Step>
+
+  <Step title="Verify Webhooks">
+    Check Autumn logs to confirm webhook events are received:
+
+    ```bash
+    # View webhook logs
+    docker logs autumn-server | grep revenuecat
+    ```
+  </Step>
+</Steps>
+
+### Test Events
+
+Send test webhook events to verify integration:
+
+```bash
+curl -X POST https://your-autumn-instance.com/webhooks/revenuecat/org_123/sandbox \
+  -H "Authorization: Bearer your_webhook_secret" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event": {
+      "type": "INITIAL_PURCHASE",
+      "app_user_id": "test_user",
+      "product_id": "com.yourapp.pro.monthly",
+      "period_type": "NORMAL",
+      "purchased_at_ms": 1708185600000,
+      "expiration_at_ms": 1710777600000,
+      "store": "APP_STORE",
+      "price": 9.99,
+      "currency": "USD"
+    },
+    "api_version": "1.0"
+  }'
+```
+
+## Troubleshooting
+
+### Webhooks Not Received
+
+<AccordionGroup>
+  <Accordion title="Verify webhook URL">
+    Check that the webhook URL in RevenueCat matches your Autumn instance:
+
+    ```bash
+    # Correct format
+    https://api.useautumn.com/webhooks/revenuecat/org_abc123/live
+
+    # Common mistakes
+    ❌ Missing /webhooks/revenuecat prefix
+    ❌ Wrong environment (live vs sandbox)
+    ❌ Incorrect organization ID
+    ```
+  </Accordion>
+
+  <Accordion title="Check webhook secret">
+    Ensure the webhook secret is correctly configured:
+
+    ```typescript
+    // Get secret from organization config
+    const secret = org.processor_configs?.revenuecat?.webhook_secret;
+
+    // Compare with Authorization header from RevenueCat
+    if (headers.authorization !== secret) {
+      console.error('Webhook secret mismatch');
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Review RevenueCat logs">
+    Check webhook delivery status in RevenueCat dashboard:
+
+    1. Go to **Project Settings** → **Integrations**
+    2. Click on your webhook integration
+    3. View **Recent Deliveries**
+    4. Check for errors or failed deliveries
+  </Accordion>
+</AccordionGroup>
+
+### Product Not Found
+
+<AccordionGroup>
+  <Accordion title="Verify product mapping">
+    Ensure RevenueCat product ID is mapped to an Autumn product:
+
+    ```typescript
+    // Check mapping exists
+    const mapping = await db
+      .select()
+      .from(revenuecatMappings)
+      .where(
+        arrayContains(revenuecatMappings.revenuecat_product_ids, [
+          'com.yourapp.pro.monthly'
+        ])
+      );
+
+    if (!mapping) {
+      console.error('No mapping found for product');
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Check product exists in Autumn">
+    Verify the Autumn product exists:
+
+    ```typescript
+    const product = await autumn.products.get({
+      productId: 'pro_plan'
+    });
+
+    if (!product) {
+      console.error('Autumn product not found');
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Access Not Granted
+
+<AccordionGroup>
+  <Accordion title="Check customer ID match">
+    Ensure RevenueCat `app_user_id` matches Autumn customer ID:
+
+    ```typescript
+    // RevenueCat webhook
+    const revenuecatUserId = event.app_user_id; // "user_123"
+
+    // Autumn customer
+    const customer = await autumn.customers.get({
+      customerId: revenuecatUserId
+    });
+
+    if (!customer) {
+      console.error('Customer not found in Autumn');
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Verify webhook was processed">
+    Check Autumn logs for webhook processing:
+
+    ```bash
+    # Search for webhook processing logs
+    docker logs autumn-server | grep "INITIAL_PURCHASE"
+    docker logs autumn-server | grep "customer_123"
+    ```
+  </Accordion>
+
+  <Accordion title="Check customer_product status">
+    Query the database to verify subscription status:
+
+    ```typescript
+    const customerProducts = await db
+      .select()
+      .from(customerProducts)
+      .where(
+        and(
+          eq(customerProducts.customer_id, 'user_123'),
+          eq(customerProducts.status, 'active')
+        )
+      );
+
+    console.log('Active subscriptions:', customerProducts);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Card title="Use Same Customer IDs" icon="id-card">
+  Always use the same customer ID in RevenueCat and Autumn. Set RevenueCat's `app_user_id` to match your user's ID when configuring Purchases.
+</Card>
+
+<Card title="Handle Webhook Delays" icon="clock">
+  RevenueCat webhooks may take a few seconds to arrive. Don't rely on immediate access after purchase - show a loading state.
+</Card>
+
+<Card title="Implement Server-Side Checks" icon="server">
+  Always verify access on the server. Client-side checks can be bypassed. Use Autumn's `/check` endpoint for critical features.
+</Card>
+
+<Card title="Test Thoroughly" icon="vial">
+  Test all subscription lifecycle events: purchase, renewal, cancellation, expiration, and billing issues. Use sandbox environment.
+</Card>
+
+<Card title="Monitor Webhook Health" icon="heart-pulse">
+  Set up monitoring for webhook delivery failures. Check RevenueCat dashboard regularly for failed deliveries.
+</Card>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Payment Providers Overview" icon="credit-card" href="/integration/payment-providers/overview">
+    Learn about multi-provider architecture
+  </Card>
+  <Card title="Webhooks Guide" icon="webhook" href="/guides/webhooks">
+    Handle webhook events from Autumn
+  </Card>
+  <Card title="Check Access" icon="shield-check" href="/guides/check-access">
+    Implement feature gating with /check endpoint
+  </Card>
+  <Card title="Products Concept" icon="box" href="/concepts/products-and-plans">
+    Understand Autumn's product model
+  </Card>
+</CardGroup>

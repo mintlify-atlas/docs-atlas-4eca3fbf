@@ -1,0 +1,383 @@
+---
+title: "Update Product"
+api: "POST /plans/{plan_id}"
+---
+
+Updates a product (plan). By default, this creates a new version of the product, preserving existing subscriptions on older versions.
+
+<Warning>
+  Updating a product creates a **new version** by default. Existing subscriptions remain on their current version unless explicitly migrated.
+</Warning>
+
+## Path Parameters
+
+<ParamField path="plan_id" type="string" required>
+  The unique identifier of the product to update.
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="version" type="number">
+  Update a specific version. If omitted, creates a new version based on the latest.
+</ParamField>
+
+<ParamField query="upsert" type="boolean">
+  If `true`, creates the product if it doesn't exist. Otherwise returns an error for non-existent products.
+</ParamField>
+
+<ParamField query="disable_version" type="boolean">
+  If `true`, updates the existing version instead of creating a new version. Use with caution as this affects all active subscriptions.
+</ParamField>
+
+## Request Body
+
+All fields are optional. Only include fields you want to update.
+
+<ParamField body="name" type="string">
+  Update the display name.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Update the description.
+</ParamField>
+
+<ParamField body="group" type="string">
+  Update the grouping identifier.
+</ParamField>
+
+<ParamField body="add_on" type="boolean">
+  Change whether this is an add-on.
+</ParamField>
+
+<ParamField body="auto_enable" type="boolean">
+  Change auto-enable behavior.
+</ParamField>
+
+<ParamField body="archived" type="boolean">
+  Archive or unarchive the product. Archived products can't be attached to new customers.
+</ParamField>
+
+<ParamField body="price" type="object">
+  Update the base subscription price. See [Create Product](/api-reference/products/create#request-body) for schema.
+</ParamField>
+
+<ParamField body="items" type="array">
+  Update the features included in this product. See [Create Product](/api-reference/products/create#request-body) for schema.
+</ParamField>
+
+<ParamField body="free_trial" type="object">
+  Update free trial configuration. See [Create Product](/api-reference/products/create#request-body) for schema.
+</ParamField>
+
+## Response
+
+Returns the updated [Product](/api-reference/products/list#product-object) object.
+
+## Versioning Behavior
+
+### Default: Create New Version
+
+By default, updates create a new version:
+
+```javascript
+// This creates version 2 of the product
+await autumn.plans.update('plan_starter', {
+  price: {
+    amount: 3900,  // Increase price
+    interval: 'month'
+  }
+});
+
+// Existing customers remain on version 1
+// New customers get version 2
+```
+
+### Update Existing Version
+
+Use `disable_version: true` to modify the current version:
+
+```javascript
+// This updates version 1 for all subscribers
+await autumn.plans.update('plan_starter', 
+  {
+    description: 'Updated description'
+  },
+  {
+    disable_version: true
+  }
+);
+```
+
+<Warning>
+  When `disable_version: true`, changes affect **all active subscriptions** immediately. Use this carefully, typically only for non-breaking changes like descriptions or display text.
+</Warning>
+
+### Update Specific Version
+
+Update a specific version using the `version` query parameter:
+
+```javascript
+// Update version 2 specifically
+await autumn.plans.update('plan_starter',
+  {
+    name: 'Starter Plan (Updated)'
+  },
+  {
+    version: 2,
+    disable_version: true
+  }
+);
+```
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.autumn.com/v1/plans/plan_starter \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "price": {
+      "amount": 3900,
+      "interval": "month"
+    },
+    "items": [
+      {
+        "feature_id": "api_calls",
+        "included": 15000
+      }
+    ]
+  }'
+```
+
+```bash cURL - Update without versioning
+curl -X POST "https://api.autumn.com/v1/plans/plan_starter?disable_version=true" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Updated description for existing version"
+  }'
+```
+
+```bash cURL - Archive product
+curl -X POST https://api.autumn.com/v1/plans/plan_starter \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "archived": true
+  }'
+```
+
+```javascript JavaScript
+// Create new version with updated price
+const updated = await autumn.plans.update('plan_starter', {
+  price: {
+    amount: 3900,
+    interval: 'month'
+  },
+  items: [
+    {
+      feature_id: 'api_calls',
+      included: 15000
+    }
+  ]
+});
+
+console.log(`Updated to version ${updated.version}`);
+```
+
+```javascript JavaScript - Update without versioning
+const updated = await autumn.plans.update(
+  'plan_starter',
+  {
+    description: 'Updated description'
+  },
+  {
+    disable_version: true
+  }
+);
+```
+
+```javascript JavaScript - Add tiered pricing
+const updated = await autumn.plans.update('plan_pro', {
+  items: [
+    {
+      feature_id: 'api_calls',
+      included: 100000,
+      reset: {
+        interval: 'month'
+      },
+      price: {
+        tiers: [
+          { to: 50000, amount: 50 },
+          { to: 200000, amount: 30 },
+          { to: 'infinite', amount: 20 }
+        ],
+        interval: 'month',
+        billing_units: 1000,
+        billing_method: 'usage_based'
+      }
+    }
+  ]
+});
+```
+
+```python Python
+# Create new version with updated price
+updated = autumn.plans.update('plan_starter', {
+    'price': {
+        'amount': 3900,
+        'interval': 'month'
+    },
+    'items': [
+        {
+            'feature_id': 'api_calls',
+            'included': 15000
+        }
+    ]
+})
+
+print(f"Updated to version {updated.version}")
+```
+
+```python Python - Update without versioning
+updated = autumn.plans.update(
+    'plan_starter',
+    {
+        'description': 'Updated description'
+    },
+    disable_version=True
+)
+```
+
+```python Python - Archive product
+updated = autumn.plans.update('plan_starter', {
+    'archived': True
+})
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 - New version created
+{
+  "id": "plan_starter",
+  "name": "Starter Plan",
+  "description": "Perfect for individuals and small teams",
+  "group": "subscription_plans",
+  "version": 2,
+  "add_on": false,
+  "default": true,
+  "price": {
+    "amount": 3900,
+    "interval": "month",
+    "interval_count": 1
+  },
+  "features": [
+    {
+      "feature_id": "api_calls",
+      "included": 15000,
+      "unlimited": false,
+      "reset": {
+        "interval": "month",
+        "interval_count": 1
+      },
+      "price": null
+    }
+  ],
+  "free_trial": {
+    "duration_length": 14,
+    "duration_type": "day",
+    "card_required": false
+  },
+  "created_at": 1708473600,
+  "env": "live",
+  "archived": false,
+  "base_variant_id": null
+}
+```
+
+```json 200 - Archived
+{
+  "id": "plan_starter",
+  "name": "Starter Plan",
+  "version": 1,
+  "add_on": false,
+  "default": true,
+  "price": {
+    "amount": 2900,
+    "interval": "month"
+  },
+  "features": [],
+  "created_at": 1708473600,
+  "env": "live",
+  "archived": true,
+  "base_variant_id": null
+}
+```
+
+```json 404
+{
+  "error": {
+    "message": "Plan not found",
+    "code": "not_found"
+  }
+}
+```
+</ResponseExample>
+
+## Common Update Patterns
+
+### Change Pricing
+
+Create a new version with updated pricing:
+
+```javascript
+await autumn.plans.update('plan_pro', {
+  price: {
+    amount: 12900,  // Was $99, now $129
+    interval: 'month'
+  }
+});
+```
+
+### Add or Modify Features
+
+Update included limits or add new features:
+
+```javascript
+await autumn.plans.update('plan_starter', {
+  items: [
+    {
+      feature_id: 'api_calls',
+      included: 20000  // Increase from 10,000
+    },
+    {
+      feature_id: 'webhooks',
+      included: 100,
+      unlimited: false
+    }
+  ]
+});
+```
+
+### Update Free Trial
+
+Modify trial terms:
+
+```javascript
+await autumn.plans.update('plan_starter', {
+  free_trial: {
+    duration_length: 30,  // Extend to 30 days
+    duration_type: 'day',
+    card_required: true   // Now require card
+  }
+});
+```
+
+### Archive Product
+
+Prevent new subscriptions while keeping existing ones:
+
+```javascript
+await autumn.plans.update('plan_legacy', {
+  archived: true
+});
+```

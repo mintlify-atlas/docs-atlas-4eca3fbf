@@ -1,0 +1,142 @@
+---
+title: 'API Reference Introduction'
+description: 'Learn how to integrate with the Autumn REST API'
+---
+
+## Welcome to the Autumn API
+
+The Autumn API is a REST API that allows you to manage billing, subscriptions, usage tracking, and entitlements for your application. This documentation covers the latest API version (2.0.0).
+
+## Base URL
+
+All API requests should be made to:
+
+```
+https://api.useautumn.com/v1
+```
+
+## API Architecture
+
+The Autumn API follows REST principles:
+
+- **Resource-oriented URLs** - Endpoints represent resources like customers, plans, and entities
+- **HTTP methods** - Standard methods (GET, POST, DELETE) to interact with resources
+- **JSON request/response** - All request bodies and responses use JSON format
+- **Bearer token authentication** - Authenticate using API keys in the Authorization header
+
+## Request Format
+
+All requests must include:
+
+1. **Content-Type header**: `application/json`
+2. **Authorization header**: `Bearer <your_api_key>`
+3. **Request body** (for POST requests): Valid JSON matching the endpoint schema
+
+### Example Request
+
+```bash
+curl https://api.useautumn.com/v1/customers/cus_123 \
+  -H "Authorization: Bearer am_sk_live_abc123..." \
+  -H "Content-Type: application/json"
+```
+
+## Response Format
+
+All responses are returned in JSON format. Successful responses return the requested resource or a success confirmation:
+
+```json
+{
+  "id": "cus_123",
+  "name": "Acme Corp",
+  "email": "billing@acme.com",
+  "created_at": "2025-01-15T10:30:00Z"
+}
+```
+
+### Success Response
+
+For operations that don't return a resource (like deletions), you'll receive:
+
+```json
+{
+  "success": true
+}
+```
+
+## Pagination
+
+List endpoints support page-based pagination:
+
+```json
+{
+  "list": [...],
+  "page": 1,
+  "page_size": 10,
+  "total_count": 145,
+  "total_pages": 15,
+  "has_next": true,
+  "has_previous": false
+}
+```
+
+## Expandable Resources
+
+Many endpoints support the `expand` query parameter to include related resources in a single request:
+
+```bash
+# Expand customer products and entities
+GET /v1/customers/cus_123?expand=products,entities
+```
+
+Common expandable fields:
+- `products` - Include customer's attached products
+- `entities` - Include customer's entities
+- `features` - Include feature details
+
+## OpenAPI Specification
+
+The Autumn API is documented using OpenAPI 3.1.0. You can access the specification file to generate client libraries or explore the API:
+
+<Card
+  title="OpenAPI Specification"
+  icon="file-code"
+  href="/api-reference/openapi.json"
+>
+  Download the complete OpenAPI specification
+</Card>
+
+## API Resources
+
+The Autumn API is organized around these core resources:
+
+<CardGroup cols={2}>
+  <Card title="Customers" icon="user" href="/api-reference/customers/create">
+    Manage customer accounts and profiles
+  </Card>
+  <Card title="Plans" icon="layer-group" href="/api-reference/endpoint/create">
+    Create and manage subscription plans
+  </Card>
+  <Card title="Entities" icon="building" href="/api-reference/endpoint/create">
+    Organize customers into hierarchical structures
+  </Card>
+  <Card title="Core Operations" icon="bolt" href="/api-reference/endpoint/create">
+    Attach products, check access, track usage, and manage billing
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api-reference/authentication">
+    Learn how to authenticate your API requests
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/api-reference/errors">
+    Understand error responses and codes
+  </Card>
+  <Card title="API Versioning" icon="code-branch" href="/api-reference/versioning">
+    Learn about API versions and backward compatibility
+  </Card>
+  <Card title="Create Your First Customer" icon="rocket" href="/api-reference/customers/create">
+    Get started with a quick tutorial
+  </Card>
+</CardGroup>

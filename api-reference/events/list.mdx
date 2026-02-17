@@ -1,0 +1,299 @@
+---
+title: 'List Events'
+openapi: 'POST /events/list'
+---
+
+## Overview
+
+Retrieve a paginated list of usage events. Events represent tracked usage for metered features and are created via the `/track` endpoint.
+
+## Request Body
+
+<ParamField body="customer_id" type="string">
+  Filter events by customer ID
+</ParamField>
+
+<ParamField body="feature_id" type="string | string[]">
+  Filter by specific feature ID(s). Can be a single feature ID or an array of feature IDs.
+</ParamField>
+
+<ParamField body="custom_range" type="object">
+  Filter events by time range
+  
+  <Expandable title="Custom Range Properties">
+    <ParamField body="start" type="number">
+      Filter events after this timestamp (epoch milliseconds)
+    </ParamField>
+    
+    <ParamField body="end" type="number">
+      Filter events before this timestamp (epoch milliseconds)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="offset" type="number">
+  Number of events to skip for pagination (default: 0)
+</ParamField>
+
+<ParamField body="limit" type="number">
+  Maximum number of events to return (default: 100, max: 1000)
+</ParamField>
+
+## Response
+
+Returns a paginated list of events.
+
+<ResponseField name="list" type="array">
+  Array of event objects
+  
+  <Expandable title="Event Object Properties">
+    <ResponseField name="id" type="string">
+      Event ID (KSUID format)
+    </ResponseField>
+    
+    <ResponseField name="timestamp" type="number">
+      Event timestamp in epoch milliseconds
+    </ResponseField>
+    
+    <ResponseField name="feature_id" type="string">
+      ID of the feature that the event belongs to
+    </ResponseField>
+    
+    <ResponseField name="customer_id" type="string">
+      Customer identifier
+    </ResponseField>
+    
+    <ResponseField name="value" type="number">
+      Event value/count
+    </ResponseField>
+    
+    <ResponseField name="properties" type="object">
+      Custom event properties (JSONB)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of events matching the filters
+</ResponseField>
+
+<ResponseField name="has_more" type="boolean">
+  Whether there are more events beyond this page
+</ResponseField>
+
+<ResponseField name="offset" type="number">
+  Current pagination offset
+</ResponseField>
+
+<ResponseField name="limit" type="number">
+  Current page size
+</ResponseField>
+
+## Example Requests
+
+### List All Events for a Customer
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/events/list' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "limit": 50
+  }'
+```
+
+```typescript TypeScript
+const events = await autumn.events.list({
+  customer_id: 'cus_123',
+  limit: 50
+});
+```
+
+```python Python
+events = autumn.events.list(
+  customer_id='cus_123',
+  limit=50
+)
+```
+</CodeGroup>
+
+### Filter by Feature and Time Range
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/events/list' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "feat_api_calls",
+    "custom_range": {
+      "start": 1759247877000,
+      "end": 1759334277000
+    },
+    "limit": 100
+  }'
+```
+
+```typescript TypeScript
+const events = await autumn.events.list({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  custom_range: {
+    start: 1759247877000,
+    end: 1759334277000
+  },
+  limit: 100
+});
+```
+
+```python Python
+events = autumn.events.list(
+  customer_id='cus_123',
+  feature_id='feat_api_calls',
+  custom_range={
+    'start': 1759247877000,
+    'end': 1759334277000
+  },
+  limit=100
+)
+```
+</CodeGroup>
+
+### Filter by Multiple Features
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/events/list' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": ["feat_api_calls", "feat_storage"],
+    "limit": 100
+  }'
+```
+
+```typescript TypeScript
+const events = await autumn.events.list({
+  customer_id: 'cus_123',
+  feature_id: ['feat_api_calls', 'feat_storage'],
+  limit: 100
+});
+```
+
+```python Python
+events = autumn.events.list(
+  customer_id='cus_123',
+  feature_id=['feat_api_calls', 'feat_storage'],
+  limit=100
+)
+```
+</CodeGroup>
+
+### Pagination Example
+
+<CodeGroup>
+```typescript TypeScript
+let allEvents = [];
+let offset = 0;
+const limit = 100;
+let hasMore = true;
+
+while (hasMore) {
+  const response = await autumn.events.list({
+    customer_id: 'cus_123',
+    offset,
+    limit
+  });
+  
+  allEvents.push(...response.list);
+  hasMore = response.has_more;
+  offset += limit;
+}
+
+console.log(`Retrieved ${allEvents.length} total events`);
+```
+
+```python Python
+all_events = []
+offset = 0
+limit = 100
+has_more = True
+
+while has_more:
+    response = autumn.events.list(
+        customer_id='cus_123',
+        offset=offset,
+        limit=limit
+    )
+    
+    all_events.extend(response.list)
+    has_more = response.has_more
+    offset += limit
+
+print(f"Retrieved {len(all_events)} total events")
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "list": [
+    {
+      "id": "evt_36xpk2TmuQX5zVPPQ8tCtnR5Weg",
+      "timestamp": 1765958215459,
+      "feature_id": "feat_api_calls",
+      "customer_id": "cus_123",
+      "value": 30,
+      "properties": {
+        "endpoint": "/v1/users",
+        "method": "GET"
+      }
+    },
+    {
+      "id": "evt_36xmHxxjAkqxufDf9yHAPNfRrLM",
+      "timestamp": 1765956512057,
+      "feature_id": "feat_api_calls",
+      "customer_id": "cus_123",
+      "value": 49,
+      "properties": {
+        "endpoint": "/v1/products",
+        "method": "POST"
+      }
+    }
+  ],
+  "total": 2,
+  "has_more": false,
+  "offset": 0,
+  "limit": 100
+}
+```
+
+## Use Cases
+
+- **Usage auditing**: Review detailed usage history for a customer
+- **Debugging**: Investigate usage patterns or unexpected behavior
+- **Custom analytics**: Export events for external analysis
+- **Billing reconciliation**: Verify usage counts for billing purposes
+- **Customer insights**: Understand how customers use your product
+
+## Notes
+
+- Events are ordered by timestamp in descending order (most recent first)
+- Event IDs are KSUIDs which encode the timestamp and are sortable
+- The `properties` field can contain custom metadata passed during tracking
+- Events are immutable once created
+- For aggregated analytics, use the `/events/aggregate` endpoint instead
+
+## Performance Tips
+
+<Tip>
+- Use `custom_range` to limit the time window for better performance
+- Filter by `feature_id` to reduce the result set
+- Use reasonable `limit` values (100-500) for optimal performance
+- Consider caching results for frequently accessed time ranges
+</Tip>

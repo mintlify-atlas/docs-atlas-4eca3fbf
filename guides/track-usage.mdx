@@ -1,0 +1,502 @@
+---
+title: "Track Usage Events"
+description: "Record usage events and implement usage-based billing in your application"
+---
+
+## Overview
+
+The `/track` endpoint records usage events for metered features. Each track call increments usage counters and deducts from the customer's balance, enabling usage-based billing and feature metering.
+
+## When to Track Usage
+
+Track usage events whenever customers consume a metered resource:
+
+- **API calls** - Track each API request
+- **Compute time** - Record processing minutes or hours
+- **Storage** - Track GB-months of storage used
+- **Credits** - Deduct credits for AI generations, exports, etc.
+- **Messages** - Count emails, SMS, or chat messages sent
+- **Seats** - Track when users are added or removed
+
+## Basic Usage Tracking
+
+<Steps>
+  <Step title="Track a usage event">
+    Call the `/track` endpoint when usage occurs:
+
+    ```typescript
+    import { Autumn } from '@useautumn/sdk';
+
+    const autumn = new Autumn({ apiKey: process.env.AUTUMN_API_KEY });
+
+    const result = await autumn.track({
+      customer_id: 'customer_123',
+      feature_id: 'api_calls',
+      value: 1
+    });
+
+    console.log(`Remaining balance: ${result.balance.current_balance}`);
+    ```
+  </Step>
+
+  <Step title="Handle the response">
+    The response includes the updated balance after tracking:
+
+    ```typescript
+    {
+      customer_id: 'customer_123',
+      value: 1,
+      balance: {
+        feature_id: 'api_calls',
+        unlimited: false,
+        granted_balance: 10000,
+        current_balance: 7499,
+        usage: 2501,
+        overage_allowed: true,
+        reset: {
+          interval: 'month',
+          resets_at: 1717200000000
+        }
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Use the balance information">
+    Use the returned balance to inform the user or adjust behavior:
+
+    ```typescript
+    const result = await autumn.track({
+      customer_id: 'customer_123',
+      feature_id: 'api_calls',
+      value: 1
+    });
+
+    // Warn when approaching limit
+    const percentUsed = (result.balance.usage / result.balance.granted_balance) * 100;
+    
+    if (percentUsed > 90) {
+      await sendWarningEmail({
+        customerId: 'customer_123',
+        feature: 'API Calls',
+        percentUsed
+      });
+    }
+    ```
+  </Step>
+</Steps>
+
+## Tracking Variable Amounts
+
+Track usage with different values:
+
+```typescript
+// Track 5 API calls at once
+await autumn.track({
+  customer_id: 'customer_123',
+  feature_id: 'api_calls',
+  value: 5
+});
+
+// Track compute time in minutes
+await autumn.track({
+  customer_id: 'customer_123',
+  feature_id: 'compute_minutes',
+  value: 45
+});
+
+// Track storage in GB
+await autumn.track({
+  customer_id: 'customer_123',
+  feature_id: 'storage_gb',
+  value: 2.5
+});
+```
+
+## Entity-Scoped Tracking
+
+Track usage for specific entities like projects or workspaces:
+
+```typescript
+// Track seat usage for a specific project
+await autumn.track({
+  customer_id: 'customer_123',
+  feature_id: 'project_seats',
+  entity_id: 'project_456',
+  value: 1
+});
+
+// Remove a seat (negative value)
+await autumn.track({
+  customer_id: 'customer_123',
+  feature_id: 'project_seats',
+  entity_id: 'project_456',
+  value: -1
+});
+```
+
+## Event-Based Tracking
+
+Track named events that map to multiple features:
+
+```typescript
+// Track an event that affects multiple features
+await autumn.track({
+  customer_id: 'customer_123',
+  event_name: 'ai.generation.completed',
+  value: 1,
+  properties: {
+    model: 'gpt-4',
+    tokens: 1500,
+    duration_ms: 2340
+  }
+});
+
+// Configure event mappings in dashboard to deduct from:
+// - "AI Generations" feature
+// - "API Calls" feature  
+// - "Compute Credits" feature
+```
+
+## Adding Event Properties
+
+Attach metadata to usage events for analytics:
+
+```typescript
+await autumn.track({
+  customer_id: 'customer_123',
+  feature_id: 'api_calls',
+  value: 1,
+  properties: {
+    endpoint: '/api/users',
+    method: 'POST',
+    region: 'us-east-1',
+    response_time_ms: 145,
+    status_code: 200
+  }
+});
+```
+
+These properties are stored with the event and can be queried later for analytics.
+
+## Idempotent Tracking
+
+Use idempotency keys to safely retry track requests:
+
+```typescript
+import { v4 as uuidv4 } from 'uuid';
+
+const idempotencyKey = uuidv4();
+
+try {
+  await autumn.track({
+    customer_id: 'customer_123',
+    feature_id: 'api_calls',
+    value: 1,
+    idempotency_key: idempotencyKey
+  });
+} catch (error) {
+  // Safe to retry with same key
+  await autumn.track({
+    customer_id: 'customer_123',
+    feature_id: 'api_calls',
+    value: 1,
+    idempotency_key: idempotencyKey
+  });
+}
+```
+
+<Tip>
+Idempotency keys prevent duplicate charges when requests are retried due to network issues or timeouts.
+</Tip>
+
+## Tracking Multiple Features
+
+Track usage for multiple features simultaneously:
+
+```typescript
+const result = await autumn.track({
+  customer_id: 'customer_123',
+  features: [
+    { feature_id: 'api_calls', value: 1 },
+    { feature_id: 'compute_credits', value: 10 },
+    { feature_id: 'storage_gb', value: 0.5 }
+  ]
+});
+
+// Returns balances for all tracked features
+console.log(result.balances);
+```
+
+## Async Tracking Pattern
+
+Track usage asynchronously to avoid blocking:
+
+```typescript
+async function processApiRequest(customerId: string) {
+  // Perform the main operation
+  const result = await performApiCall();
+
+  // Track usage asynchronously (don't await)
+  autumn.track({
+    customer_id: customerId,
+    feature_id: 'api_calls',
+    value: 1
+  }).catch(error => {
+    // Log error but don't fail the request
+    console.error('Failed to track usage:', error);
+  });
+
+  return result;
+}
+```
+
+<Warning>
+Async tracking means the customer's balance update might lag behind actual usage. Only use this for non-critical metering.
+</Warning>
+
+## Tracking in Background Jobs
+
+Track usage from background jobs and workers:
+
+```typescript
+// In a queue worker
+async function processJob(job) {
+  const startTime = Date.now();
+
+  try {
+    // Process the job
+    await performWork(job);
+
+    // Track compute time used
+    const durationMinutes = (Date.now() - startTime) / 60000;
+    
+    await autumn.track({
+      customer_id: job.customerId,
+      feature_id: 'compute_minutes',
+      value: Math.ceil(durationMinutes),
+      properties: {
+        job_id: job.id,
+        job_type: job.type,
+        duration_ms: Date.now() - startTime
+      }
+    });
+  } catch (error) {
+    // Still track failed jobs if they consumed resources
+    const durationMinutes = (Date.now() - startTime) / 60000;
+    
+    await autumn.track({
+      customer_id: job.customerId,
+      feature_id: 'compute_minutes',
+      value: Math.ceil(durationMinutes),
+      properties: {
+        job_id: job.id,
+        error: error.message,
+        failed: true
+      }
+    });
+  }
+}
+```
+
+## Batching Usage Events
+
+For high-volume tracking, batch events:
+
+```typescript
+class UsageTracker {
+  private queue: Array<TrackParams> = [];
+  private flushInterval: NodeJS.Timeout;
+
+  constructor() {
+    // Flush every 30 seconds
+    this.flushInterval = setInterval(() => this.flush(), 30000);
+  }
+
+  track(params: TrackParams) {
+    this.queue.push(params);
+    
+    // Flush if queue is large
+    if (this.queue.length >= 100) {
+      this.flush();
+    }
+  }
+
+  async flush() {
+    if (this.queue.length === 0) return;
+
+    const batch = this.queue.splice(0, this.queue.length);
+
+    // Aggregate by customer and feature
+    const aggregated = new Map<string, number>();
+    
+    for (const event of batch) {
+      const key = `${event.customer_id}:${event.feature_id}`;
+      aggregated.set(key, (aggregated.get(key) || 0) + event.value);
+    }
+
+    // Send aggregated events
+    await Promise.all(
+      Array.from(aggregated.entries()).map(([key, value]) => {
+        const [customer_id, feature_id] = key.split(':');
+        return autumn.track({ customer_id, feature_id, value });
+      })
+    );
+  }
+}
+
+const tracker = new UsageTracker();
+
+// Track without waiting
+tracker.track({
+  customer_id: 'customer_123',
+  feature_id: 'api_calls',
+  value: 1
+});
+```
+
+## Middleware Pattern
+
+Automatically track usage for API endpoints:
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+
+function trackUsage(featureId: string, getValue?: (req: Request) => number) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const customerId = req.user.autumnCustomerId;
+    const value = getValue ? getValue(req) : 1;
+
+    // Track after response is sent
+    res.on('finish', () => {
+      if (res.statusCode < 400) {
+        autumn.track({
+          customer_id: customerId,
+          feature_id: featureId,
+          value,
+          properties: {
+            endpoint: req.path,
+            method: req.method,
+            status_code: res.statusCode
+          }
+        }).catch(console.error);
+      }
+    });
+
+    next();
+  };
+}
+
+// Use in routes
+app.get('/api/data', 
+  trackUsage('api_calls'),
+  async (req, res) => {
+    const data = await getData();
+    res.json(data);
+  }
+);
+
+// Variable tracking based on request
+app.post('/api/export',
+  trackUsage('exports', (req) => req.body.row_count / 1000),
+  async (req, res) => {
+    const file = await generateExport(req.body);
+    res.download(file);
+  }
+);
+```
+
+## Auto-Creating Customers
+
+Automatically create customers during tracking:
+
+```typescript
+const result = await autumn.track({
+  customer_id: 'new_customer_123',
+  feature_id: 'api_calls',
+  value: 1,
+  customer_data: {
+    name: 'John Doe',
+    email: 'john@example.com'
+  }
+});
+
+// Customer is created if doesn't exist
+// Then usage is tracked
+```
+
+## Error Handling
+
+Handle tracking errors appropriately:
+
+```typescript
+try {
+  const result = await autumn.track({
+    customer_id: 'customer_123',
+    feature_id: 'api_calls',
+    value: 1
+  });
+
+  return result;
+} catch (error) {
+  if (error.code === 'customer_not_found') {
+    // Create customer first
+    await autumn.customers.create({
+      id: 'customer_123',
+      email: 'user@example.com'
+    });
+    
+    // Retry tracking
+    return await autumn.track({
+      customer_id: 'customer_123',
+      feature_id: 'api_calls',
+      value: 1
+    });
+  }
+
+  if (error.code === 'insufficient_balance') {
+    // Handle limit reached
+    return {
+      error: 'Limit reached',
+      upgrade_required: true
+    };
+  }
+
+  // Log and continue
+  console.error('Failed to track usage:', error);
+  throw error;
+}
+```
+
+## Best Practices
+
+<Card title="Track close to the source" icon="location-dot">
+  Record usage immediately after consumption to ensure accuracy.
+</Card>
+
+<Card title="Use idempotency keys" icon="key">
+  Always use idempotency keys in production to safely handle retries.
+</Card>
+
+<Card title="Include metadata" icon="tags">
+  Add properties for analytics and debugging - they're invaluable later.
+</Card>
+
+<Card title="Handle errors gracefully" icon="circle-exclamation">
+  Don't fail user requests if tracking fails - log errors and continue.
+</Card>
+
+<Card title="Monitor tracking failures" icon="chart-line">
+  Set up alerts for high tracking error rates to catch issues early.
+</Card>
+
+<Card title="Batch high-volume tracking" icon="layer-group">
+  For very high-volume scenarios, consider batching to reduce API calls.
+</Card>
+
+## Related Resources
+
+- [Check Access Guide](/guides/check-access)
+- [Track API Reference](/api-reference/core/track)
+- [Features Concept](/concepts/features)
+- [Events API](/api-reference/events/list)

@@ -1,0 +1,113 @@
+---
+title: 'Create Entity'
+openapi: 'POST /customers/{customer_id}/entities'
+---
+
+## Overview
+
+Create a new entity for a customer. Entities represent individual instances or units within a feature scope, such as projects, organizations, or seats.
+
+## Request Body
+
+<ParamField body="id" type="string" required>
+  The unique identifier for the entity. Can be a string or number (numbers are converted to strings).
+</ParamField>
+
+<ParamField body="name" type="string">
+  The display name for the entity
+</ParamField>
+
+<ParamField body="feature_id" type="string" required>
+  The ID of the feature this entity belongs to
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Optional custom data to attach to the entity
+</ParamField>
+
+## Response
+
+Returns the created entity object.
+
+<ResponseField name="id" type="string">
+  The unique identifier of the entity
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The name of the entity
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  The customer ID this entity belongs to
+</ResponseField>
+
+<ResponseField name="feature_id" type="string">
+  The feature ID this entity belongs to
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp (milliseconds) when the entity was created
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  The environment - either `sandbox` or `live`
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/customers/cus_123/entities' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "id": "proj_456",
+    "name": "Project Alpha",
+    "feature_id": "feat_projects"
+  }'
+```
+
+```typescript TypeScript
+const entity = await autumn.entities.create({
+  customer_id: 'cus_123',
+  id: 'proj_456',
+  name: 'Project Alpha',
+  feature_id: 'feat_projects'
+});
+```
+
+```python Python
+entity = autumn.entities.create(
+  customer_id='cus_123',
+  id='proj_456',
+  name='Project Alpha',
+  feature_id='feat_projects'
+)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "id": "proj_456",
+  "name": "Project Alpha",
+  "customer_id": "cus_123",
+  "feature_id": "feat_projects",
+  "created_at": 1759247877000,
+  "env": "live"
+}
+```
+
+## Use Cases
+
+- **Project-based limits**: Create an entity for each project to track usage per project
+- **Seat-based pricing**: Create an entity for each seat or team member
+- **Multi-tenant features**: Create entities for organizations or workspaces
+- **Resource tracking**: Track individual resources like API keys or databases
+
+## Notes
+
+- Entity IDs must be unique within a customer and feature scope
+- Entities are automatically associated with the environment (sandbox/live) based on your API key
+- Use entity-scoped balances to track limits or usage per entity

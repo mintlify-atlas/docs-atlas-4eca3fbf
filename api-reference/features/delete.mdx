@@ -1,0 +1,204 @@
+---
+title: "Delete Feature"
+openapi: "DELETE /features/{feature_id}"
+---
+
+## Overview
+
+Permanently delete a feature from your workspace. This operation is irreversible and will fail if the feature is currently in use.
+
+<Warning>
+**Deletion Requirements**:
+- Feature must not be referenced by any products
+- Feature must not be used in any credit system schemas
+- Feature must not have active customer entitlements
+
+**Consider archiving instead** to preserve historical data and existing entitlements.
+</Warning>
+
+## Path Parameters
+
+<ParamField path="feature_id" type="string" required>
+  The unique identifier of the feature to delete (e.g., `api-calls`, `storage-gb`).
+</ParamField>
+
+## Response
+
+Returns a success confirmation when the feature is deleted.
+
+```json Success Response
+{
+  "success": true
+}
+```
+
+## Pre-Deletion Checks
+
+Before deleting a feature, the API performs these validations:
+
+### 1. Product References
+
+The feature must not be included in any product's plan items:
+
+```json Error Example
+{
+  "message": "Feature api-calls is used in a product. You must delete the product first, or archive it instead.",
+  "code": "feature_in_use"
+}
+```
+
+**Resolution**: Remove the feature from all products or archive it instead.
+
+### 2. Credit System Usage
+
+The feature must not be referenced in any credit system's `credit_schema`:
+
+```json Error Example
+{
+  "message": "Feature api-calls is used by credit system credits",
+  "code": "feature_in_use"
+}
+```
+
+**Resolution**: Update the credit system to remove the feature reference, or delete the credit system first.
+
+## Alternative: Archive Feature
+
+Instead of deleting, consider archiving the feature to:
+
+- **Preserve historical data**: Keep usage records intact
+- **Maintain existing entitlements**: Don't disrupt current customers
+- **Prevent new usage**: Stop accepting new events
+- **Hide from UI**: Remove from product configuration
+
+```bash Archive Instead of Delete
+curl -X POST https://api.autumn.com/features/api-calls \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "archived": true
+  }'
+```
+
+<Info>
+Archived features remain in your workspace but stop accepting new usage events and don't appear in the default features list.
+</Info>
+
+## Error Responses
+
+<ResponseField name="404" type="error">
+  Feature not found. The specified `feature_id` does not exist.
+  
+  ```json
+  {
+    "message": "Feature with id api-calls not found",
+    "code": "feature_not_found"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="400" type="error">
+  Feature cannot be deleted due to dependencies.
+  
+  **Used in Product**:
+  ```json
+  {
+    "message": "Feature api-calls is used in a product. You must delete the product first, or archive it instead.",
+    "code": "feature_in_use"
+  }
+  ```
+  
+  **Used in Credit System**:
+  ```json
+  {
+    "message": "Feature api-calls is used by credit system credits",
+    "code": "feature_in_use"
+  }
+  ```
+</ResponseField>
+
+## Safe Deletion Workflow
+
+Follow these steps to safely delete a feature:
+
+### 1. Check for Product References
+
+List all products and verify the feature is not included:
+
+```bash
+curl -X GET https://api.autumn.com/products \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Search for the feature ID in plan items.
+
+### 2. Check for Credit System Usage
+
+List all features and check credit schemas:
+
+```bash
+curl -X GET https://api.autumn.com/features \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Search for the feature ID in `credit_schema` arrays.
+
+### 3. Remove References
+
+Update or delete products and credit systems that reference the feature.
+
+### 4. Delete Feature
+
+Once all references are removed:
+
+```bash
+curl -X DELETE https://api.autumn.com/features/api-calls \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+## When to Delete vs Archive
+
+<CardGroup cols={2}>
+  <Card title="Delete When" icon="trash">
+    - Feature was created by mistake
+    - Feature never had usage data
+    - Cleaning up test/development features
+    - Feature has no customer entitlements
+  </Card>
+  
+  <Card title="Archive When" icon="box-archive">
+    - Feature has historical usage data
+    - Customers have active entitlements
+    - Want to preserve analytics
+    - Migrating to a new feature
+  </Card>
+</CardGroup>
+
+## Deletion Info Endpoint
+
+Before deleting, check what would be affected:
+
+```bash Get Deletion Info
+curl -X GET https://api.autumn.com/features/api-calls/deletion_info \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+This endpoint (if available) returns:
+- Products using the feature
+- Credit systems referencing the feature
+- Count of customer entitlements
+- Recommended action (delete vs archive)
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Update Feature" icon="pen" href="/api-reference/features/update">
+    Archive instead of deleting
+  </Card>
+  <Card title="Get Feature" icon="magnifying-glass" href="/api-reference/features/get">
+    Check current configuration before deletion
+  </Card>
+  <Card title="List Features" icon="list" href="/api-reference/features/list">
+    View all features in your workspace
+  </Card>
+</CardGroup>

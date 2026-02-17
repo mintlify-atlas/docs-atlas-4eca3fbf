@@ -1,0 +1,202 @@
+---
+title: 'Stripe Setup'
+description: 'Configure Stripe for payment processing in Autumn'
+icon: 'credit-card'
+---
+
+Autumn integrates with Stripe to handle payment processing, subscriptions, and billing. This guide covers how to set up and configure Stripe for your Autumn deployment.
+
+## Connection Methods
+
+Autumn supports two ways to connect with Stripe:
+
+### 1. OAuth (Stripe Connect)
+
+Recommended for production deployments. Uses Stripe Connect with OAuth to securely connect your customers' Stripe accounts.
+
+**Advantages:**
+- More secure - credentials never leave Stripe
+- Easier for end users to set up
+- Automatic token refresh
+- Better for multi-tenant platforms
+
+### 2. Secret Key (Legacy)
+
+Direct API key integration where users paste their Stripe secret keys.
+
+**Advantages:**
+- Simpler initial setup
+- Good for development/testing
+- No OAuth flow required
+
+<Warning>
+  The secret key method stores encrypted API keys in your database. Ensure your encryption is properly configured.
+</Warning>
+
+## Environment Variables
+
+### Required Variables
+
+Configure these environment variables in your `server/.env` file:
+
+<Steps>
+  <Step title="Encryption Settings">
+    Required for encrypting stored API keys:
+    
+    ```bash
+    ENCRYPTION_IV=your-encryption-iv
+    ENCRYPTION_PASSWORD=your-encryption-password
+    ```
+    
+    <Info>
+      These are automatically generated when you run `npm run setup` for the first time.
+    </Info>
+  </Step>
+
+  <Step title="Webhook URL">
+    Base URL where Stripe will send webhook events:
+    
+    ```bash
+    STRIPE_WEBHOOK_URL=https://your-domain.com
+    ```
+    
+    For local development, use a tunnel service like ngrok or localtunnel pointing to port 8080.
+  </Step>
+
+  <Step title="Stripe Connect (OAuth) - Optional">
+    Required only if using OAuth connection method:
+    
+    ```bash
+    # For sandbox/test mode
+    STRIPE_SANDBOX_CLIENT_ID=ca_xxx
+    STRIPE_SANDBOX_SECRET_KEY=sk_test_xxx
+    STRIPE_SANDBOX_WEBHOOK_SECRET=whsec_xxx
+    
+    # For live/production mode
+    STRIPE_LIVE_CLIENT_ID=ca_xxx
+    STRIPE_LIVE_SECRET_KEY=sk_live_xxx
+    STRIPE_LIVE_WEBHOOK_SECRET=whsec_xxx
+    ```
+    
+    <Info>
+      Get these from your [Stripe Connect settings](https://dashboard.stripe.com/settings/applications).
+    </Info>
+  </Step>
+</Steps>
+
+## Getting Stripe Credentials
+
+### For OAuth Setup
+
+<Steps>
+  <Step title="Create a Stripe Platform Account">
+    1. Go to [Stripe Connect](https://dashboard.stripe.com/settings/applications)
+    2. Create a new platform/connect application
+    3. Note your Client ID (`ca_xxx`)
+  </Step>
+
+  <Step title="Get API Keys">
+    1. Navigate to [API Keys](https://dashboard.stripe.com/apikeys)
+    2. Copy your Secret key for the appropriate mode (test/live)
+    3. Add to your environment variables as `STRIPE_SANDBOX_SECRET_KEY` or `STRIPE_LIVE_SECRET_KEY`
+  </Step>
+
+  <Step title="Configure Webhook Endpoint">
+    1. Go to [Webhooks](https://dashboard.stripe.com/webhooks)
+    2. Click "Add endpoint"
+    3. Enter your webhook URL: `https://your-domain.com/webhooks/connect/sandbox` (or `/live`)
+    4. Select "Connect" as the webhook type
+    5. Copy the webhook signing secret and add as `STRIPE_SANDBOX_WEBHOOK_SECRET`
+  </Step>
+</Steps>
+
+### For Secret Key Setup
+
+Users connecting via secret key will:
+
+1. Get their Stripe API key from [API Keys](https://dashboard.stripe.com/apikeys)
+2. Paste it in the Autumn dashboard
+3. Autumn automatically creates and configures webhook endpoints
+
+## Configuration Code Reference
+
+Stripe client initialization happens in:
+
+```typescript
+// Master Stripe client (for Connect)
+server/src/external/connect/initStripeCli.ts:13
+
+// Organization-specific Stripe client
+server/src/external/connect/createStripeCli.ts
+```
+
+Webhook verification and secret key handling:
+
+```typescript
+// Secret key connection
+server/src/internal/orgs/orgUtils/handleStripeSecretKey.ts:10
+
+// Webhook secret retrieval
+server/src/internal/orgs/orgUtils.ts:160
+```
+
+## Webhook Configuration
+
+Autumn automatically manages webhooks:
+
+- **OAuth/Connect**: Webhooks are configured at the platform level
+- **Secret Key**: Webhooks are automatically created when connecting an API key
+
+Webhook endpoints:
+- Legacy: `/webhooks/stripe/:orgId/:env`
+- Connect: `/webhooks/connect/:env`
+
+<Info>
+  Autumn handles webhook signature verification, idempotency, and retry logic automatically.
+</Info>
+
+## Dual Mode Support
+
+Autumn supports running Stripe in two modes simultaneously:
+
+- **Sandbox/Test Mode**: For development and testing (`AppEnv.Sandbox`)
+- **Live/Production Mode**: For production transactions (`AppEnv.Live`)
+
+Each mode has separate:
+- API keys
+- Webhook secrets
+- Client IDs (for OAuth)
+- Connected accounts
+
+## Troubleshooting
+
+### Webhook Verification Fails
+
+- Ensure `STRIPE_WEBHOOK_URL` matches your actual webhook endpoint URL
+- Check that webhook signing secrets are correctly configured
+- Verify your tunnel is running (for local development)
+
+### API Key Connection Fails
+
+- Verify the API key is valid by testing it in the Stripe dashboard
+- Check that the key matches the environment (test vs live)
+- Ensure encryption variables are set
+
+### Missing Client ID Error
+
+```
+Stripe live client ID not configured
+```
+
+This means you're trying to use OAuth but haven't set `STRIPE_LIVE_CLIENT_ID` or `STRIPE_SANDBOX_CLIENT_ID`.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Stripe Connect" icon="link" href="/integration/stripe-connect">
+    Learn about connected accounts and OAuth flow
+  </Card>
+  <Card title="Stripe Webhooks" icon="webhook" href="/integration/stripe-webhooks">
+    Understand webhook event handling
+  </Card>
+</CardGroup>

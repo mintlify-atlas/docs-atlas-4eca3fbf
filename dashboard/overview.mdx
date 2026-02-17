@@ -7,7 +7,7 @@ The Autumn dashboard provides a comprehensive interface for managing your pricin
 
 ## Main Navigation
 
-The dashboard is organized into four primary sections accessible from the left sidebar:
+The dashboard is organized into primary sections accessible from the left sidebar. The sidebar can be toggled using `Cmd/Ctrl + B` or the collapse button.
 
 ### Products
 
@@ -23,12 +23,14 @@ Manage your pricing structure including plans, features, and rewards:
 
 ### Customers
 
-View and manage your customer base:
+View and manage your customer base with powerful filtering and search:
 
-- View all customers and their subscriptions
-- Track feature usage and balances
+- View all customers with their subscription status
+- Track feature usage and balances in real-time
 - Manage customer subscriptions and plans
 - Access customer invoices and billing history
+- Filter by status, version, and custom criteria
+- Search by name, email, or customer ID
 
 <Card title="Learn more" icon="user" href="/dashboard/customers">
   Explore customer management in detail
@@ -36,11 +38,13 @@ View and manage your customer base:
 
 ### Events
 
-Monitor usage events tracked through your application:
+Monitor usage events and analytics tracked through your application:
 
-- View event history and timeseries data
-- Analyze feature usage patterns
-- Track API calls and event properties
+- View event history with timeseries visualizations
+- Analyze feature usage patterns across customers
+- Track API calls with custom event properties
+- Filter by time range and event type
+- Group events by customer or custom properties
 
 <Card title="Learn more" icon="chart-bar" href="/dashboard/analytics">
   Explore analytics and events
@@ -56,41 +60,166 @@ Access developer tools and integrations:
 - **Vercel** - Connect Vercel deployments (if enabled)
 - **RevenueCat** - Integrate with RevenueCat for mobile subscriptions (if enabled)
 
+<Note>
+  Developer tools are available as collapsible sections in the sidebar. Click to expand and view all integration options.
+</Note>
+
 ## Environment Management
 
-If your organization has deployed Autumn, you can switch between environments using the environment dropdown in the sidebar:
+If your organization has deployed Autumn to production, you can switch between environments using the environment dropdown in the sidebar:
 
 - **Sandbox** - Test environment for development and staging
 - **Production** - Live environment for production workloads
 
-<Note>
-  Changes made in the sandbox environment do not affect production data.
-</Note>
+<Warning>
+  Changes made in the sandbox environment do not affect production data. Always test in sandbox before deploying to production.
+</Warning>
 
-## Organization Settings
+### Environment Indicator
 
-Access organization settings by clicking your organization name in the sidebar:
+When in sandbox mode, a banner appears at the top of the dashboard to clearly indicate you're working in the test environment.
 
-- Manage team members and permissions
-- Configure billing and subscription settings
-- View organization usage and limits
+## Organization Management
+
+Access organization settings from the dropdown in the sidebar:
+
+### Organization Settings
+
+- **Profile** - Update organization name and logo
+- **Members** - Invite team members and manage permissions
+- **Invites** - View pending invitations
+- **Billing** - Manage organization subscription (for cloud customers)
+
+### Team Collaboration
+
+- Invite team members by email
+- Manage member roles and permissions
+- View activity logs (coming soon)
+- Transfer organization ownership
+
+### Multiple Organizations
+
+Switch between organizations you're a member of:
+
+1. Click your organization name in the sidebar
+2. Select **Switch organization**
+3. Choose from the list of available organizations
+4. Or create a new organization
 
 ## Keyboard Shortcuts
 
 Speed up your workflow with these keyboard shortcuts:
 
-- `Cmd/Ctrl + B` - Toggle sidebar
-- `Cmd/Ctrl + K` - Open command palette
+- `Cmd/Ctrl + B` - Toggle sidebar visibility
+- `Cmd/Ctrl + K` - Open command palette (coming soon)
+- `n` - Create new item in current view (when applicable)
+
+<Tip>
+  The sidebar remembers your collapse state and group preferences across sessions.
+</Tip>
+
+## Dashboard Features
+
+### Onboarding Guide
+
+New organizations see an interactive onboarding guide that helps you:
+
+1. Create your first plan
+2. Define features for your product
+3. Integrate the SDK in your application
+4. Test with your first customer
+5. Deploy to production
+
+### Empty States
+
+When sections are empty, helpful guidance appears with:
+
+- Quick explanation of the feature
+- Call-to-action buttons to get started
+- Links to relevant documentation
+- Example use cases
+
+### Real-time Updates
+
+The dashboard updates in real-time as data changes:
+
+- Customer usage updates as events are tracked
+- Subscription status reflects Stripe changes
+- Balance information updates after track calls
+- Invoice data syncs from payment provider
+
+## View Modes
+
+Some sections offer multiple view modes:
+
+### Products View Modes
+
+- **List view** - Table showing all plans with key details
+- **AI Chat view** - Conversational interface to explore and create products
+
+### Customer View Modes
+
+- **Table view** - Virtualized table for high-performance scrolling
+- **Column customization** - Show/hide columns based on your needs
+- **Saved views** - Save filter combinations for quick access (coming soon)
 
 ## Getting Started
 
 After setting up your Autumn account:
 
 1. **Create your first plan** in the Products section
-2. **Define features** that customers can access
+   - Define base pricing and billing cycle
+   - Add features customers can access
+   - Configure trial periods if needed
+
+2. **Define features** that customers can use
+   - Boolean features for access control
+   - Metered features for usage tracking
+   - Set default limits and pricing
+
 3. **Integrate the SDK** in your application
-4. **Test with the Autumn CLI** or create test customers
-5. **Monitor usage** in the Analytics section
+   - Install the Autumn SDK for your platform
+   - Configure API keys from Developer section
+   - Implement attach, check, and track calls
+
+4. **Test with customers** in sandbox
+   - Create test customers manually
+   - Use the Autumn CLI for local testing
+   - Verify feature access and usage tracking
+
+5. **Deploy to production**
+   - Connect your production Stripe account
+   - Copy products from sandbox to production
+   - Create production API keys
+   - Update your application configuration
+
+6. **Monitor usage** in the Analytics section
+   - Track customer growth
+   - Identify popular features
+   - Optimize pricing based on data
+
+## Best Practices
+
+### Navigation
+
+- Use the collapsible sidebar to maximize screen space
+- Keep frequently used tabs expanded in groups
+- Use keyboard shortcuts to move quickly
+- Bookmark specific customer or product pages
+
+### Organization
+
+- Name plans and features clearly and consistently
+- Use groups to organize related products
+- Add metadata for custom segmentation
+- Document internal notes in descriptions
+
+### Workflow
+
+- Test all changes in sandbox first
+- Use filters to focus on specific segments
+- Export data regularly for backup
+- Set up webhooks for automation
 
 <CardGroup cols={2}>
   <Card title="Products" icon="basket" href="/dashboard/products">
@@ -102,7 +231,7 @@ After setting up your Autumn account:
   <Card title="Analytics" icon="chart-bar" href="/dashboard/analytics">
     Monitor usage and events
   </Card>
-  <Card title="API Reference" icon="code" href="/api/attach">
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
     Integrate with your application
   </Card>
 </CardGroup>

@@ -1,0 +1,443 @@
+---
+title: 'Error Handling'
+description: 'Understand error responses and how to handle them'
+---
+
+## Error Response Format
+
+When an error occurs, the Autumn API returns a JSON response with the following structure:
+
+```json
+{
+  "message": "Human-readable error description",
+  "code": "machine_readable_error_code",
+  "env": "sandbox"
+}
+```
+
+<ResponseField name="message" type="string" required>
+  A human-readable description of what went wrong. This message is safe to display to end users.
+</ResponseField>
+
+<ResponseField name="code" type="string" required>
+  A machine-readable error code that identifies the specific error type. Use this code to handle errors programmatically.
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  The environment where the error occurred (`sandbox` or `live`). Only included when context is available.
+</ResponseField>
+
+## HTTP Status Codes
+
+The API uses standard HTTP status codes:
+
+| Status Code | Meaning |
+|------------|----------|
+| `200` | Success - Request completed successfully |
+| `400` | Bad Request - Invalid parameters or request format |
+| `401` | Unauthorized - Invalid or missing authentication |
+| `404` | Not Found - Resource doesn't exist |
+| `500` | Internal Server Error - Something went wrong on our end |
+
+## Error Categories
+
+### Authentication Errors (401)
+
+Errors related to API authentication and authorization.
+
+<AccordionGroup>
+  <Accordion title="no_secret_key">
+    **Cause**: No `Authorization` header provided or Bearer token is missing.
+    
+    **Solution**: Include your API key in the Authorization header:
+    ```bash
+    Authorization: Bearer am_sk_live_abc123...
+    ```
+  </Accordion>
+
+  <Accordion title="invalid_secret_key">
+    **Cause**: The provided API key is invalid, revoked, or doesn't exist.
+    
+    **Solution**: 
+    - Verify you're using the correct API key
+    - Check that the key hasn't been revoked
+    - Ensure you're using the right environment (test vs live)
+  </Accordion>
+
+  <Accordion title="invalid_publishable_key">
+    **Cause**: The provided publishable key is invalid or doesn't exist.
+    
+    **Solution**: Verify you're using a valid publishable key starting with `am_pk_`.
+  </Accordion>
+
+  <Accordion title="endpoint_not_public">
+    **Cause**: Attempting to access a restricted endpoint using a publishable key.
+    
+    **Example**:
+    ```json
+    {
+      "message": "Endpoint /v1/customers not accessible via publishable key. Please try with a secret key instead.",
+      "code": "endpoint_not_public"
+    }
+    ```
+    
+    **Solution**: Use a secret key for this endpoint, or switch to an allowed public endpoint.
+  </Accordion>
+
+  <Accordion title="no_auth_header">
+    **Cause**: Missing Authentication header for dashboard session.
+    
+    **Solution**: Ensure you're authenticated with Better Auth for dashboard requests.
+  </Accordion>
+
+  <Accordion title="invalid_auth_header">
+    **Cause**: Invalid session token format or expired session.
+    
+    **Solution**: Re-authenticate or refresh your session token.
+  </Accordion>
+</AccordionGroup>
+
+### Validation Errors (400)
+
+Errors caused by invalid input or malformed requests.
+
+<AccordionGroup>
+  <Accordion title="invalid_inputs">
+    **Cause**: Request body or parameters failed schema validation.
+    
+    **Example**:
+    ```json
+    {
+      "message": "Validation error: email must be a valid email address",
+      "code": "invalid_inputs"
+    }
+    ```
+    
+    **Solution**: Check the error message for specific validation failures and correct your input.
+  </Accordion>
+
+  <Accordion title="invalid_request">
+    **Cause**: Request is missing required parameters or has incorrect structure.
+    
+    **Solution**: Verify your request matches the endpoint's expected schema.
+  </Accordion>
+
+  <Accordion title="invalid_api_version">
+    **Cause**: The `x-api-version` header contains an invalid version format.
+    
+    **Example**:
+    ```json
+    {
+      "message": "\"2025-99-99\" is not a valid API version",
+      "code": "invalid_api_version"
+    }
+    ```
+    
+    **Solution**: Use a valid API version format (CalVer, SemVer, or legacy float).
+  </Accordion>
+
+  <Accordion title="invalid_expand">
+    **Cause**: The `expand` parameter contains invalid or unsupported fields.
+    
+    **Solution**: Check the endpoint documentation for supported expand fields.
+  </Accordion>
+</AccordionGroup>
+
+### Resource Errors (404)
+
+Errors when requested resources don't exist.
+
+<AccordionGroup>
+  <Accordion title="customer_not_found">
+    **Cause**: The specified customer ID doesn't exist.
+    
+    **Example**:
+    ```json
+    {
+      "message": "Customer with ID 'cus_xyz' not found",
+      "code": "customer_not_found"
+    }
+    ```
+    
+    **Solution**: Verify the customer ID exists or create the customer first.
+  </Accordion>
+
+  <Accordion title="product_not_found">
+    **Cause**: The specified product or plan doesn't exist.
+    
+    **Solution**: Check that the product ID is correct and the product hasn't been deleted.
+  </Accordion>
+
+  <Accordion title="feature_not_found">
+    **Cause**: The specified feature doesn't exist.
+    
+    **Solution**: Ensure the feature ID is correct and the feature exists in your organization.
+  </Accordion>
+
+  <Accordion title="entity_not_found">
+    **Cause**: The specified entity doesn't exist.
+    
+    **Solution**: Verify the entity ID or create the entity first.
+  </Accordion>
+
+  <Accordion title="org_not_found">
+    **Cause**: Organization not found for the authenticated user.
+    
+    **Solution**: Ensure you're authenticated correctly and your organization exists.
+  </Accordion>
+</AccordionGroup>
+
+### Business Logic Errors (400)
+
+Errors related to business rules and constraints.
+
+<AccordionGroup>
+  <Accordion title="customer_already_exists">
+    **Cause**: Attempting to create a customer with a `customer_id` that already exists.
+    
+    **Solution**: Use a unique customer ID or update the existing customer instead.
+  </Accordion>
+
+  <Accordion title="duplicate_customer_email">
+    **Cause**: A customer with this email already exists.
+    
+    **Solution**: Use a different email or update the existing customer.
+  </Accordion>
+
+  <Accordion title="product_already_attached">
+    **Cause**: The customer already has this product attached.
+    
+    **Solution**: Update the existing product attachment instead of creating a new one.
+  </Accordion>
+
+  <Accordion title="insufficient_balance">
+    **Cause**: Customer doesn't have enough balance to perform the requested action.
+    
+    **Example**:
+    ```json
+    {
+      "message": "Insufficient balance: required 10, available 5",
+      "code": "insufficient_balance"
+    }
+    ```
+    
+    **Solution**: Ensure the customer has sufficient balance before checking or consuming features.
+  </Accordion>
+
+  <Accordion title="duplicate_feature_id">
+    **Cause**: A feature with this ID already exists.
+    
+    **Solution**: Use a unique feature ID or update the existing feature.
+  </Accordion>
+
+  <Accordion title="customer_has_no_payment_method">
+    **Cause**: Attempting a billing operation for a customer without a payment method.
+    
+    **Solution**: Add a payment method to the customer before proceeding.
+  </Accordion>
+</AccordionGroup>
+
+### Payment & Stripe Errors (400)
+
+Errors related to payment processing and Stripe integration.
+
+<AccordionGroup>
+  <Accordion title="stripe_error">
+    **Cause**: An error occurred while processing a Stripe operation.
+    
+    **Example**:
+    ```json
+    {
+      "message": "(Stripe Error) Your card was declined",
+      "code": "stripe_error"
+    }
+    ```
+    
+    **Solution**: Check the error message for specific Stripe error details.
+  </Accordion>
+
+  <Accordion title="stripe_card_declined">
+    **Cause**: The customer's card was declined by Stripe.
+    
+    **Solution**: Ask the customer to use a different payment method.
+  </Accordion>
+
+  <Accordion title="stripe_config_not_found">
+    **Cause**: Stripe is not configured for your organization.
+    
+    **Solution**: Configure Stripe integration in your Autumn dashboard.
+  </Accordion>
+</AccordionGroup>
+
+### Idempotency Errors (400)
+
+Errors related to idempotent request handling.
+
+<AccordionGroup>
+  <Accordion title="idempotency_key_already_exists">
+    **Cause**: An operation with this idempotency key was already completed.
+    
+    **Solution**: Use a unique idempotency key for each new operation.
+  </Accordion>
+
+  <Accordion title="duplicate_idempotency_key">
+    **Cause**: The same idempotency key was used for two different requests.
+    
+    **Solution**: Ensure idempotency keys are unique across different operations.
+  </Accordion>
+</AccordionGroup>
+
+### Internal Errors (500)
+
+Errors that occur on the server side.
+
+<AccordionGroup>
+  <Accordion title="internal_error">
+    **Cause**: An unexpected error occurred on the Autumn servers.
+    
+    **Example**:
+    ```json
+    {
+      "message": "Internal server error",
+      "code": "internal_error"
+    }
+    ```
+    
+    **Solution**: 
+    - Retry the request after a short delay
+    - If the error persists, contact Autumn support
+    - Check the [status page](https://status.useautumn.com) for any ongoing incidents
+  </Accordion>
+</AccordionGroup>
+
+## Complete Error Code Reference
+
+<Accordion title="View all error codes">
+
+### Authentication (401)
+- `no_secret_key` - Missing Authorization header
+- `invalid_secret_key` - Invalid or revoked API key
+- `invalid_publishable_key` - Invalid publishable key
+- `endpoint_not_public` - Endpoint not accessible with publishable key
+- `no_auth_header` - Missing authentication header
+- `invalid_auth_header` - Invalid session token
+- `invalid_api_version` - Invalid API version format
+
+### Validation (400)
+- `invalid_inputs` - Schema validation failed
+- `invalid_request` - Malformed request
+- `invalid_expand` - Invalid expand parameter
+- `invalid_options` - Invalid options provided
+- `invalid_feature` - Invalid feature configuration
+- `invalid_customer` - Invalid customer data
+- `invalid_price` - Invalid price configuration
+- `invalid_event` - Invalid event data
+- `invalid_entitlement` - Invalid entitlement configuration
+- `invalid_reward` - Invalid reward configuration
+
+### Resources (404)
+- `customer_not_found` - Customer doesn't exist
+- `product_not_found` - Product doesn't exist
+- `feature_not_found` - Feature doesn't exist
+- `entity_not_found` - Entity doesn't exist
+- `org_not_found` - Organization doesn't exist
+- `price_not_found` - Price doesn't exist
+- `cus_product_not_found` - Customer product not found
+- `entity_balance_not_found` - Entity balance not found
+- `payment_method_not_found` - Payment method not found
+- `reward_not_found` - Reward not found
+- `referral_not_found` - Referral code not found
+
+### Business Logic (400)
+- `customer_already_exists` - Duplicate customer ID
+- `duplicate_customer_email` - Email already in use
+- `duplicate_feature_id` - Feature ID already exists
+- `product_already_attached` - Product already attached to customer
+- `insufficient_balance` - Not enough balance for operation
+- `customer_has_no_payment_method` - Payment method required
+- `customer_already_has_product` - Customer already subscribed
+- `feature_limit_reached` - Feature usage limit exceeded
+- `entity_already_deleted` - Entity was already deleted
+
+### Stripe Errors (400)
+- `stripe_error` - General Stripe error
+- `stripe_card_declined` - Card payment declined
+- `stripe_config_not_found` - Stripe not configured
+- `stripe_key_invalid` - Invalid Stripe API key
+
+### Internal Errors (500)
+- `internal_error` - Unexpected server error
+
+</Accordion>
+
+## Error Handling Best Practices
+
+<Steps>
+  <Step title="Check HTTP status codes">
+    Always check the HTTP status code first to determine the general error category.
+  </Step>
+  
+  <Step title="Parse the error code">
+    Use the `code` field to handle specific errors programmatically:
+    
+    ```javascript
+    try {
+      const response = await autumn.createCustomer(data);
+    } catch (error) {
+      if (error.code === 'customer_already_exists') {
+        // Handle duplicate customer
+        return await autumn.updateCustomer(data);
+      } else if (error.code === 'invalid_inputs') {
+        // Show validation errors to user
+        showError(error.message);
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Display user-friendly messages">
+    The `message` field is safe to display to end users and provides helpful context.
+  </Step>
+  
+  <Step title="Implement retry logic">
+    For `internal_error` (500) responses, implement exponential backoff retry logic:
+    
+    ```javascript
+    async function retryRequest(fn, maxRetries = 3) {
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          return await fn();
+        } catch (error) {
+          if (error.statusCode === 500 && i < maxRetries - 1) {
+            await sleep(Math.pow(2, i) * 1000);
+            continue;
+          }
+          throw error;
+        }
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Log errors for debugging">
+    Log error details including the request parameters for troubleshooting:
+    
+    ```javascript
+    console.error('API Error:', {
+      code: error.code,
+      message: error.message,
+      statusCode: error.statusCode,
+      request: { endpoint, params }
+    });
+    ```
+  </Step>
+</Steps>
+
+## Need Help?
+
+If you encounter an error you can't resolve:
+
+- Check the [API status page](https://status.useautumn.com)
+- Review the error message and code in this documentation
+- Contact [Autumn support](mailto:support@useautumn.com) with the error details
+- Include the request ID from the response headers (if available)

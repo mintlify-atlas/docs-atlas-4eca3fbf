@@ -1,0 +1,585 @@
+---
+title: 'Track Usage Event'
+api: 'POST /track'
+description: 'Record usage events for metered features and update customer balances'
+---
+
+## Overview
+
+The `/track` endpoint records usage events for metered features. It decrements the customer's balance and returns the updated balance information. This is the primary endpoint for implementing usage-based billing and pay-as-you-go features.
+
+<Note>
+  Every time you track an event, the customer's balance is updated in real-time. Use `idempotency_key` to safely retry requests without double-counting usage.
+</Note>
+
+## When to Use
+
+**Use `/track` when:**
+- Recording API calls, compute time, storage usage
+- Implementing metered features
+- Tracking usage for pay-as-you-go billing
+- Incrementing usage counters
+- Recording analytics events
+
+**Use `/check` instead when:**
+- You need to verify access before performing an operation
+- You want to check balance without recording usage
+
+## Authentication
+
+This endpoint requires API key authentication:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  ID which you provided when creating the customer.
+
+  ```json
+  "cus_123"
+  ```
+</ParamField>
+
+<ParamField body="feature_id" type="string">
+  ID of the feature to track usage for. Required if `event_name` is not provided.
+
+  ```json
+  "api_calls"
+  ```
+</ParamField>
+
+<ParamField body="event_name" type="string">
+  An event name can be used in place of `feature_id`. This can be used if multiple features are tracked in the same event.
+
+  Either `feature_id` or `event_name` must be provided, but not both.
+
+  ```json
+  "document_processed"
+  ```
+</ParamField>
+
+<ParamField body="value" type="number">
+  The amount of usage to record. Defaults to `1`. Can be negative to increase the balance (e.g., when removing a seat or refunding usage).
+
+  ```json
+  5
+  ```
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  If using entity balances (e.g., seats, teams), the entity ID to track usage for.
+
+  ```json
+  "team_456"
+  ```
+</ParamField>
+
+<ParamField body="properties" type="object">
+  Additional properties to attach to this usage event. Useful for analytics and filtering.
+
+  ```json
+  {
+    "endpoint": "/v1/users",
+    "method": "GET",
+    "duration_ms": 234
+  }
+  ```
+</ParamField>
+
+<ParamField body="idempotency_key" type="string">
+  Unique key to prevent duplicate event recording. Use this to safely retry requests without creating duplicate usage records.
+
+  If you send the same `idempotency_key` twice, only the first request will be processed.
+
+  ```json
+  "evt_abc123xyz"
+  ```
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Additional customer properties. These will be used to create or update the customer if they don't exist or their properties are not already set.
+
+  <Expandable title="Customer Data Properties">
+    <ParamField body="name" type="string">
+      Customer's full name
+    </ParamField>
+    <ParamField body="email" type="string">
+      Customer's email address
+    </ParamField>
+    <ParamField body="fingerprint" type="string">
+      Unique identifier to detect duplicate accounts
+    </ParamField>
+    <ParamField body="metadata" type="object">
+      Custom metadata for the customer
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="overage_behavior" type="string">
+  How to handle usage when balance is insufficient:
+  
+  - `cap` - Limits usage to available balance. If customer has 5 remaining and you track 10, only 5 will be recorded.
+  - `reject` - Prevents the usage entirely if balance is insufficient. The request will fail.
+
+  If not specified, usage is recorded even if balance goes negative (depending on feature configuration).
+
+  ```json
+  "cap"
+  ```
+</ParamField>
+
+## Response
+
+<ResponseField name="customer_id" type="string">
+  The ID of the customer.
+</ResponseField>
+
+<ResponseField name="entity_id" type="string" optional>
+  The entity ID if one was provided in the request.
+</ResponseField>
+
+<ResponseField name="event_name" type="string" optional>
+  The name of the event (if event_name was used instead of feature_id).
+</ResponseField>
+
+<ResponseField name="value" type="number">
+  The actual amount of usage recorded. This may differ from the requested value if `overage_behavior` was set to `cap`.
+</ResponseField>
+
+<ResponseField name="balance" type="object" nullable>
+  The customer's updated balance for this feature.
+
+  <Expandable title="Balance Object">
+    <ResponseField name="feature_id" type="string">
+      The feature ID.
+    </ResponseField>
+
+    <ResponseField name="unlimited" type="boolean">
+      Whether the customer has unlimited access.
+    </ResponseField>
+
+    <ResponseField name="granted_balance" type="number">
+      Balance granted from subscriptions.
+    </ResponseField>
+
+    <ResponseField name="purchased_balance" type="number">
+      Additional balance purchased separately.
+    </ResponseField>
+
+    <ResponseField name="current_balance" type="number">
+      Current remaining balance after this usage.
+    </ResponseField>
+
+    <ResponseField name="usage" type="number">
+      Total usage in the current period (including this event).
+    </ResponseField>
+
+    <ResponseField name="overage_allowed" type="boolean">
+      Whether overage is allowed for this feature.
+    </ResponseField>
+
+    <ResponseField name="reset" type="object" nullable>
+      When the balance will reset.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="balances" type="object" optional>
+  If `event_name` was used and it maps to multiple features, this contains balances for all affected features.
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.useautumn.com/track \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "api_calls",
+    "value": 1
+  }'
+```
+
+```typescript TypeScript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
+
+const result = await autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'api_calls',
+  value: 1,
+  properties: {
+    endpoint: '/v1/users',
+    method: 'GET'
+  }
+});
+
+console.log(`Remaining balance: ${result.balance.current_balance}`);
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key='YOUR_API_KEY')
+
+result = autumn.track(
+  customer_id='cus_123',
+  feature_id='api_calls',
+  value=1,
+  properties={
+    'endpoint': '/v1/users',
+    'method': 'GET'
+  }
+)
+
+print(f"Remaining balance: {result['balance']['current_balance']}")
+```
+
+```typescript React
+import { useAutumn } from '@useautumn/react';
+import { useEffect } from 'react';
+
+function ApiCallTracker() {
+  const autumn = useAutumn();
+
+  const trackApiCall = async (endpoint: string) => {
+    try {
+      const result = await autumn.track({
+        customer_id: 'cus_123',
+        feature_id: 'api_calls',
+        value: 1,
+        properties: { endpoint },
+        idempotency_key: `api_${Date.now()}_${Math.random()}`
+      });
+
+      if (result.balance.current_balance < 10) {
+        // Warn user about low balance
+        showLowBalanceWarning();
+      }
+    } catch (error) {
+      console.error('Failed to track usage:', error);
+    }
+  };
+
+  return <div>API tracking active</div>;
+}
+```
+</CodeGroup>
+
+## Example Responses
+
+### Successful Track
+
+```json
+{
+  "customer_id": "cus_123",
+  "value": 1,
+  "balance": {
+    "feature_id": "api_calls",
+    "unlimited": false,
+    "granted_balance": 1000,
+    "purchased_balance": 0,
+    "current_balance": 846,
+    "usage": 154,
+    "overage_allowed": false,
+    "max_purchase": null,
+    "reset": {
+      "interval": "month",
+      "resets_at": 1735689600000
+    },
+    "plan_id": "pro_plan"
+  }
+}
+```
+
+### Track with Overage Cap
+
+```json
+{
+  "customer_id": "cus_123",
+  "value": 5,
+  "balance": {
+    "feature_id": "api_calls",
+    "unlimited": false,
+    "granted_balance": 100,
+    "purchased_balance": 0,
+    "current_balance": 0,
+    "usage": 100,
+    "overage_allowed": false,
+    "reset": {
+      "interval": "month",
+      "resets_at": 1735689600000
+    }
+  }
+}
+```
+*Note: Requested value was 10, but only 5 was recorded due to cap behavior*
+
+### Track with Event Name
+
+```json
+{
+  "customer_id": "cus_123",
+  "event_name": "document_processed",
+  "value": 1,
+  "balances": {
+    "storage": {
+      "feature_id": "storage",
+      "current_balance": 9500,
+      "usage": 500
+    },
+    "processing": {
+      "feature_id": "processing",
+      "current_balance": 990,
+      "usage": 10
+    }
+  }
+}
+```
+
+## Common Use Cases
+
+### Simple Usage Tracking
+
+```typescript
+// Track single API call
+await autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'api_calls',
+  value: 1
+});
+```
+
+### Track with Idempotency
+
+```typescript
+// Generate idempotency key from request ID
+const idempotencyKey = `req_${requestId}`;
+
+await autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'api_calls',
+  value: 1,
+  idempotency_key: idempotencyKey
+});
+
+// Safe to retry - won't double-count
+await autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'api_calls',
+  value: 1,
+  idempotency_key: idempotencyKey // Same key
+});
+```
+
+### Track with Properties
+
+```typescript
+await autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'compute_time',
+  value: 1.5, // 1.5 hours
+  properties: {
+    job_id: 'job_789',
+    instance_type: 't3.large',
+    region: 'us-east-1'
+  }
+});
+```
+
+### Handle Overage with Cap
+
+```typescript
+const result = await autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'api_calls',
+  value: 100,
+  overage_behavior: 'cap'
+});
+
+if (result.value < 100) {
+  console.log(`Only ${result.value} of 100 requests were allowed`);
+  console.log('Customer needs to upgrade');
+}
+```
+
+### Reject on Insufficient Balance
+
+```typescript
+try {
+  await autumn.track({
+    customer_id: 'cus_123',
+    feature_id: 'api_calls',
+    value: 10,
+    overage_behavior: 'reject'
+  });
+} catch (error) {
+  if (error.code === 'insufficient_balance') {
+    // Show upgrade prompt
+    showUpgradeModal();
+  }
+}
+```
+
+### Track Negative Value (Refund)
+
+```typescript
+// Refund usage when operation is cancelled
+await autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'api_calls',
+  value: -5 // Adds 5 back to balance
+});
+```
+
+### Entity-Scoped Tracking
+
+```typescript
+await autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'team_seats',
+  entity_id: 'team_456',
+  value: 1
+});
+```
+
+## Best Practices
+
+### Always Use Idempotency Keys
+
+For critical operations, always include an idempotency key:
+
+```typescript
+const trackWithRetry = async (params) => {
+  const maxRetries = 3;
+  let lastError;
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await autumn.track({
+        ...params,
+        idempotency_key: params.idempotency_key || `${params.customer_id}_${Date.now()}`
+      });
+    } catch (error) {
+      lastError = error;
+      if (error.code !== 'network_error') break;
+      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+    }
+  }
+
+  throw lastError;
+};
+```
+
+### Track in Background
+
+Don't block user operations waiting for track response:
+
+```typescript
+// Process request immediately
+const response = await processUserRequest();
+
+// Track usage in background
+autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'api_calls',
+  value: 1
+}).catch(error => {
+  console.error('Failed to track usage:', error);
+  // Log to error tracking service
+});
+
+return response;
+```
+
+### Batch Tracking
+
+For high-volume scenarios, consider batching:
+
+```typescript
+const usageQueue = [];
+
+function queueUsage(customerId: string, featureId: string, value: number) {
+  usageQueue.push({ customer_id: customerId, feature_id: featureId, value });
+}
+
+setInterval(async () => {
+  if (usageQueue.length === 0) return;
+
+  const batch = usageQueue.splice(0, 100);
+  await Promise.all(
+    batch.map(usage => autumn.track(usage).catch(console.error))
+  );
+}, 1000); // Flush every second
+```
+
+### Monitor Balance Thresholds
+
+```typescript
+const result = await autumn.track({
+  customer_id: 'cus_123',
+  feature_id: 'api_calls',
+  value: 1
+});
+
+if (!result.balance.unlimited) {
+  const percentUsed = (result.balance.usage / (result.balance.granted_balance + result.balance.purchased_balance)) * 100;
+
+  if (percentUsed > 80) {
+    // Warn customer about approaching limit
+    await sendLowBalanceEmail(customerId);
+  } else if (percentUsed > 100) {
+    // Customer has exceeded quota
+    await sendUpgradePrompt(customerId);
+  }
+}
+```
+
+## Error Handling
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="code" type="string">
+      Error code identifying the type of error.
+      
+      Common error codes:
+      - `customer_not_found` - The specified customer does not exist
+      - `feature_not_found` - The specified feature does not exist
+      - `insufficient_balance` - Customer doesn't have enough balance (with `overage_behavior: 'reject'`)
+      - `duplicate_event` - Event with this idempotency_key was already recorded
+      - `invalid_request` - Invalid parameters provided
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Human-readable error message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Error Response
+
+```json
+{
+  "error": {
+    "code": "insufficient_balance",
+    "message": "Customer does not have sufficient balance for this operation"
+  }
+}
+```
+
+## Related Endpoints
+
+- [Check](/api-reference/core/check) - Verify feature access before tracking
+- [Balances](/api/balances/retrieve) - Get detailed balance information
+- [Events](/api/events/list) - List historical usage events
+
+## Related Guides
+
+- [Tracking Usage](/guides/tracking-usage) - Complete guide to usage tracking
+- [Usage-Based Billing](/guides/usage-based-billing) - Implementing metered features
+- [Metered Features](/guides/metered-features) - Setting up pay-as-you-go features

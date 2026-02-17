@@ -1,0 +1,234 @@
+---
+title: 'Update Balance'
+openapi: 'POST /balances/update'
+---
+
+## Overview
+
+Update or set the balance for a specific feature for a customer. Use this endpoint to adjust quotas, reset usage, or modify balance amounts.
+
+<Info>
+Either `current_balance` must be provided. You can update the balance for a specific reset interval if the feature has recurring resets.
+</Info>
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer
+</ParamField>
+
+<ParamField body="feature_id" type="string" required>
+  The ID of the feature to update balance for
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  The ID of the entity to update balance for (if using entity-scoped balances)
+</ParamField>
+
+<ParamField body="current_balance" type="number">
+  The new balance value to set. This sets the current available balance directly.
+</ParamField>
+
+<ParamField body="interval" type="enum">
+  The interval to update balance for. Options: `day`, `week`, `month`, `year`. Only applicable if the feature has recurring resets.
+</ParamField>
+
+## Response
+
+Returns a success response confirming the balance was updated.
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the balance update was successful
+</ResponseField>
+
+## Example Requests
+
+### Set Current Balance
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/balances/update' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "feat_api_calls",
+    "current_balance": 500
+  }'
+```
+
+```typescript TypeScript
+const result = await autumn.balances.update({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  current_balance: 500
+});
+```
+
+```python Python
+result = autumn.balances.update(
+  customer_id='cus_123',
+  feature_id='feat_api_calls',
+  current_balance=500
+)
+```
+</CodeGroup>
+
+### Update Entity-Scoped Balance
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/balances/update' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "entity_id": "proj_456",
+    "feature_id": "feat_storage_gb",
+    "current_balance": 75
+  }'
+```
+
+```typescript TypeScript
+const result = await autumn.balances.update({
+  customer_id: 'cus_123',
+  entity_id: 'proj_456',
+  feature_id: 'feat_storage_gb',
+  current_balance: 75
+});
+```
+
+```python Python
+result = autumn.balances.update(
+  customer_id='cus_123',
+  entity_id='proj_456',
+  feature_id='feat_storage_gb',
+  current_balance=75
+)
+```
+</CodeGroup>
+
+### Update Balance for Specific Interval
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/balances/update' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "feat_api_calls",
+    "current_balance": 1000,
+    "interval": "month"
+  }'
+```
+
+```typescript TypeScript
+const result = await autumn.balances.update({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  current_balance: 1000,
+  interval: 'month'
+});
+```
+
+```python Python
+result = autumn.balances.update(
+  customer_id='cus_123',
+  feature_id='feat_api_calls',
+  current_balance=1000,
+  interval='month'
+)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true
+}
+```
+
+## Use Cases
+
+### Grant Bonus Credits
+Increase a customer's balance as a reward or compensation:
+```typescript
+// Get current balance first
+const customer = await autumn.customers.get({
+  customer_id: 'cus_123',
+  expand: ['balances.feature']
+});
+
+const currentBalance = customer.balances['feat_api_calls'].current_balance;
+
+// Add 500 bonus credits
+await autumn.balances.update({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  current_balance: currentBalance + 500
+});
+```
+
+### Reset Monthly Quota
+Manually reset a customer's monthly balance:
+```typescript
+await autumn.balances.update({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  current_balance: 1000, // Reset to included amount
+  interval: 'month'
+});
+```
+
+### Adjust Project Limits
+Modify entity-scoped balances when project limits change:
+```typescript
+await autumn.balances.update({
+  customer_id: 'cus_123',
+  entity_id: 'proj_456',
+  feature_id: 'feat_storage_gb',
+  current_balance: 100 // Increase storage limit
+});
+```
+
+### Deduct Balance
+Manually deduct from a balance for external usage:
+```typescript
+const customer = await autumn.customers.get({
+  customer_id: 'cus_123',
+  expand: ['balances.feature']
+});
+
+const currentBalance = customer.balances['feat_credits'].current_balance;
+
+await autumn.balances.update({
+  customer_id: 'cus_123',
+  feature_id: 'feat_credits',
+  current_balance: currentBalance - 50 // Deduct 50 credits
+});
+```
+
+## Behavior Notes
+
+<Info>
+**Setting vs. Adding**: The `current_balance` parameter **sets** the balance to the specified value. It does not add to the existing balance. To add to a balance, you must first fetch the current balance and then set it to `current + amount`.
+</Info>
+
+<Warning>
+**Concurrent Updates**: If multiple updates happen simultaneously, the last write wins. For critical balance operations, consider implementing optimistic locking or transaction patterns in your application.
+</Warning>
+
+## Error Responses
+
+- **400 Bad Request**: Invalid parameters or missing required fields
+- **404 Not Found**: Customer, feature, or balance does not exist
+- **403 Forbidden**: Insufficient permissions
+
+## Notes
+
+- The balance must already exist (created via plan attachment or `/balances/create`)
+- Updates are immediate and affect the next `/check` or `/track` call
+- For features with reset intervals, omitting `interval` updates the current active period
+- Entity-scoped balances require both `customer_id` and `entity_id`

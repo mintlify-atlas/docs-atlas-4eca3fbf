@@ -1,11 +1,12 @@
 ---
 title: "TypeScript SDK"
-description: "Full-featured SDK for Node.js and TypeScript server applications"
+description: "Full-featured Node.js and TypeScript SDK for server-side integration"
+icon: "node-js"
 ---
 
-## Installation
+The Autumn TypeScript SDK provides a complete interface for managing billing, subscriptions, and feature access in Node.js and TypeScript applications.
 
-Install the Autumn SDK using your preferred package manager:
+## Installation
 
 <CodeGroup>
 ```bash npm
@@ -25,9 +26,9 @@ bun add autumn-js
 ```
 </CodeGroup>
 
-## Quick Start
+## Initialization
 
-### 1. Initialize the Client
+### Basic Setup
 
 Create an Autumn client instance with your secret key:
 
@@ -35,22 +36,25 @@ Create an Autumn client instance with your secret key:
 import Autumn from 'autumn-js';
 
 const autumn = new Autumn({
-  secretKey: process.env.AUTUMN_SECRET_KEY, // am_sk_...
-  baseUrl: 'https://api.useautumn.com/v1' // Optional, defaults to production
+  secretKey: process.env.AUTUMN_SECRET_KEY
 });
 ```
 
-### 2. Configuration Options
+### Configuration Options
 
 <ParamField path="secretKey" type="string" required>
-  Your Autumn secret key for server-side authentication. Get this from your [dashboard](https://app.useautumn.com).
+  Your Autumn secret key from the [dashboard](https://app.useautumn.com). Starts with `am_sk_`.
 </ParamField>
 
 <ParamField path="baseUrl" type="string" default="https://api.useautumn.com/v1">
-  The Autumn API base URL. Use this for self-hosted instances.
+  API base URL. Override for self-hosted instances.
 </ParamField>
 
-### 3. Environment Setup
+<ParamField path="timeout" type="number" default="30000">
+  Request timeout in milliseconds.
+</ParamField>
+
+### Environment Variables
 
 Store your secret key securely:
 
@@ -59,7 +63,7 @@ AUTUMN_SECRET_KEY=am_sk_test_...
 ```
 
 <Warning>
-  Never commit secret keys to version control. Always use environment variables or secret management services.
+  Never commit secret keys to version control. Use environment variables or secret management services.
 </Warning>
 
 ## Core Operations
@@ -69,13 +73,6 @@ AUTUMN_SECRET_KEY=am_sk_test_...
 Subscribe customers to products and plans:
 
 ```typescript billing.ts
-import Autumn from 'autumn-js';
-
-const autumn = new Autumn({
-  secretKey: process.env.AUTUMN_SECRET_KEY
-});
-
-// Subscribe a customer to a product
 const { data } = await autumn.attach({
   customerId: 'user_123',
   productId: 'pro_plan',
@@ -83,15 +80,40 @@ const { data } = await autumn.attach({
   cancelUrl: 'https://yourapp.com/pricing'
 });
 
-// For new customers without payment method, data.url contains Stripe Checkout URL
+// For new customers, data.url contains Stripe Checkout URL
 if (data.url) {
-  // Redirect user to Stripe Checkout
   return { redirectUrl: data.url };
 }
 
-// For existing customers, subscription is updated immediately
-console.log('Subscription updated:', data);
+// For existing customers, subscription updates immediately
+console.log('Subscription updated');
 ```
+
+#### Attach Parameters
+
+<ParamField path="customerId" type="string" required>
+  Your internal user or organization ID
+</ParamField>
+
+<ParamField path="productId" type="string" required>
+  The product ID to attach
+</ParamField>
+
+<ParamField path="successUrl" type="string">
+  URL to redirect after successful payment
+</ParamField>
+
+<ParamField path="cancelUrl" type="string">
+  URL to redirect if user cancels checkout
+</ParamField>
+
+<ParamField path="quantity" type="number">
+  For seat-based pricing (e.g., number of team members)
+</ParamField>
+
+<ParamField path="entityId" type="string">
+  Entity ID for multi-entity subscriptions
+</ParamField>
 
 ### Attach with Quantity
 
@@ -120,9 +142,26 @@ if (!data.allowed) {
   throw new Error('Feature access denied');
 }
 
-// Allow the operation
-performFeatureAction();
+// Proceed with feature access
 ```
+
+#### Check Parameters
+
+<ParamField path="customerId" type="string" required>
+  Customer ID to check access for
+</ParamField>
+
+<ParamField path="featureId" type="string" required>
+  Feature ID to check
+</ParamField>
+
+<ParamField path="quantity" type="number" default="1">
+  Amount to check (for usage-based features)
+</ParamField>
+
+<ParamField path="entityId" type="string">
+  Check access for specific entity
+</ParamField>
 
 ### Check with Usage Details
 
@@ -131,17 +170,16 @@ Get detailed usage information:
 ```typescript
 const { data } = await autumn.check({
   customerId: 'user_123',
-  featureId: 'api_calls',
-  includeUsage: true
+  featureId: 'api_calls'
 });
 
-console.log(`Used: ${data.used} / ${data.limit}`);
+console.log(`Used: ${data.current_usage} / ${data.limit}`);
 console.log(`Remaining: ${data.remaining}`);
 
 if (!data.allowed) {
   return {
     error: 'Limit reached',
-    upgrade_url: '/pricing'
+    upgradeUrl: '/pricing'
   };
 }
 ```
@@ -151,7 +189,7 @@ if (!data.allowed) {
 Track feature consumption for metered features:
 
 ```typescript usage.ts
-// Track single unit of usage
+// Track single unit
 await autumn.track({
   customerId: 'user_123',
   featureId: 'api_calls',
@@ -165,6 +203,32 @@ await autumn.track({
   value: 2.5
 });
 ```
+
+#### Track Parameters
+
+<ParamField path="customerId" type="string" required>
+  Customer ID recording usage
+</ParamField>
+
+<ParamField path="featureId" type="string" required>
+  Feature ID being consumed
+</ParamField>
+
+<ParamField path="value" type="number" required>
+  Amount of usage to record
+</ParamField>
+
+<ParamField path="eventName" type="string">
+  Optional event name for analytics
+</ParamField>
+
+<ParamField path="properties" type="object">
+  Additional metadata
+</ParamField>
+
+<ParamField path="entityId" type="string">
+  Entity consuming the feature
+</ParamField>
 
 ### Check and Track Pattern
 
@@ -245,9 +309,19 @@ const { data } = await autumn.customers.list({
   offset: 0
 });
 
-console.log(`Total customers: ${data.total}`);
+console.log(`Total: ${data.total}`);
 data.list.forEach(customer => {
   console.log(`${customer.name} - ${customer.email}`);
+});
+```
+
+### Delete Customer
+
+Remove a customer:
+
+```typescript
+await autumn.customers.delete({
+  customerId: 'user_123'
 });
 ```
 
@@ -301,9 +375,28 @@ const { data } = await autumn.products.get({
 console.log(data.product);
 ```
 
+### Create Product
+
+Create a new product programmatically:
+
+```typescript
+const { data } = await autumn.products.create({
+  id: 'enterprise_plan',
+  name: 'Enterprise Plan',
+  price: 99900, // Price in cents
+  interval: 'month',
+  features: [
+    {
+      id: 'api_calls',
+      limit: 1000000
+    }
+  ]
+});
+```
+
 ## Checkout Flow
 
-### Generate Checkout Session
+### Generate Checkout Preview
 
 Use `checkout` to preview pricing before attaching:
 
@@ -353,68 +446,86 @@ await autumn.cancel({
 });
 ```
 
-## Advanced Usage
+<Note>
+  By default, cancellations take effect at the end of the billing period. Access continues until then.
+</Note>
 
-### Entity Management
+## Entity Management
 
 Manage entities (seats, workspaces, projects):
 
+### Create Entity
+
 ```typescript
-// Create an entity
 const { data } = await autumn.entities.create({
   customerId: 'org_123',
   entityDefinitionId: 'workspace',
   entityId: 'workspace_456',
   name: 'Marketing Team'
 });
+```
 
-// List entities
-const { data: entities } = await autumn.entities.list({
+### List Entities
+
+```typescript
+const { data } = await autumn.entities.list({
   customerId: 'org_123'
 });
 
-// Delete an entity
+console.log(`Total entities: ${data.total}`);
+```
+
+### Delete Entity
+
+```typescript
 await autumn.entities.delete({
   customerId: 'org_123',
   entityId: 'workspace_456'
 });
 ```
 
-### Balance Management (Credits)
+## Balance Management (Credits)
 
 Manage customer credit balances:
 
+### Add Credits
+
 ```typescript
-// Add credits
 await autumn.balances.create({
   customerId: 'user_123',
   featureId: 'credits',
   value: 1000
 });
+```
 
-// Update balance
+### Update Balance
+
+```typescript
 await autumn.balances.update({
   customerId: 'user_123',
   featureId: 'credits',
   value: 500 // Add 500 more credits
 });
+```
 
-// Check balance
+### Check Balance
+
+```typescript
 const { data } = await autumn.check({
   customerId: 'user_123',
-  featureId: 'credits',
-  includeUsage: true
+  featureId: 'credits'
 });
 
 console.log(`Credits remaining: ${data.remaining}`);
 ```
 
-### Invoice Management
+## Invoice Management
 
 Retrieve customer invoices:
 
+### List Invoices
+
 ```typescript
-// List invoices
 const { data } = await autumn.invoices.list({
   customerId: 'user_123'
 });
@@ -422,14 +533,19 @@ const { data } = await autumn.invoices.list({
 data.list.forEach(invoice => {
   console.log(`${invoice.date}: ${invoice.amount} ${invoice.currency}`);
 });
-
-// Get specific invoice
-const { data: invoice } = await autumn.invoices.get({
-  invoiceId: 'inv_123'
-});
 ```
 
-### Billing Portal
+### Get Invoice
+
+```typescript
+const { data } = await autumn.invoices.get({
+  invoiceId: 'inv_123'
+});
+
+console.log(data.invoice);
+```
+
+## Billing Portal
 
 Generate a Stripe billing portal URL:
 
@@ -443,7 +559,7 @@ const { data } = await autumn.customers.billingPortal({
 return { portalUrl: data.url };
 ```
 
-## Type Safety
+## TypeScript Types
 
 The SDK is fully typed with TypeScript:
 
@@ -453,8 +569,10 @@ import type {
   CheckResult,
   AttachParams,
   AttachResult,
+  TrackParams,
   Customer,
-  Product
+  Product,
+  Invoice
 } from 'autumn-js';
 
 const params: CheckParams = {
@@ -486,9 +604,11 @@ try {
 }
 ```
 
-## Express.js Integration
+## Framework Integration
 
-Example middleware for Express:
+### Express.js Middleware
+
+Create middleware for feature access control:
 
 ```typescript middleware.ts
 import Autumn from 'autumn-js';
@@ -498,9 +618,9 @@ const autumn = new Autumn({
   secretKey: process.env.AUTUMN_SECRET_KEY
 });
 
-export async function requireFeature(featureId: string) {
+export function requireFeature(featureId: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const customerId = req.user?.id; // From your auth middleware
+    const customerId = req.user?.id;
     
     if (!customerId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -512,7 +632,7 @@ export async function requireFeature(featureId: string) {
       if (!data.allowed) {
         return res.status(403).json({
           error: 'Feature access denied',
-          upgrade_url: '/pricing'
+          upgradeUrl: '/pricing'
         });
       }
       
@@ -527,6 +647,8 @@ export async function requireFeature(featureId: string) {
 Usage:
 
 ```typescript routes.ts
+import { requireFeature } from './middleware';
+
 app.post('/api/generate', 
   requireFeature('ai_generation'),
   async (req, res) => {
@@ -543,6 +665,31 @@ app.post('/api/generate',
     res.json(result);
   }
 );
+```
+
+### Next.js API Routes
+
+```typescript app/api/check-access/route.ts
+import Autumn from 'autumn-js';
+import { NextResponse } from 'next/server';
+
+const autumn = new Autumn({
+  secretKey: process.env.AUTUMN_SECRET_KEY
+});
+
+export async function POST(request: Request) {
+  const { customerId, featureId } = await request.json();
+  
+  try {
+    const { data } = await autumn.check({ customerId, featureId });
+    return NextResponse.json({ allowed: data.allowed });
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Check failed' },
+      { status: 500 }
+    );
+  }
+}
 ```
 
 ## Best Practices
@@ -568,7 +715,9 @@ app.post('/api/generate',
           return await autumn.check(params);
         } catch (error) {
           if (i === retries - 1) throw error;
-          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+          await new Promise(resolve => 
+            setTimeout(resolve, 1000 * (i + 1))
+          );
         }
       }
     }
@@ -592,7 +741,7 @@ app.post('/api/generate',
       const result = await autumn.check({ customerId, featureId });
       cache.set(key, {
         allowed: result.data.allowed,
-        expires: Date.now() + 60000 // Cache for 1 minute
+        expires: Date.now() + 60000 // 1 minute
       });
       
       return result;
@@ -609,10 +758,10 @@ app.post('/api/generate',
       
       switch (event.type) {
         case 'customer.subscription.updated':
-          // Handle subscription change
+          // Clear cache, notify user
           break;
         case 'customer.feature.limit_reached':
-          // Notify customer
+          // Send notification
           break;
       }
       
@@ -625,16 +774,16 @@ app.post('/api/generate',
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="API Reference" icon="book" href="/api/attach">
-    Explore all available API endpoints
-  </Card>
   <Card title="React SDK" icon="react" href="/sdks/react">
-    Check out the React SDK for frontend
+    Check out the React SDK for frontend integration
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Explore all available API endpoints
   </Card>
   <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
     Set up webhooks for real-time events
   </Card>
-  <Card title="Python SDK" icon="python" href="/sdks/python">
-    View the Python SDK documentation
+  <Card title="Examples" icon="code" href="/guides/attach-products">
+    View integration examples and guides
   </Card>
 </CardGroup>

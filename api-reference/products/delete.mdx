@@ -1,0 +1,225 @@
+---
+title: "Delete Product"
+api: "DELETE /plans/{plan_id}"
+---
+
+Deletes a specific version of a product (plan). By default, only deletes the latest version. Use with caution as this action cannot be undone.
+
+<Warning>
+  Deleting a product version that has active subscriptions may cause issues. Consider archiving instead by using the [Update Product](/api-reference/products/update) endpoint with `archived: true`.
+</Warning>
+
+## Path Parameters
+
+<ParamField path="plan_id" type="string" required>
+  The unique identifier of the product to delete.
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="all_versions" type="boolean">
+  If `true`, deletes all versions of the product. If `false` or omitted, only deletes the latest version.
+</ParamField>
+
+## Response
+
+Returns a success confirmation.
+
+<ResponseField name="success" type="boolean">
+  Always `true` if the deletion was successful.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Confirmation message.
+</ResponseField>
+
+## Delete Behavior
+
+### Delete Latest Version Only
+
+By default, only the latest version is deleted:
+
+```javascript
+// Product has versions 1, 2, and 3
+await autumn.plans.delete('plan_starter');
+// Result: Versions 1 and 2 remain, version 3 is deleted
+// Version 2 becomes the new "latest version"
+```
+
+### Delete All Versions
+
+Use `all_versions: true` to delete the entire product:
+
+```javascript
+await autumn.plans.delete('plan_starter', {
+  all_versions: true
+});
+// Result: All versions deleted, product no longer exists
+```
+
+<Warning>
+  When `all_versions: true`, the entire product is removed. Customers with active subscriptions to any version will be affected.
+</Warning>
+
+## When to Delete vs Archive
+
+### Use Delete When:
+- Product was created by mistake
+- Product has no active subscriptions
+- Testing in development environment
+- Removing outdated versions that are no longer in use
+
+### Use Archive When:
+- Product has active subscriptions
+- Want to prevent new subscriptions while keeping existing ones
+- Need to maintain historical data
+- Might want to restore the product later
+
+To archive instead of delete:
+
+```javascript
+// Archive instead of delete
+await autumn.plans.update('plan_starter', {
+  archived: true
+});
+```
+
+<RequestExample>
+```bash cURL
+curl -X DELETE https://api.autumn.com/v1/plans/plan_starter \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```bash cURL - Delete all versions
+curl -X DELETE "https://api.autumn.com/v1/plans/plan_starter?all_versions=true" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+// Delete latest version only
+await autumn.plans.delete('plan_starter');
+console.log('Latest version deleted');
+```
+
+```javascript JavaScript - Delete all versions
+await autumn.plans.delete('plan_starter', {
+  all_versions: true
+});
+console.log('All versions deleted');
+```
+
+```javascript JavaScript - Safe deletion pattern
+// Check for active subscriptions first
+const product = await autumn.plans.get('plan_starter');
+
+// Better to archive if there might be active subscriptions
+if (hasActiveSubscriptions) {
+  await autumn.plans.update('plan_starter', { archived: true });
+  console.log('Product archived');
+} else {
+  await autumn.plans.delete('plan_starter');
+  console.log('Product deleted');
+}
+```
+
+```python Python
+# Delete latest version only
+autumn.plans.delete('plan_starter')
+print('Latest version deleted')
+```
+
+```python Python - Delete all versions
+autumn.plans.delete('plan_starter', all_versions=True)
+print('All versions deleted')
+```
+
+```python Python - Safe deletion pattern
+# Check for active subscriptions first
+product = autumn.plans.get('plan_starter')
+
+# Better to archive if there might be active subscriptions
+if has_active_subscriptions:
+    autumn.plans.update('plan_starter', {'archived': True})
+    print('Product archived')
+else:
+    autumn.plans.delete('plan_starter')
+    print('Product deleted')
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "success": true,
+  "message": "Plan deleted successfully"
+}
+```
+
+```json 404
+{
+  "error": {
+    "message": "Plan not found",
+    "code": "not_found"
+  }
+}
+```
+
+```json 400
+{
+  "error": {
+    "message": "Cannot delete plan with active subscriptions",
+    "code": "invalid_request"
+  }
+}
+```
+</ResponseExample>
+
+## Version Management Examples
+
+### Delete Only Latest Version
+
+When you want to roll back to a previous version:
+
+```javascript
+// You have versions 1, 2, 3
+// Version 3 has a bug, delete it
+await autumn.plans.delete('plan_pro');
+
+// Now version 2 is the latest
+const product = await autumn.plans.get('plan_pro');
+console.log(product.version); // 2
+```
+
+### Clean Up Test Products
+
+In development, delete all versions:
+
+```javascript
+// Delete test products completely
+const testProducts = ['plan_test_1', 'plan_test_2', 'plan_test_3'];
+
+for (const productId of testProducts) {
+  try {
+    await autumn.plans.delete(productId, { all_versions: true });
+    console.log(`Deleted ${productId}`);
+  } catch (error) {
+    console.error(`Failed to delete ${productId}:`, error.message);
+  }
+}
+```
+
+### Delete Unused Versions
+
+Remove old versions that have no subscriptions:
+
+```javascript
+// Check if version has no subscriptions, then delete
+const customers = await autumn.customers.list({
+  plans: [{ id: 'plan_starter', versions: [1] }]
+});
+
+if (customers.list.length === 0) {
+  // Safe to delete version 1 (you'd need to specify version in actual implementation)
+  console.log('Version 1 has no subscriptions');
+}
+```

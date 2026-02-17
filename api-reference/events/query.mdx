@@ -1,0 +1,333 @@
+---
+title: 'Query Events (Aggregate)'
+openapi: 'POST /events/aggregate'
+---
+
+## Overview
+
+Aggregate usage events over time periods with optional grouping. This endpoint provides analytics-ready data for dashboards, reporting, and billing calculations.
+
+<Info>
+This endpoint is also referred to as "Query Events" or "Aggregate Events" in the Autumn ecosystem.
+</Info>
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  Customer ID to aggregate events for
+</ParamField>
+
+<ParamField body="feature_id" type="string | string[]" required>
+  Feature ID(s) to aggregate events for. Can be a single ID or an array of IDs.
+</ParamField>
+
+<ParamField body="group_by" type="string">
+  Property to group events by (must start with `properties.`). If provided, each time period will contain grouped data.
+  
+  Example: `properties.region` to group by region
+</ParamField>
+
+<ParamField body="range" type="enum">
+  Predefined time range. Options:
+  - `24h` - Last 24 hours
+  - `7d` - Last 7 days
+  - `30d` - Last 30 days
+  - `1bc` - Current billing cycle (default)
+  - `3bc` - Last 3 billing cycles
+  
+  Either `range` or `custom_range` must be provided, but not both.
+</ParamField>
+
+<ParamField body="bin_size" type="enum">
+  Size of time bins for aggregation. Options:
+  - `hour` - Hourly buckets (default for 24h range)
+  - `day` - Daily buckets (default for other ranges)
+  - `week` - Weekly buckets
+  - `month` - Monthly buckets
+</ParamField>
+
+<ParamField body="custom_range" type="object">
+  Custom time range for aggregation
+  
+  <Expandable title="Custom Range Properties">
+    <ParamField body="start" type="number" required>
+      Start timestamp in epoch milliseconds
+    </ParamField>
+    
+    <ParamField body="end" type="number" required>
+      End timestamp in epoch milliseconds (must be after start)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response
+
+Returns aggregated event data with totals.
+
+<ResponseField name="list" type="array">
+  Array of time period objects containing aggregated values
+  
+  <Expandable title="Period Object (No Grouping)">
+    <ResponseField name="period" type="number">
+      Timestamp for the start of this time period (epoch milliseconds)
+    </ResponseField>
+    
+    <ResponseField name="[feature_id]" type="number">
+      Aggregated value for each feature in this period
+    </ResponseField>
+  </Expandable>
+  
+  <Expandable title="Period Object (With Grouping)">
+    <ResponseField name="period" type="number">
+      Timestamp for the start of this time period (epoch milliseconds)
+    </ResponseField>
+    
+    <ResponseField name="[feature_id]" type="object">
+      Object with group values as keys and aggregated values as numbers
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="total" type="object">
+  Total aggregates across all periods for each feature
+  
+  <Expandable title="Total Object Properties">
+    <ResponseField name="[feature_id].count" type="number">
+      Number of events
+    </ResponseField>
+    
+    <ResponseField name="[feature_id].sum" type="number">
+      Sum of all event values
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Requests
+
+### Basic Aggregation
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/events/aggregate' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "feat_api_calls",
+    "range": "7d"
+  }'
+```
+
+```typescript TypeScript
+const analytics = await autumn.events.aggregate({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  range: '7d'
+});
+```
+
+```python Python
+analytics = autumn.events.aggregate(
+  customer_id='cus_123',
+  feature_id='feat_api_calls',
+  range='7d'
+)
+```
+</CodeGroup>
+
+### Multiple Features
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/events/aggregate' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": ["feat_api_calls", "feat_storage"],
+    "range": "30d",
+    "bin_size": "day"
+  }'
+```
+
+```typescript TypeScript
+const analytics = await autumn.events.aggregate({
+  customer_id: 'cus_123',
+  feature_id: ['feat_api_calls', 'feat_storage'],
+  range: '30d',
+  bin_size: 'day'
+});
+```
+
+```python Python
+analytics = autumn.events.aggregate(
+  customer_id='cus_123',
+  feature_id=['feat_api_calls', 'feat_storage'],
+  range='30d',
+  bin_size='day'
+)
+```
+</CodeGroup>
+
+### Custom Time Range
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/events/aggregate' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "feat_api_calls",
+    "custom_range": {
+      "start": 1759247877000,
+      "end": 1759420677000
+    },
+    "bin_size": "hour"
+  }'
+```
+
+```typescript TypeScript
+const analytics = await autumn.events.aggregate({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  custom_range: {
+    start: 1759247877000,
+    end: 1759420677000
+  },
+  bin_size: 'hour'
+});
+```
+
+```python Python
+analytics = autumn.events.aggregate(
+  customer_id='cus_123',
+  feature_id='feat_api_calls',
+  custom_range={
+    'start': 1759247877000,
+    'end': 1759420677000
+  },
+  bin_size='hour'
+)
+```
+</CodeGroup>
+
+### Group By Property
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/events/aggregate' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "feat_api_calls",
+    "range": "7d",
+    "group_by": "properties.region"
+  }'
+```
+
+```typescript TypeScript
+const analytics = await autumn.events.aggregate({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  range: '7d',
+  group_by: 'properties.region'
+});
+```
+
+```python Python
+analytics = autumn.events.aggregate(
+  customer_id='cus_123',
+  feature_id='feat_api_calls',
+  range='7d',
+  group_by='properties.region'
+)
+```
+</CodeGroup>
+
+## Example Responses
+
+### Without Grouping
+
+```json
+{
+  "list": [
+    {
+      "period": 1762905600000,
+      "feat_api_calls": 150,
+      "feat_storage": 1024
+    },
+    {
+      "period": 1762992000000,
+      "feat_api_calls": 203,
+      "feat_storage": 2048
+    }
+  ],
+  "total": {
+    "feat_api_calls": {
+      "count": 2,
+      "sum": 353
+    },
+    "feat_storage": {
+      "count": 2,
+      "sum": 3072
+    }
+  }
+}
+```
+
+### With Grouping
+
+```json
+{
+  "list": [
+    {
+      "period": 1762905600000,
+      "feat_api_calls": {
+        "us-east-1": 100,
+        "eu-west-1": 50
+      }
+    },
+    {
+      "period": 1762992000000,
+      "feat_api_calls": {
+        "us-east-1": 150,
+        "eu-west-1": 53
+      }
+    }
+  ],
+  "total": {
+    "feat_api_calls": {
+      "count": 2,
+      "sum": 353
+    }
+  }
+}
+```
+
+## Use Cases
+
+- **Usage dashboards**: Display usage trends over time
+- **Billing calculations**: Calculate usage-based charges
+- **Analytics**: Understand usage patterns and trends
+- **Regional analysis**: Group by region or other properties
+- **Capacity planning**: Forecast future usage based on trends
+- **Customer insights**: Compare usage across different segments
+
+## Notes
+
+- Default range is `1bc` (current billing cycle)
+- Default bin size is `hour` for 24h range, `day` for others
+- The `group_by` parameter must start with `properties.`
+- Time periods with zero events are included with zero values
+- Totals provide summary statistics across all time periods
+
+## Performance Tips
+
+<Tip>
+- Use appropriate bin sizes for your data volume (smaller bins = more computation)
+- Limit the number of features queried simultaneously
+- Cache aggregate results for frequently accessed ranges
+- Use `range` presets when possible instead of `custom_range`
+</Tip>

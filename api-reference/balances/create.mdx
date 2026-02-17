@@ -1,0 +1,241 @@
+---
+title: 'Create Balance'
+openapi: 'POST /balances/create'
+---
+
+## Overview
+
+Create a new balance for a specific feature for a customer. Balances track usage limits, quotas, or credits for metered and boolean features.
+
+## Request Body
+
+<ParamField body="feature_id" type="string" required>
+  The feature ID to create the balance for
+</ParamField>
+
+<ParamField body="customer_id" type="string" required>
+  The customer ID to assign the balance to
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  Entity ID for entity-scoped balances (optional). If provided, the balance will be scoped to this specific entity.
+</ParamField>
+
+<ParamField body="included" type="number">
+  The initial balance amount to grant. Required for metered features unless `unlimited` is true.
+</ParamField>
+
+<ParamField body="unlimited" type="boolean">
+  Whether the balance is unlimited. Cannot be combined with `included` or `reset` for metered features.
+</ParamField>
+
+<ParamField body="reset" type="object">
+  Reset configuration for the balance
+  
+  <Expandable title="Reset Object Properties">
+    <ParamField body="interval" type="enum" required>
+      The reset interval. Options: `day`, `week`, `month`, `year`
+    </ParamField>
+    
+    <ParamField body="interval_count" type="number">
+      Multiplier for the interval (e.g., `2` with `month` interval = every 2 months)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="expires_at" type="number">
+  Unix timestamp in milliseconds when the balance expires
+</ParamField>
+
+<ParamField body="granted_balance" type="number">
+  (Deprecated) Use `included` instead. The initial balance amount.
+</ParamField>
+
+## Response
+
+Returns a success response confirming the balance was created.
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the balance creation was successful
+</ResponseField>
+
+## Feature Type Validation
+
+### Boolean Features
+- Cannot specify `included`, `unlimited`, or `reset`
+- Simply creates an access grant for the feature
+
+### Metered Features
+- Must specify either `included` OR `unlimited` (but not both)
+- Cannot combine `unlimited` with `reset`
+- Can specify `expires_at` for temporary access
+
+## Example Requests
+
+### Create Standard Metered Balance
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/balances/create' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "feat_api_calls",
+    "included": 1000
+  }'
+```
+
+```typescript TypeScript
+const result = await autumn.balances.create({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  included: 1000
+});
+```
+
+```python Python
+result = autumn.balances.create(
+  customer_id='cus_123',
+  feature_id='feat_api_calls',
+  included=1000
+)
+```
+</CodeGroup>
+
+### Create Balance with Reset
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/balances/create' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "feat_api_calls",
+    "included": 1000,
+    "reset": {
+      "interval": "month",
+      "interval_count": 1
+    }
+  }'
+```
+
+```typescript TypeScript
+const result = await autumn.balances.create({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  included: 1000,
+  reset: {
+    interval: 'month',
+    interval_count: 1
+  }
+});
+```
+
+```python Python
+result = autumn.balances.create(
+  customer_id='cus_123',
+  feature_id='feat_api_calls',
+  included=1000,
+  reset={
+    'interval': 'month',
+    'interval_count': 1
+  }
+)
+```
+</CodeGroup>
+
+### Create Entity-Scoped Balance
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/balances/create' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "entity_id": "proj_456",
+    "feature_id": "feat_storage_gb",
+    "included": 50
+  }'
+```
+
+```typescript TypeScript
+const result = await autumn.balances.create({
+  customer_id: 'cus_123',
+  entity_id: 'proj_456',
+  feature_id: 'feat_storage_gb',
+  included: 50
+});
+```
+
+```python Python
+result = autumn.balances.create(
+  customer_id='cus_123',
+  entity_id='proj_456',
+  feature_id='feat_storage_gb',
+  included=50
+)
+```
+</CodeGroup>
+
+### Create Unlimited Balance
+
+<CodeGroup>
+```bash cURL
+curl -X POST 'https://api.useautumn.com/v1/balances/create' \
+  -H 'Authorization: Bearer YOUR_SECRET_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "feat_api_calls",
+    "unlimited": true
+  }'
+```
+
+```typescript TypeScript
+const result = await autumn.balances.create({
+  customer_id: 'cus_123',
+  feature_id: 'feat_api_calls',
+  unlimited: true
+});
+```
+
+```python Python
+result = autumn.balances.create(
+  customer_id='cus_123',
+  feature_id='feat_api_calls',
+  unlimited=True
+)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "success": true
+}
+```
+
+## Use Cases
+
+- **Grant trial credits**: Create a balance with a specific `included` amount and `expires_at` timestamp
+- **Monthly quotas**: Use `reset` with `interval: "month"` for recurring monthly limits
+- **Per-project limits**: Use `entity_id` to create separate balances for each project or workspace
+- **Premium features**: Create boolean feature balances to grant access to specific features
+- **Unlimited plans**: Set `unlimited: true` for customers on unlimited plans
+
+## Error Responses
+
+- **400 Bad Request**: Invalid parameters or feature type mismatch
+- **404 Not Found**: Customer or feature does not exist
+- **409 Conflict**: Balance already exists for this customer/feature/entity combination
+
+## Notes
+
+- Balances are automatically associated with the environment (sandbox/live) based on your API key
+- If a balance already exists, this endpoint will return an error - use the update endpoint instead
+- Entity-scoped balances require both `customer_id` and `entity_id`
+- Reset intervals are calculated from the balance creation time

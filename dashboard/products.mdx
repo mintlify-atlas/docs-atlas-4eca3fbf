@@ -35,16 +35,53 @@ One-time prices for credits, top-ups, or lifetime access:
 - Often used for credit packs or feature unlocks
 - Can grant credits or temporary access
 
+## Products Page Interface
+
+The Products page provides two view modes for managing your plans:
+
+### List View
+
+Table-based interface showing all plans:
+
+- **Plan name** - Display name and description
+- **Type** - Subscription or one-time purchase
+- **Base price** - Monthly or yearly pricing
+- **Status** - Active, draft, or archived
+- **Row actions** - Quick access to edit, copy, or archive
+
+**Page actions:**
+- **Create plan** button to add new products
+- **View toggle** to switch between list and AI chat views
+- **Menu button** for bulk operations
+
+<Note>
+  Use the keyboard shortcut `n` to quickly create a new plan from anywhere in the Products section.
+</Note>
+
+### AI Chat View
+
+Conversational interface for exploring and creating products:
+
+- Ask questions about your pricing structure
+- Get suggestions for plan configurations
+- Create plans through natural language
+- Analyze pricing strategy
+
+<Tip>
+  The AI Chat view is helpful for brainstorming pricing models or getting quick answers about your product catalog.
+</Tip>
+
 ## Creating a Plan
 
 1. Click **Create plan** in the Plans tab
 2. Enter basic details:
    - **Name** - Display name for the plan
-   - **Description** - Optional description
-   - **Group** - Organize plans into categories
+   - **Description** - Optional description shown to customers
+   - **Group** - Organize plans into categories (e.g., "Starter", "Pro")
 3. Configure pricing:
    - **Plan type** - Subscription or one-time purchase
    - **Base price** - Fixed recurring amount (for subscriptions)
+   - **Currency** - USD, EUR, GBP, etc.
    - **Billing cycle** - Monthly, yearly, or custom interval
 4. Add features to the plan (see Features section below)
 5. Configure advanced options:
@@ -53,8 +90,65 @@ One-time prices for credits, top-ups, or lifetime access:
    - **Metadata** - Custom key-value pairs
 
 <Tip>
-  Use groups to organize plans by tier (e.g., "Starter", "Pro", "Enterprise") or product line.
+  Use groups to organize plans by tier (e.g., "Starter", "Pro", "Enterprise") or product line for easier navigation.
 </Tip>
+
+## Plan Editor
+
+The Plan Editor provides a visual interface for configuring your product:
+
+### Plan Cards
+
+Each plan version displays as a card showing:
+
+- Plan name and group
+- Base price and billing cycle
+- List of included features
+- Plan status and metadata
+
+**Card interactions:**
+- Click plan name to edit details
+- Click features to configure limits
+- Drag features to reorder
+- Click **Add feature** to include new items
+
+### Feature Configuration
+
+Configure how each feature works in the plan:
+
+#### Boolean Features
+
+- **Enabled** - Turn feature access on/off
+- **Behavior** - Grant or deny access
+
+#### Metered Features
+
+- **Included usage** - Free units per billing cycle
+- **Usage limit** - Maximum allowed consumption
+- **Overage pricing** - Cost per unit beyond limit
+- **Reset frequency** - When usage resets (monthly, yearly)
+- **Rollover** - Carry unused units to next period
+
+<Warning>
+  Changes to plan pricing or features create a new version. Review carefully to avoid unexpected impacts on existing customers.
+</Warning>
+
+### Advanced Configuration
+
+**Free trial settings:**
+- Trial duration (days)
+- Features available during trial
+- Automatic conversion to paid
+
+**Proration settings:**
+- Enable/disable proration
+- Proration behavior on upgrades
+- Proration behavior on downgrades
+
+**Entity-level limits:**
+- Apply feature limits per workspace/project
+- Configure entity creation limits
+- Set per-entity pricing
 
 ## Features
 
@@ -76,6 +170,8 @@ const { hasAccess } = await autumn.check({
 - Unlock premium features
 - Enable integrations
 - Access to specific pages or sections
+- Team collaboration features
+- Priority support
 
 ### Metered Features
 
@@ -109,47 +205,54 @@ const { hasAccess, usage } = await autumn.check({
 - **Tiered pricing** - Different rates at different volume levels
 - **Volume pricing** - Rate applies to all units when threshold is reached
 
+### Features Page
+
+Dedicated page for managing features across all plans:
+
+**Features table shows:**
+- Feature name and key
+- Feature type (boolean or metered)
+- Billing units for metered features
+- Plans using this feature
+- Default limits and pricing
+
+**Actions:**
+- Create new features
+- Edit feature configuration
+- View usage across customers
+- Archive unused features
+
 ### Creating a Feature
 
 1. Navigate to **Products** → **Features**
 2. Click **Create feature**
 3. Configure the feature:
-   - **Name** - Display name
-   - **Key** - Unique identifier used in API calls
+   - **Name** - Display name for the dashboard
+   - **Key** - Unique identifier used in API calls (e.g., `api-calls`)
    - **Type** - Boolean or Metered
+   - **Description** - Optional explanation of the feature
 4. For metered features, configure:
-   - **Billing units** - Unit of measure
+   - **Billing units** - Unit of measure (calls, GB, hours, etc.)
    - **Default limit** - Fallback limit if not set in plan
+   - **Aggregation method** - How to count usage (sum, max, unique)
 5. Add the feature to plans and configure plan-specific settings
 
 <Note>
   Feature keys are used in API calls and cannot be changed after creation. Choose descriptive, kebab-case names like `api-calls` or `storage-gb`.
 </Note>
 
-## Feature Configuration in Plans
-
-When adding a feature to a plan, you can configure:
-
-### Basic Settings
-
-- **Included usage** - Free units included in the plan
-- **Usage limit** - Maximum allowed usage
-- **Overage pricing** - Charge for usage beyond limit
-
-### Advanced Settings
-
-- **Usage reset** - When usage resets (monthly, billing cycle, never)
-- **Proration** - How to handle mid-cycle changes
-- **Rollover** - Carry unused credits to next period
-- **Entity-level limits** - Apply limits per entity instead of customer
-
-<Tip>
-  Use entity-level limits when you want to track usage per workspace, project, or team rather than per customer. See the [Entities guide](/concepts/entities) for details.
-</Tip>
-
 ## Rewards
 
 Rewards incentivize customer actions like referrals or milestones:
+
+### Rewards Table
+
+View and manage all rewards:
+
+- Reward name and type
+- Discount amount or free product
+- Redemption count
+- Active status
 
 ### Reward Types
 
@@ -157,35 +260,106 @@ Rewards incentivize customer actions like referrals or milestones:
 - Percentage or fixed amount off
 - Apply to specific plans
 - One-time or recurring discounts
+- Duration limits (e.g., 3 months)
 
 **Free product rewards:**
 - Grant access to plans without payment
 - Useful for referral programs
 - Time-limited or permanent access
+- Trial extensions
 
-### Creating a Reward Program
+### Creating a Reward
 
 1. Navigate to **Products** → **Rewards**
-2. Click **Create reward program**
-3. Configure:
+2. Click **Create reward**
+3. Select reward type:
+   - **Discount** - Percentage or amount off
+   - **Free product** - Grant plan access
+4. Configure reward details:
+   - **Name** - Internal reward name
+   - **Amount** - Discount percentage or free plan
+   - **Duration** - How long reward lasts
+   - **Applicable plans** - Which plans qualify
+5. Save and get shareable reward code
+
+### Referral Programs Table
+
+Manage referral campaigns:
+
+- Program name and status
+- Referrer reward
+- Referee reward
+- Total referrals
+- Conversion rate
+
+### Creating a Referral Program
+
+1. Click **Create referral program**
+2. Configure program:
    - **Name** - Program name
-   - **Type** - Discount or free product
-   - **Trigger** - When reward is granted (referral, milestone, etc.)
-   - **Reward details** - Discount amount or free product
-4. Share the referral link with customers
+   - **Referrer reward** - What the referrer gets
+   - **Referee reward** - What the referred customer gets
+   - **Trigger** - When rewards are granted
+3. Share the referral link with customers
+4. Track performance in the referral programs table
+
+<Tip>
+  Offer rewards to both referrer and referee to maximize participation. A common pattern is giving both sides a discount or credit.
+</Tip>
 
 ## Plan Versioning
 
 Autumn maintains version history when you update plans:
 
 - Existing customers stay on their current version
-- New customers get the latest version
+- New customers get the latest version automatically
 - You can migrate customers to new versions
 - Archived versions remain accessible for reporting
+
+### Creating a New Version
+
+When you edit a published plan:
+
+1. Make changes to pricing or features
+2. Click **Save**
+3. Confirm you want to create a new version
+4. Existing customers remain on old version
+5. New subscriptions use the new version
+
+### Version Migration
+
+Migrate customers to new plan versions:
+
+1. Open the plan with multiple versions
+2. Click **Migrate customers**
+3. Select customers to migrate
+4. Choose migration timing:
+   - Immediately
+   - At next renewal
+   - Custom date
+5. Review pricing changes and proration
+6. Confirm migration
 
 <Warning>
   Changes to plan pricing or features create a new version. Carefully review changes before publishing to ensure existing customers aren't affected unexpectedly.
 </Warning>
+
+## Copying Plans
+
+Duplicate existing plans to save time:
+
+1. Click the menu icon (•••) on a plan
+2. Select **Copy plan**
+3. Choose what to copy:
+   - Base pricing
+   - All features and limits
+   - Metadata
+4. Edit the copied plan as needed
+5. Save as a new plan
+
+<Tip>
+  Use plan copying to quickly create plan variations like regional pricing or team vs. enterprise tiers.
+</Tip>
 
 ## Archiving Plans
 
@@ -193,10 +367,18 @@ Archive plans you no longer want to offer:
 
 1. Click the menu icon (•••) on a plan
 2. Select **Archive**
-3. The plan is hidden from new customers but existing subscriptions continue
+3. Confirm archival
+4. The plan is hidden from new customers
+5. Existing subscriptions continue unchanged
+
+**Archived plans:**
+- Don't appear in product lists
+- Can't be attached to new customers
+- Can be restored anytime
+- Still appear in reporting and analytics
 
 <Note>
-  Archived plans can be restored from the **Show archived** toggle.
+  Archived plans can be restored from the **Show archived** toggle in the plan list.
 </Note>
 
 ## Best Practices
@@ -206,6 +388,8 @@ Archive plans you no longer want to offer:
 - Keep plan names simple and descriptive
 - Use groups to organize related plans
 - Limit the number of plans to avoid choice paralysis (3-5 tiers works well)
+- Create clear differentiation between tiers
+- Consider customer segments when naming
 
 ### Feature Design
 
@@ -213,6 +397,8 @@ Archive plans you no longer want to offer:
 - Use metered features for usage-based pricing
 - Set reasonable default limits
 - Consider usage patterns when setting reset frequencies
+- Document feature purposes in descriptions
+- Group related features together
 
 ### Pricing Strategy
 
@@ -220,6 +406,16 @@ Archive plans you no longer want to offer:
 - Add tiered pricing as you understand customer usage
 - Use included usage to provide value at each tier
 - Set overage pricing to monetize heavy users
+- Test pricing changes in sandbox first
+- Monitor customer response to pricing updates
+
+### Version Management
+
+- Communicate changes to customers before migration
+- Use gradual rollout for major pricing changes
+- Keep version history for compliance
+- Document the reason for each version
+- Grandfather existing customers when raising prices
 
 ## Related Resources
 
@@ -233,7 +429,7 @@ Archive plans you no longer want to offer:
   <Card title="Pricing Models" icon="dollar" href="/concepts/pricing-models">
     Explore pricing strategies
   </Card>
-  <Card title="API: Create Product" icon="code" href="/api/products/create">
+  <Card title="API: Create Product" icon="code" href="/api-reference/products/create">
     Create products via API
   </Card>
 </CardGroup>

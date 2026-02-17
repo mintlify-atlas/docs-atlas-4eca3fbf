@@ -1,0 +1,210 @@
+---
+title: "Create Feature"
+openapi: "POST /features"
+---
+
+## Overview
+
+Create a new feature to enable usage tracking, access control, or credit-based billing. Features are the foundation of your pricing model and connect to products through plan items.
+
+## Request Body
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the feature. Use lowercase with hyphens (e.g., `api-calls`, `storage-gb`).
+  
+  <Info>
+  The ID cannot be changed after creation. It's used in `/track` and `/check` API calls.
+  </Info>
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Human-readable name displayed in your dashboard and customer interfaces.
+</ParamField>
+
+<ParamField path="type" type="string" required>
+  The feature type determines how it tracks and bills usage:
+  
+  - **`metered`**: Tracks consumable or allocated usage (API calls, storage, seats)
+  - **`boolean`**: Simple on/off access control (feature flags)
+  - **`credit_system`**: Universal currency that converts to metered features
+</ParamField>
+
+<ParamField path="consumable" type="boolean">
+  Whether the feature tracks consumable usage that depletes a balance.
+  
+  **Required for `metered` features**:
+  - `true`: Usage depletes a quota (API calls, credits)
+  - `false`: Usage is allocated/measured but doesn't deplete (seats, storage)
+  
+  **For `credit_system` features**: Must be `true`
+  
+  **For `boolean` features**: Not applicable (no usage tracking)
+</ParamField>
+
+<ParamField path="event_names" type="array">
+  Array of event names that trigger this feature's usage tracking. When you send an event via `/track` with a matching name, it increments this feature's usage.
+  
+  ```json Example
+  ["api_call", "api_request", "endpoint_hit"]
+  ```
+</ParamField>
+
+<ParamField path="credit_schema" type="array">
+  **Required for `credit_system` features**. Defines conversion rates from credits to metered features.
+  
+  <Expandable title="Credit Schema Item">
+    <ParamField path="metered_feature_id" type="string" required>
+      ID of the metered feature this credit can be spent on
+    </ParamField>
+    
+    <ParamField path="credit_cost" type="number" required>
+      How many credits are deducted per unit of the metered feature
+    </ParamField>
+  </Expandable>
+  
+  ```json Example
+  [
+    {
+      "metered_feature_id": "api-calls",
+      "credit_cost": 1
+    },
+    {
+      "metered_feature_id": "storage-gb",
+      "credit_cost": 100
+    }
+  ]
+  ```
+</ParamField>
+
+<ParamField path="display" type="object">
+  Display settings for proper pluralization in user interfaces.
+  
+  <Expandable title="properties">
+    <ParamField path="singular" type="string">
+      Singular form (e.g., "API Call")
+    </ParamField>
+    
+    <ParamField path="plural" type="string">
+      Plural form (e.g., "API Calls")
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Examples
+
+### Metered Feature (Consumable)
+
+Track API calls that deplete a quota:
+
+```json
+{
+  "id": "api-calls",
+  "name": "API Calls",
+  "type": "metered",
+  "consumable": true,
+  "event_names": ["api_call"],
+  "display": {
+    "singular": "API Call",
+    "plural": "API Calls"
+  }
+}
+```
+
+### Metered Feature (Allocated)
+
+Track team seats that are allocated but not consumed:
+
+```json
+{
+  "id": "team-seats",
+  "name": "Team Seats",
+  "type": "metered",
+  "consumable": false,
+  "event_names": ["seat_used"],
+  "display": {
+    "singular": "Seat",
+    "plural": "Seats"
+  }
+}
+```
+
+### Boolean Feature
+
+Simple feature flag for access control:
+
+```json
+{
+  "id": "advanced-analytics",
+  "name": "Advanced Analytics",
+  "type": "boolean",
+  "consumable": false
+}
+```
+
+### Credit System
+
+Universal credits that convert to multiple features:
+
+```json
+{
+  "id": "credits",
+  "name": "Platform Credits",
+  "type": "credit_system",
+  "consumable": true,
+  "credit_schema": [
+    {
+      "metered_feature_id": "api-calls",
+      "credit_cost": 1
+    },
+    {
+      "metered_feature_id": "ai-generations",
+      "credit_cost": 10
+    },
+    {
+      "metered_feature_id": "video-transcodes",
+      "credit_cost": 50
+    }
+  ],
+  "display": {
+    "singular": "Credit",
+    "plural": "Credits"
+  }
+}
+```
+
+## Response
+
+Returns the created feature object with all configured properties.
+
+## Validation Rules
+
+<Warning>
+- **Metered features**: Must specify `consumable` (true or false)
+- **Credit system features**: Must include `credit_schema` and set `consumable: true`
+- **Feature IDs**: Must be unique within your workspace and match regex pattern `^[a-z0-9-_]+$`
+- **Credit schema**: Can only reference existing metered features
+</Warning>
+
+## Next Steps
+
+After creating a feature:
+
+1. **Add to product**: Include the feature in a product's plan items
+2. **Set allowances**: Define usage limits (e.g., 10,000 API calls per month)
+3. **Track usage**: Send events via `/track` to increment usage
+4. **Check access**: Use `/check` to verify limits before allowing actions
+
+<CardGroup cols={2}>
+  <Card title="Products API" icon="box" href="/api-reference/products/create">
+    Add features to products with usage limits
+  </Card>
+  <Card title="Track Usage" icon="chart-line" href="/api-reference/core/track">
+    Send events to increment feature usage
+  </Card>
+  <Card title="Check Access" icon="shield-check" href="/api-reference/core/check">
+    Verify feature access and remaining balance
+  </Card>
+  <Card title="Feature Concepts" icon="book" href="/concepts/features">
+    Learn about feature types and patterns
+  </Card>
+</CardGroup>

@@ -3,9 +3,14 @@
   "name": "Autumn",
   "theme": "mint",
   "colors": {
-    "primary": "#F97316",
-    "light": "#FED7AA",
-    "dark": "#EA580C"
+    "primary": "#10b981",
+    "light": "#86efac",
+    "dark": "#047857"
+  },
+  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
   },
   "navbar": {
     "primary": {
@@ -30,7 +35,7 @@
             "pages": [
               "introduction",
               "quickstart",
-              "installation"
+              "self-hosting"
             ]
           },
           {
@@ -40,7 +45,17 @@
               "concepts/features",
               "concepts/customers",
               "concepts/entities",
-              "concepts/billing-flow"
+              "concepts/pricing-models"
+            ]
+          },
+          {
+            "group": "Usage Guides",
+            "pages": [
+              "guides/attach-products",
+              "guides/check-access",
+              "guides/track-usage",
+              "guides/manage-customers",
+              "guides/webhooks"
             ]
           },
           {
@@ -49,28 +64,16 @@
               "pricing-models/subscriptions",
               "pricing-models/usage-based",
               "pricing-models/credits",
-              "pricing-models/seats",
-              "pricing-models/prepaid"
+              "pricing-models/seat-based"
             ]
           },
           {
-            "group": "Guides",
+            "group": "Dashboard",
             "pages": [
-              "guides/checking-access",
-              "guides/tracking-usage",
-              "guides/attach-products",
-              "guides/handling-webhooks",
-              "guides/custom-pricing",
-              "guides/migrations"
-            ]
-          },
-          {
-            "group": "Self-Hosting",
-            "pages": [
-              "self-hosting/overview",
-              "self-hosting/environment-variables",
-              "self-hosting/database-setup",
-              "self-hosting/docker-deployment"
+              "dashboard/overview",
+              "dashboard/products",
+              "dashboard/customers",
+              "dashboard/analytics"
             ]
           }
         ]
@@ -81,91 +84,111 @@
           {
             "group": "Overview",
             "pages": [
-              "api/overview",
-              "api/authentication",
-              "api/errors",
-              "api/versioning",
-              "api/rate-limits"
+              "api-reference/introduction",
+              "api-reference/authentication",
+              "api-reference/errors",
+              "api-reference/versioning"
             ]
           },
           {
-            "group": "Billing",
+            "group": "Core Endpoints",
             "pages": [
-              "api/billing/check",
-              "api/billing/track",
-              "api/billing/attach",
-              "api/billing/checkout"
+              "api-reference/core/attach",
+              "api-reference/core/check",
+              "api-reference/core/track",
+              "api-reference/core/checkout",
+              "api-reference/core/cancel",
+              "api-reference/core/setup-payment",
+              "api-reference/core/billing-portal"
             ]
           },
           {
-            "group": "Customers",
+            "group": "Products & Plans",
             "pages": [
-              "api/customers/create",
-              "api/customers/retrieve",
-              "api/customers/update",
-              "api/customers/delete",
-              "api/customers/list"
-            ]
-          },
-          {
-            "group": "Products",
-            "pages": [
-              "api/products/create",
-              "api/products/retrieve",
-              "api/products/update",
-              "api/products/delete",
-              "api/products/list"
+              "api-reference/products/list",
+              "api-reference/products/create",
+              "api-reference/products/get",
+              "api-reference/products/update",
+              "api-reference/products/delete"
             ]
           },
           {
             "group": "Features",
             "pages": [
-              "api/features/create",
-              "api/features/retrieve",
-              "api/features/update",
-              "api/features/delete",
-              "api/features/list"
+              "api-reference/features/list",
+              "api-reference/features/create",
+              "api-reference/features/get",
+              "api-reference/features/update",
+              "api-reference/features/delete"
+            ]
+          },
+          {
+            "group": "Customers",
+            "pages": [
+              "api-reference/customers/list",
+              "api-reference/customers/create",
+              "api-reference/customers/get",
+              "api-reference/customers/update",
+              "api-reference/customers/delete"
             ]
           },
           {
             "group": "Entities",
             "pages": [
-              "api/entities/create",
-              "api/entities/retrieve",
-              "api/entities/update",
-              "api/entities/delete",
-              "api/entities/list"
-            ]
-          },
-          {
-            "group": "Invoices",
-            "pages": [
-              "api/invoices/retrieve",
-              "api/invoices/list"
-            ]
-          },
-          {
-            "group": "Events",
-            "pages": [
-              "api/events/retrieve",
-              "api/events/list"
+              "api-reference/entities/list",
+              "api-reference/entities/create",
+              "api-reference/entities/get",
+              "api-reference/entities/update",
+              "api-reference/entities/delete"
             ]
           },
           {
             "group": "Balances",
             "pages": [
-              "api/balances/retrieve",
-              "api/balances/list"
+              "api-reference/balances/create",
+              "api-reference/balances/update"
             ]
           },
           {
-            "group": "Rewards & Referrals",
+            "group": "Events & Analytics",
             "pages": [
-              "api/rewards/create",
-              "api/rewards/retrieve",
-              "api/referrals/create",
-              "api/referrals/retrieve",
-              "api/redemptions/create"
+              "api-reference/events/list",
+              "api-reference/events/query"
+            ]
+          },
+          {
+            "group": "Invoices",
+            "pages": [
+              "api-reference/invoices/list",
+              "api-reference/invoices/get"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Integration",
+        "groups": [
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdks/overview",
+              "sdks/typescript",
+              "sdks/react"
+            ]
+          },
+          {
+            "group": "Stripe Integration",
+            "pages": [
+              "integration/stripe-setup",
+              "integration/stripe-connect",
+              "integration/stripe-webhooks"
+            ]
+          },
+          {
+            "group": "Payment Providers",
+            "pages": [
+              "integration/payment-providers/overview",
+              "integration/payment-providers/revenue-cat"
             ]
           }
         ]

@@ -1,0 +1,271 @@
+---
+title: "Get Product"
+api: "GET /plans/{plan_id}"
+---
+
+Retrieves a specific product (plan) by its ID. By default, returns the latest version of the product.
+
+## Path Parameters
+
+<ParamField path="plan_id" type="string" required>
+  The unique identifier of the product to retrieve.
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="customer_id" type="string">
+  Filter by customer eligibility. When provided, the response includes `customer_eligibility` information showing whether this customer can subscribe to the product and if they're eligible for a trial.
+</ParamField>
+
+<ParamField query="version" type="number">
+  Retrieve a specific version of the product. If omitted, returns the latest version.
+</ParamField>
+
+## Response
+
+Returns a [Product](/api-reference/products/list#product-object) object.
+
+<ResponseField name="id" type="string">
+  Unique identifier for the product.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Display name for the product.
+</ResponseField>
+
+<ResponseField name="description" type="string | null">
+  Description of what this product includes.
+</ResponseField>
+
+<ResponseField name="group" type="string | null">
+  Optional grouping identifier.
+</ResponseField>
+
+<ResponseField name="version" type="number">
+  Version number of this product.
+</ResponseField>
+
+<ResponseField name="add_on" type="boolean">
+  Whether this product is an add-on.
+</ResponseField>
+
+<ResponseField name="default" type="boolean">
+  Whether this is the default plan.
+</ResponseField>
+
+<ResponseField name="price" type="object | null">
+  Base price for the product subscription. See [List Products](/api-reference/products/list#product-object) for full schema.
+</ResponseField>
+
+<ResponseField name="features" type="array">
+  Array of features included in this product. See [List Products](/api-reference/products/list#product-item-object) for full schema.
+</ResponseField>
+
+<ResponseField name="free_trial" type="object | null">
+  Free trial configuration. See [List Products](/api-reference/products/list#product-object) for full schema.
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp when the product was created.
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  Environment: `test` or `live`.
+</ResponseField>
+
+<ResponseField name="archived" type="boolean">
+  Whether this product is archived.
+</ResponseField>
+
+<ResponseField name="base_variant_id" type="string | null">
+  ID of the base product if this is a variant.
+</ResponseField>
+
+<ResponseField name="customer_eligibility" type="object">
+  Customer-specific eligibility information (only present when `customer_id` is provided).
+  
+  <Expandable title="customer_eligibility properties">
+    <ResponseField name="trial_available" type="boolean">
+      Whether this customer is eligible for the product's free trial.
+    </ResponseField>
+    
+    <ResponseField name="scenario" type="string">
+      Attachment scenario. One of: `attach`, `attach_with_trial`, `switch`, `incompatible`, `already_attached`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X GET https://api.autumn.com/v1/plans/plan_starter \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```bash cURL - Specific version
+curl -X GET "https://api.autumn.com/v1/plans/plan_starter?version=2" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```bash cURL - With customer eligibility
+curl -X GET "https://api.autumn.com/v1/plans/plan_starter?customer_id=user_12345" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const product = await autumn.plans.get('plan_starter');
+console.log(`Product: ${product.name} (v${product.version})`);
+```
+
+```javascript JavaScript - Specific version
+const product = await autumn.plans.get('plan_starter', {
+  version: 2
+});
+```
+
+```javascript JavaScript - With customer eligibility
+const product = await autumn.plans.get('plan_starter', {
+  customer_id: 'user_12345'
+});
+
+if (product.customer_eligibility?.trial_available) {
+  console.log('Customer is eligible for free trial!');
+}
+```
+
+```python Python
+product = autumn.plans.get('plan_starter')
+print(f"Product: {product.name} (v{product.version})")
+```
+
+```python Python - Specific version
+product = autumn.plans.get('plan_starter', version=2)
+```
+
+```python Python - With customer eligibility
+product = autumn.plans.get('plan_starter', customer_id='user_12345')
+
+if product.customer_eligibility and product.customer_eligibility.trial_available:
+    print('Customer is eligible for free trial!')
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "id": "plan_starter",
+  "name": "Starter Plan",
+  "description": "Perfect for individuals and small teams",
+  "group": "subscription_plans",
+  "version": 1,
+  "add_on": false,
+  "default": true,
+  "price": {
+    "amount": 2900,
+    "interval": "month",
+    "interval_count": 1
+  },
+  "features": [
+    {
+      "feature_id": "api_calls",
+      "included": 10000,
+      "unlimited": false,
+      "reset": {
+        "interval": "month",
+        "interval_count": 1
+      },
+      "price": {
+        "amount": 100,
+        "interval": "month",
+        "interval_count": 1,
+        "billing_units": 1000,
+        "billing_method": "prepaid",
+        "max_purchase": 50000
+      },
+      "display": {
+        "primary_text": "10,000 API calls included",
+        "secondary_text": "$0.10 per 1,000 additional calls"
+      },
+      "rollover": {
+        "max": 5000,
+        "expiry_duration_type": "month",
+        "expiry_duration_length": 1
+      }
+    },
+    {
+      "feature_id": "team_members",
+      "included": 5,
+      "unlimited": false,
+      "reset": null,
+      "price": {
+        "amount": 500,
+        "interval": "month",
+        "interval_count": 1,
+        "billing_units": 1,
+        "billing_method": "prepaid",
+        "max_purchase": 20
+      }
+    }
+  ],
+  "free_trial": {
+    "duration_length": 14,
+    "duration_type": "day",
+    "card_required": false
+  },
+  "created_at": 1708473600,
+  "env": "live",
+  "archived": false,
+  "base_variant_id": null
+}
+```
+
+```json 200 - With customer eligibility
+{
+  "id": "plan_starter",
+  "name": "Starter Plan",
+  "description": "Perfect for individuals and small teams",
+  "group": "subscription_plans",
+  "version": 1,
+  "add_on": false,
+  "default": true,
+  "price": {
+    "amount": 2900,
+    "interval": "month",
+    "interval_count": 1
+  },
+  "features": [
+    {
+      "feature_id": "api_calls",
+      "included": 10000,
+      "unlimited": false,
+      "reset": {
+        "interval": "month",
+        "interval_count": 1
+      },
+      "price": null
+    }
+  ],
+  "free_trial": {
+    "duration_length": 14,
+    "duration_type": "day",
+    "card_required": false
+  },
+  "created_at": 1708473600,
+  "env": "live",
+  "archived": false,
+  "base_variant_id": null,
+  "customer_eligibility": {
+    "trial_available": true,
+    "scenario": "attach_with_trial"
+  }
+}
+```
+
+```json 404
+{
+  "error": {
+    "message": "Plan not found",
+    "code": "not_found"
+  }
+}
+```
+</ResponseExample>

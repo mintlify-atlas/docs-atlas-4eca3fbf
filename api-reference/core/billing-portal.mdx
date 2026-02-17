@@ -1,0 +1,506 @@
+---
+title: 'Create Billing Portal Session'
+api: 'POST /customers/{customer_id}/billing_portal'
+description: 'Create a Stripe billing portal session where customers can manage their subscription and payment methods'
+---
+
+## Overview
+
+The billing portal endpoint creates a secure Stripe-hosted session where customers can self-manage their subscriptions, payment methods, and view billing history. This provides a complete self-service billing experience without building custom UI.
+
+<Note>
+  The billing portal is hosted by Stripe and provides a secure, PCI-compliant interface for customers to manage their own billing information.
+</Note>
+
+## When to Use
+
+**Use billing portal when:**
+- Providing self-service subscription management
+- Allowing customers to update payment methods
+- Letting customers view invoices and payment history
+- Enabling subscription cancellation
+- Reducing support burden for billing inquiries
+
+## Authentication
+
+This endpoint requires API key authentication:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Path Parameters
+
+<ParamField path="customer_id" type="string" required>
+  The customer's unique identifier. The customer must have a linked Stripe account.
+
+  ```
+  cus_123
+  ```
+</ParamField>
+
+## Request Body
+
+<ParamField body="configuration_id" type="string">
+  Stripe billing portal configuration ID. Create configurations in your [Stripe Dashboard](https://dashboard.stripe.com/settings/billing/portal) to customize the portal's appearance and functionality.
+
+  If not provided, Autumn will use the default portal configuration.
+
+  ```json
+  "bpc_1ABC123"
+  ```
+</ParamField>
+
+<ParamField body="return_url" type="string">
+  URL to redirect the customer to when they click the back button in the billing portal.
+
+  ```json
+  "https://example.com/account/billing"
+  ```
+</ParamField>
+
+## Response
+
+<ResponseField name="customer_id" type="string" nullable>
+  The customer's unique identifier (echoed from the request).
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The Stripe billing portal session URL. Redirect your customer to this URL to allow them to manage their billing information.
+
+  **Important**: This URL expires after a short period (typically 1 hour). Generate a new URL each time a customer wants to access the portal.
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.useautumn.com/customers/cus_123/billing_portal \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "return_url": "https://example.com/account/billing"
+  }'
+```
+
+```typescript TypeScript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
+
+const session = await autumn.billingPortal({
+  customer_id: 'cus_123',
+  return_url: 'https://example.com/account/billing'
+});
+
+// Redirect the customer to the portal
+window.location.href = session.url;
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key='YOUR_API_KEY')
+
+session = autumn.billing_portal(
+  customer_id='cus_123',
+  return_url='https://example.com/account/billing'
+)
+
+# Redirect the customer to the portal
+print(f"Portal URL: {session['url']}")
+```
+
+```typescript React
+import { useAutumn } from '@useautumn/react';
+import { useState } from 'react';
+
+function ManageBillingButton() {
+  const autumn = useAutumn();
+  const [loading, setLoading] = useState(false);
+
+  const handleManageBilling = async () => {
+    setLoading(true);
+    try {
+      const session = await autumn.billingPortal({
+        customer_id: 'cus_123',
+        return_url: window.location.href // Return to current page
+      });
+
+      // Redirect to billing portal
+      window.location.href = session.url;
+    } catch (error) {
+      console.error('Failed to open billing portal:', error);
+      alert('Unable to open billing portal. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={handleManageBilling} disabled={loading}>
+      {loading ? 'Loading...' : 'Manage Billing'}
+    </button>
+  );
+}
+```
+</CodeGroup>
+
+## Example Responses
+
+### Successful Portal Session
+
+```json
+{
+  "customer_id": "cus_123",
+  "url": "https://billing.stripe.com/session/live_YWNjdF8xQUJDMTIz..."
+}
+```
+
+## Portal Features
+
+The Stripe billing portal allows customers to:
+
+### Payment Methods
+- Add new payment methods (credit/debit cards)
+- Update existing payment methods
+- Set default payment method
+- Remove payment methods
+
+### Subscriptions
+- View active subscriptions
+- Upgrade or downgrade plans (if configured)
+- Cancel subscriptions (if configured)
+- View upcoming renewals and amounts
+
+### Invoices
+- View past invoices
+- Download invoice PDFs
+- View payment receipts
+- Access invoice history
+
+### Billing Information
+- Update billing email
+- View billing address
+- Update billing details
+
+## Portal Configuration
+
+Configure your billing portal in the [Stripe Dashboard](https://dashboard.stripe.com/settings/billing/portal):
+
+### Customer Access Controls
+
+```typescript
+// Use different configurations for different customer types
+const getPor talConfig = (customerType: string) => {
+  if (customerType === 'enterprise') {
+    return 'bpc_enterprise_config'; // Full control
+  } else if (customerType === 'pro') {
+    return 'bpc_pro_config'; // Can manage payment, can't cancel
+  } else {
+    return 'bpc_basic_config'; // Read-only
+  }
+};
+
+const session = await autumn.billingPortal({
+  customer_id: 'cus_123',
+  configuration_id: getPortalConfig(customer.type),
+  return_url: 'https://example.com/account'
+});
+```
+
+### Configuration Options
+
+In your Stripe Dashboard, configure:
+
+- **Subscription management** - Allow customers to cancel, pause, or change plans
+- **Payment method updates** - Enable adding/removing payment methods
+- **Invoice history** - Set how many invoices are visible
+- **Branding** - Customize colors, logos, and icons
+- **Business information** - Set company name, support details
+- **Features** - Enable/disable specific portal features
+
+## Common Use Cases
+
+### Basic Billing Management
+
+```typescript
+const openBillingPortal = async () => {
+  const session = await autumn.billingPortal({
+    customer_id: 'cus_123',
+    return_url: 'https://example.com/account'
+  });
+
+  window.location.href = session.url;
+};
+```
+
+### Account Settings Page Integration
+
+```typescript
+function AccountSettings() {
+  const autumn = useAutumn();
+
+  return (
+    <div className="settings-section">
+      <h2>Billing & Subscription</h2>
+      <p>Manage your subscription, payment methods, and invoices.</p>
+      
+      <button 
+        onClick={async () => {
+          const session = await autumn.billingPortal({
+            customer_id: currentUser.id,
+            return_url: window.location.href
+          });
+          window.location.href = session.url;
+        }}
+      >
+        Manage Billing
+      </button>
+    </div>
+  );
+}
+```
+
+### Handle Missing Stripe Integration
+
+```typescript
+const openBillingPortalSafely = async (customerId: string) => {
+  try {
+    const session = await autumn.billingPortal({
+      customer_id: customerId,
+      return_url: 'https://example.com/account'
+    });
+    window.location.href = session.url;
+  } catch (error) {
+    if (error.message?.includes('no Stripe ID')) {
+      // Customer doesn't have Stripe ID yet
+      alert('Please add a payment method first.');
+      
+      // Redirect to payment setup
+      const setupSession = await autumn.setupPayment({
+        customer_id: customerId,
+        success_url: 'https://example.com/account'
+      });
+      window.location.href = setupSession.url;
+    } else {
+      throw error;
+    }
+  }
+};
+```
+
+### Custom Configuration Per Customer Tier
+
+```typescript
+const openTieredPortal = async (customer: Customer) => {
+  const configs = {
+    free: 'bpc_free_config',      // Can view only
+    pro: 'bpc_pro_config',        // Can update payment
+    enterprise: 'bpc_ent_config'  // Full management
+  };
+
+  const session = await autumn.billingPortal({
+    customer_id: customer.id,
+    configuration_id: configs[customer.tier],
+    return_url: 'https://example.com/account'
+  });
+
+  window.location.href = session.url;
+};
+```
+
+## Best Practices
+
+### Always Provide Return URL
+
+```typescript
+const openPortal = async () => {
+  const session = await autumn.billingPortal({
+    customer_id: 'cus_123',
+    // Return to current page for seamless experience
+    return_url: window.location.href
+  });
+
+  window.location.href = session.url;
+};
+```
+
+### Generate Fresh URLs
+
+```typescript
+// ❌ Don't cache portal URLs
+const cachedUrl = await getCachedPortalUrl();
+window.location.href = cachedUrl; // May be expired!
+
+// ✅ Generate fresh URL every time
+const session = await autumn.billingPortal({
+  customer_id: 'cus_123',
+  return_url: 'https://example.com/account'
+});
+window.location.href = session.url; // Always fresh
+```
+
+### Handle Portal Events via Webhooks
+
+```typescript
+app.post('/webhooks/stripe', async (req, res) => {
+  const event = req.body;
+
+  switch (event.type) {
+    case 'customer.subscription.updated':
+      // Customer changed their subscription in portal
+      await handleSubscriptionChange(event.data);
+      break;
+
+    case 'payment_method.attached':
+      // Customer added payment method in portal
+      await handlePaymentMethodAdded(event.data);
+      break;
+
+    case 'customer.subscription.deleted':
+      // Customer cancelled in portal
+      await handleSubscriptionCancelled(event.data);
+      break;
+  }
+
+  res.json({ received: true });
+});
+```
+
+### Provide Clear UI Feedback
+
+```typescript
+function BillingManagement() {
+  const [opening, setOpening] = useState(false);
+
+  const handleOpenPortal = async () => {
+    setOpening(true);
+    try {
+      const session = await autumn.billingPortal({
+        customer_id: 'cus_123',
+        return_url: window.location.href
+      });
+
+      // Show loading state before redirect
+      showToast('Opening billing portal...');
+      
+      window.location.href = session.url;
+    } catch (error) {
+      setOpening(false);
+      showError('Failed to open billing portal');
+    }
+  };
+
+  return (
+    <button onClick={handleOpenPortal} disabled={opening}>
+      {opening ? (
+        <>
+          <Spinner /> Opening Portal...
+        </>
+      ) : (
+        'Manage Billing'
+      )}
+    </button>
+  );
+}
+```
+
+## Security Considerations
+
+### Server-Side Generation
+
+For security, generate portal URLs on your server:
+
+```typescript
+// Client-side
+const openPortal = async () => {
+  const response = await fetch('/api/billing-portal', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${userToken}` }
+  });
+  
+  const { url } = await response.json();
+  window.location.href = url;
+};
+
+// Server-side
+app.post('/api/billing-portal', authenticateUser, async (req, res) => {
+  const session = await autumn.billingPortal({
+    customer_id: req.user.id,
+    return_url: req.body.return_url
+  });
+
+  res.json({ url: session.url });
+});
+```
+
+## Error Handling
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="code" type="string">
+      Error code identifying the type of error.
+      
+      Common error codes:
+      - `customer_not_found` - The specified customer does not exist
+      - `no_stripe_customer` - Customer does not have a Stripe ID
+      - `stripe_error` - Error from Stripe API
+      - `invalid_configuration` - Invalid configuration_id
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Human-readable error message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Error Response
+
+```json
+{
+  "error": {
+    "code": "no_stripe_customer",
+    "message": "Customer has no Stripe ID. Please create a payment method first."
+  }
+}
+```
+
+### Handling Errors
+
+```typescript
+try {
+  const session = await autumn.billingPortal({
+    customer_id: 'cus_123',
+    return_url: 'https://example.com/account'
+  });
+  window.location.href = session.url;
+} catch (error) {
+  if (error.code === 'no_stripe_customer') {
+    // Redirect to payment setup instead
+    const setupSession = await autumn.setupPayment({
+      customer_id: 'cus_123',
+      success_url: 'https://example.com/account'
+    });
+    window.location.href = setupSession.url;
+  } else {
+    console.error('Failed to open portal:', error);
+    showError('Unable to open billing portal');
+  }
+}
+```
+
+## Related Endpoints
+
+- [Setup Payment](/api-reference/core/setup-payment) - Add payment method for new customers
+- [Cancel](/api-reference/core/cancel) - Programmatic subscription cancellation
+- [Customers](/api/customers/retrieve) - Retrieve customer information
+
+## Related Guides
+
+- [Subscriptions](/guides/subscriptions) - Managing customer subscriptions
+- [Manage Customers](/guides/manage-customers) - Customer management guide
+
+## Related Resources
+
+- [Stripe Billing Portal Documentation](https://stripe.com/docs/billing/subscriptions/integrating-customer-portal) - Stripe's official documentation
+- [Stripe Dashboard - Portal Configuration](https://dashboard.stripe.com/settings/billing/portal) - Configure portal settings

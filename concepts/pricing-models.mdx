@@ -1,462 +1,342 @@
 ---
 title: "Pricing Models"
-description: "Learn about fixed, usage-based, and hybrid pricing strategies"
+description: "Explore different pricing strategies you can implement with Autumn"
 ---
 
 ## Overview
 
-Autumn supports flexible pricing models to match your business needs:
+Autumn supports a wide range of pricing models to match your business needs. You can implement traditional subscription pricing, usage-based billing, hybrid models, or any combination that works for your product.
 
-- **Fixed Pricing**: Flat subscription fees
-- **Usage-Based Pricing**: Pay per consumption
-- **Hybrid Pricing**: Combination of fixed and usage components
-- **Tiered Pricing**: Progressive rates based on volume
-- **Per-Seat Pricing**: Price multiplied by quantity
+This guide explores common pricing patterns and how to configure them using Autumn's products, features, and plan items.
 
-Each product can have multiple prices with different billing intervals and configurations.
+## Subscription Pricing
 
-## Price Structure
+Fixed recurring charges at regular intervals.
 
-All prices share these core attributes:
+### Simple Monthly Subscription
 
-<ParamField path="id" type="string" required>
-  Unique identifier for the price
-</ParamField>
+The most common SaaS pricing model:
 
-<ParamField path="internal_product_id" type="string" required>
-  Reference to the product this price belongs to
-</ParamField>
-
-<ParamField path="billing_type" type="string">
-  When charges occur: `fixed`, `usage`
-</ParamField>
-
-<ParamField path="config" type="object" required>
-  Configuration specific to the price type
-</ParamField>
-
-<ParamField path="is_custom" type="boolean" default="false">
-  Whether this is a custom negotiated price
-</ParamField>
-
-## Fixed Pricing
-
-Fixed prices charge a flat amount at regular intervals.
-
-### Configuration
-
-<ParamField path="type" type="string" value="fixed">
-  Price type identifier
-</ParamField>
-
-<ParamField path="amount" type="number" required>
-  Charge amount in cents (e.g., 2999 = $29.99)
-</ParamField>
-
-<ParamField path="interval" type="string" required>
-  Billing frequency: `day`, `week`, `month`, `year`, `one_time`
-</ParamField>
-
-<ParamField path="interval_count" type="number" default="1">
-  Number of intervals between charges (e.g., 3 for quarterly)
-</ParamField>
-
-### Examples
-
-#### Monthly Subscription
-
-```json
+```json Example: $29/month
 {
-  "id": "price_monthly_pro",
-  "billing_type": "fixed",
-  "config": {
-    "type": "fixed",
-    "amount": 4900,
-    "interval": "month",
-    "interval_count": 1
+  "id": "pro",
+  "name": "Pro Plan",
+  "price": {
+    "amount": 2900,
+    "interval": "month"
+  },
+  "items": [
+    {
+      "feature_id": "api-calls",
+      "included": 10000,
+      "unlimited": false,
+      "reset": { "interval": "month" }
+    }
+  ]
+}
+```
+
+**Characteristics:**
+- Fixed monthly charge
+- Predictable revenue
+- Included allowances
+- Resets monthly
+
+### Annual Subscription with Discount
+
+Encourage annual commitments with discounted pricing:
+
+```json Example: $290/year (17% discount)
+{
+  "id": "pro-annual",
+  "name": "Pro Plan (Annual)",
+  "price": {
+    "amount": 29000,
+    "interval": "year"
+  },
+  "items": [
+    {
+      "feature_id": "api-calls",
+      "included": 120000,
+      "unlimited": false,
+      "reset": { "interval": "year" }
+    }
+  ]
+}
+```
+
+**Benefits:**
+- Better cash flow (paid upfront)
+- Lower churn (annual commitment)
+- Higher customer lifetime value
+
+### Multiple Intervals
+
+Offer flexibility with various billing intervals:
+
+```json Example: Quarterly Billing
+{
+  "id": "pro-quarterly",
+  "name": "Pro Plan (Quarterly)",
+  "price": {
+    "amount": 8400,
+    "interval": "quarter"
   }
 }
 ```
 
-<Note>
-This charges $49.00 every month.
-</Note>
-
-#### Annual Subscription
-
-```json
-{
-  "id": "price_yearly_pro",
-  "billing_type": "fixed",
-  "config": {
-    "type": "fixed",
-    "amount": 49900,
-    "interval": "year",
-    "interval_count": 1
-  }
-}
-```
-
-<Note>
-This charges $499.00 every year (roughly 2 months free compared to monthly).
-</Note>
-
-#### One-Time Payment
-
-```json
-{
-  "id": "price_lifetime",
-  "billing_type": "fixed",
-  "config": {
-    "type": "fixed",
-    "amount": 29900,
-    "interval": "one_time",
-    "interval_count": 1
-  }
-}
-```
-
-#### Quarterly Billing
-
-```json
-{
-  "id": "price_quarterly",
-  "billing_type": "fixed",
-  "config": {
-    "type": "fixed",
-    "amount": 13900,
-    "interval": "month",
-    "interval_count": 3
-  }
-}
-```
-
-<Note>
-This charges $139.00 every 3 months.
-</Note>
+Supported intervals:
+- `week` - Weekly
+- `month` - Monthly
+- `quarter` - Every 3 months
+- `semi_annual` - Every 6 months
+- `year` - Annually
 
 ## Usage-Based Pricing
 
-Usage prices charge based on actual consumption of features.
+Charge customers based on actual consumption.
 
-### Configuration
+### Pay-as-You-Go
 
-<ParamField path="type" type="string" value="usage">
-  Price type identifier
-</ParamField>
+No base fee, pure usage pricing:
 
-<ParamField path="internal_feature_id" type="string" required>
-  Feature to meter for billing
-</ParamField>
-
-<ParamField path="feature_id" type="string" required>
-  External feature identifier
-</ParamField>
-
-<ParamField path="bill_when" type="string" required>
-  When to bill:
-  - `in_advance`: Charge at period start
-  - `start_of_period`: Charge at period start
-  - `end_of_period`: Charge at period end (arrears)
-</ParamField>
-
-<ParamField path="billing_units" type="number">
-  How many feature units equal one billing unit (e.g., 1000 = bill per 1000 API calls)
-</ParamField>
-
-<ParamField path="usage_tiers" type="array" required>
-  Tiered pricing structure
-  
-  <Expandable title="Tier Object">
-    <ParamField path="to" type="number | 'infinite'">
-      Upper bound of this tier (or `"infinite"` for the last tier)
-    </ParamField>
-    <ParamField path="amount" type="number">
-      Price per unit in this tier (in cents)
-    </ParamField>
-  </Expandable>
-</ParamField>
-
-<ParamField path="interval" type="string" required>
-  Reset period for usage: `day`, `week`, `month`, `year`
-</ParamField>
-
-### Examples
-
-#### Simple Usage Pricing
-
-```json
+```json Example: $0.10 per 1,000 API calls
 {
-  "id": "price_api_calls",
-  "billing_type": "usage",
-  "config": {
-    "type": "usage",
-    "feature_id": "api-calls",
-    "internal_feature_id": "feat_api_calls",
-    "bill_when": "end_of_period",
+  "id": "pay-as-you-go",
+  "name": "Pay as You Go",
+  "price": null,
+  "items": [
+    {
+      "feature_id": "api-calls",
+      "included": 0,
+      "unlimited": false,
+      "price": {
+        "amount": 10,
+        "billing_method": "usage_based",
+        "billing_units": 1000,
+        "interval": "month"
+      }
+    }
+  ]
+}
+```
+
+**Characteristics:**
+- No upfront cost
+- Billed monthly in arrears
+- Scales with usage
+- Variable monthly cost
+
+### Prepaid Credits
+
+Customers purchase capacity upfront:
+
+```json Example: $100 for 100,000 credits
+{
+  "id": "credits-bundle",
+  "name": "100K Credits",
+  "price": {
+    "amount": 10000,
+    "interval": "one_off"
+  },
+  "items": [
+    {
+      "feature_id": "credits",
+      "included": 100000,
+      "unlimited": false,
+      "reset": null
+    }
+  ]
+}
+```
+
+**Benefits:**
+- Immediate payment
+- No surprise bills
+- Customer controls spending
+- Works like gift cards
+
+### Tiered Usage Pricing
+
+Volume discounts for higher usage:
+
+```json Example: Decreasing per-unit cost
+{
+  "feature_id": "api-calls",
+  "included": 0,
+  "unlimited": false,
+  "price": {
+    "tiers": [
+      {
+        "to": 10000,
+        "amount": 10
+      },
+      {
+        "to": 100000,
+        "amount": 8
+      },
+      {
+        "to": "infinite",
+        "amount": 5
+      }
+    ],
+    "billing_method": "usage_based",
     "billing_units": 1000,
-    "interval": "month",
-    "usage_tiers": [
-      {
-        "to": "infinite",
-        "amount": 100
-      }
-    ]
+    "interval": "month"
   }
 }
 ```
 
-<Note>
-This charges $1.00 per 1,000 API calls, billed at the end of each month.
-</Note>
+**Pricing breakdown:**
+- 0-10k calls: $0.01 each ($100 max)
+- 10k-100k calls: $0.008 each ($720 max)
+- 100k+ calls: $0.005 each (no limit)
 
-#### Tiered Usage Pricing
-
-```json
-{
-  "id": "price_storage_tiered",
-  "billing_type": "usage",
-  "config": {
-    "type": "usage",
-    "feature_id": "storage-gb",
-    "internal_feature_id": "feat_storage",
-    "bill_when": "end_of_period",
-    "billing_units": 1,
-    "interval": "month",
-    "usage_tiers": [
-      {
-        "to": 100,
-        "amount": 50
-      },
-      {
-        "to": 1000,
-        "amount": 40
-      },
-      {
-        "to": "infinite",
-        "amount": 30
-      }
-    ]
-  }
-}
-```
-
-<Note>
-Pricing:
-- First 100 GB: $0.50/GB
-- Next 900 GB (101-1000): $0.40/GB
-- Beyond 1000 GB: $0.30/GB
-</Note>
-
-#### Volume-Based Pricing
-
-```json
-{
-  "id": "price_seats",
-  "billing_type": "usage",
-  "config": {
-    "type": "usage",
-    "feature_id": "seats",
-    "internal_feature_id": "feat_seats",
-    "bill_when": "start_of_period",
-    "billing_units": 1,
-    "interval": "month",
-    "usage_tiers": [
-      {
-        "to": 10,
-        "amount": 1000
-      },
-      {
-        "to": 50,
-        "amount": 900
-      },
-      {
-        "to": "infinite",
-        "amount": 800
-      }
-    ]
-  }
-}
-```
-
-<Note>
-Pricing:
-- 1-10 seats: $10/seat
-- 11-50 seats: $9/seat
-- 51+ seats: $8/seat
-</Note>
+<Info>
+A customer using 150,000 API calls pays:<br/>
+$100 (first 10k) + $720 (next 90k) + $250 (final 50k) = **$1,070**
+</Info>
 
 ## Hybrid Pricing
 
-Combine fixed and usage-based components on the same product:
+Combine subscription and usage-based components.
 
-```json Example: Base + Overage
+### Base + Overage
+
+Fixed base fee with usage charges for overages:
+
+```json Example: $19/month + $0.005 per extra call
 {
-  "product": {
-    "id": "pro",
-    "name": "Pro Plan"
+  "id": "hybrid",
+  "name": "Hybrid Plan",
+  "price": {
+    "amount": 1900,
+    "interval": "month"
   },
-  "prices": [
+  "items": [
     {
-      "id": "price_base",
-      "billing_type": "fixed",
-      "config": {
-        "type": "fixed",
-        "amount": 2900,
+      "feature_id": "api-calls",
+      "included": 5000,
+      "unlimited": false,
+      "reset": { "interval": "month" },
+      "price": {
+        "amount": 5,
+        "billing_method": "usage_based",
+        "billing_units": 1000,
+        "interval": "month"
+      }
+    }
+  ]
+}
+```
+
+**How it works:**
+- Month 1: Used 3,000 calls → Pay $19 (no overage)
+- Month 2: Used 8,000 calls → Pay $19 + $15 overage = $34
+- Month 3: Used 15,000 calls → Pay $19 + $50 overage = $69
+
+### Multiple Feature Types
+
+Combine fixed features with metered features:
+
+```json Example: Mixed Entitlements
+{
+  "id": "professional",
+  "name": "Professional",
+  "price": {
+    "amount": 4900,
+    "interval": "month"
+  },
+  "items": [
+    {
+      "feature_id": "team-seats",
+      "included": 10,
+      "unlimited": false,
+      "reset": { "interval": "month" }
+    },
+    {
+      "feature_id": "storage-gb",
+      "included": 100,
+      "unlimited": false,
+      "reset": { "interval": "month" },
+      "price": {
+        "amount": 50,
+        "billing_method": "usage_based",
+        "billing_units": 10,
         "interval": "month"
       }
     },
     {
-      "id": "price_overage",
-      "billing_type": "usage",
-      "config": {
-        "type": "usage",
-        "feature_id": "api-calls",
-        "bill_when": "end_of_period",
-        "billing_units": 1000,
-        "interval": "month",
-        "usage_tiers": [
-          {
-            "to": "infinite",
-            "amount": 100
-          }
-        ]
-      },
-      "entitlement_id": "ent_included_calls"
-    }
-  ],
-  "entitlements": [
-    {
-      "id": "ent_included_calls",
-      "feature_id": "api-calls",
-      "allowance": 10000,
-      "interval": "month"
+      "feature_id": "advanced-analytics",
+      "unlimited": true
     }
   ]
 }
 ```
 
-<Info>
-This charges:
-- **Fixed**: $29/month base fee
-- **Usage**: $1 per 1,000 API calls beyond the included 10,000
-</Info>
+**What's included:**
+- 10 seats (fixed)
+- 100 GB storage (fixed) + $0.50/GB overage
+- Advanced analytics (unlimited access)
 
 ## Per-Seat Pricing
 
-Charge based on quantity (e.g., number of users):
+Charge based on number of users.
 
-```typescript Example: Per-Seat Subscription
-await autumn.attach({
-  customer_id: "customer_123",
-  product_id: "team-plan",
-  quantity: 5  // 5 seats
-});
-```
+### Simple Per-Seat
 
-With a fixed price of $10/seat/month, the total is $50/month.
-
-### Updating Quantity
-
-```typescript Example: Add More Seats
-await autumn.updateSubscription({
-  customer_id: "customer_123",
-  product_id: "team-plan",
-  quantity: 8  // Increased to 8 seats
-});
-```
-
-## Proration
-
-Handle mid-cycle changes with proration:
-
-<ParamField path="proration_config" type="object">
-  Configuration for prorated billing adjustments
-</ParamField>
-
-```json Example: Proration Enabled
+```json Example: $15 per user/month
 {
-  "id": "price_monthly",
-  "config": {
-    "type": "fixed",
-    "amount": 4900,
-    "interval": "month"
-  },
-  "proration_config": {
-    "enabled": true
-  }
-}
-```
-
-<Note>
-When enabled, customers are credited/charged proportionally when upgrading or downgrading mid-cycle.
-</Note>
-
-## External Processor Integration
-
-Sync prices with external payment processors:
-
-<ParamField path="stripe_price_id" type="string">
-  Stripe Price ID for the fixed component
-</ParamField>
-
-<ParamField path="stripe_meter_id" type="string">
-  Stripe Meter ID for usage tracking
-</ParamField>
-
-<ParamField path="stripe_product_id" type="string">
-  Stripe Product ID
-</ParamField>
-
-```json Example: Stripe Integration
-{
-  "id": "price_pro_monthly",
-  "config": {
-    "type": "fixed",
-    "amount": 4900,
+  "id": "team",
+  "name": "Team Plan",
+  "price": {
+    "amount": 1500,
     "interval": "month",
-    "stripe_price_id": "price_stripe123",
-    "stripe_product_id": "prod_stripe456"
+    "display": {
+      "primary_text": "$15",
+      "secondary_text": "per user/month"
+    }
   }
 }
 ```
 
-## Custom Pricing
+**Usage:**
 
-Mark prices as custom for enterprise or negotiated deals:
-
-<ParamField path="is_custom" type="boolean" default="false">
-  Indicates this is a custom price not available to all customers
-</ParamField>
-
-```json Example: Custom Enterprise Price
-{
-  "id": "price_enterprise_custom",
-  "is_custom": true,
-  "config": {
-    "type": "fixed",
-    "amount": 50000,
-    "interval": "year"
-  }
-}
+```typescript Subscribe with Quantity
+await autumn.attach({
+  customer_id: "org_123",
+  product_id: "team",
+  quantity: 5  // 5 users × $15 = $75/month
+});
 ```
 
-<Note>
-Custom prices are typically created per-customer and not shown in public pricing pages.
-</Note>
+### Graduated Per-Seat Pricing
 
-## Common Pricing Patterns
+Volume discounts for larger teams:
 
-### Freemium
-
-```json
+```json Example: Decreasing per-seat cost
 {
-  "product": "free",
-  "prices": [
+  "items": [
     {
-      "config": {
-        "type": "fixed",
-        "amount": 0,
+      "feature_id": "seats",
+      "included": 0,
+      "price": {
+        "tiers": [
+          {
+            "to": 10,
+            "amount": 1500  // $15/user for 1-10
+          },
+          {
+            "to": 50,
+            "amount": 1200  // $12/user for 11-50
+          },
+          {
+            "to": "infinite",
+            "amount": 1000  // $10/user for 51+
+          }
+        ],
+        "billing_method": "usage_based",
+        "billing_units": 1,
         "interval": "month"
       }
     }
@@ -464,162 +344,424 @@ Custom prices are typically created per-customer and not shown in public pricing
 }
 ```
 
-### Good-Better-Best
+## Freemium Model
 
-```json
+Free tier with upgrade path to paid plans.
+
+### Free Plan
+
+```json Example: Limited Free Plan
+{
+  "id": "free",
+  "name": "Free Plan",
+  "price": null,
+  "items": [
+    {
+      "feature_id": "api-calls",
+      "included": 1000,
+      "unlimited": false,
+      "reset": { "interval": "month" }
+    },
+    {
+      "feature_id": "storage-gb",
+      "included": 5,
+      "unlimited": false
+    }
+  ]
+}
+```
+
+### Paid Upgrade
+
+```json Example: Paid Plan with More
+{
+  "id": "pro",
+  "name": "Pro Plan",
+  "price": {
+    "amount": 2900,
+    "interval": "month"
+  },
+  "items": [
+    {
+      "feature_id": "api-calls",
+      "included": 100000,
+      "unlimited": false,
+      "reset": { "interval": "month" }
+    },
+    {
+      "feature_id": "storage-gb",
+      "included": 100,
+      "unlimited": false
+    },
+    {
+      "feature_id": "priority-support",
+      "unlimited": true
+    }
+  ]
+}
+```
+
+**Upgrade path:**
+
+```typescript From Free to Pro
+await autumn.attach({
+  customer_id: "user_123",
+  product_id: "pro"
+});
+```
+
+## Free Trial Pricing
+
+Offer trial periods before charging.
+
+### Trial with Credit Card
+
+```json Example: 14-Day Trial, Card Required
+{
+  "id": "pro",
+  "name": "Pro Plan",
+  "price": {
+    "amount": 2900,
+    "interval": "month"
+  },
+  "free_trial": {
+    "duration_length": 14,
+    "duration_type": "day",
+    "card_required": true
+  }
+}
+```
+
+**What happens:**
+- Day 0: Customer enters card, trial starts
+- Days 1-13: Full access, no charge
+- Day 14: Trial ends, first charge of $29
+
+### Trial without Credit Card
+
+```json Example: 7-Day Trial, No Card
+{
+  "free_trial": {
+    "duration_length": 7,
+    "duration_type": "day",
+    "card_required": false
+  }
+}
+```
+
+**What happens:**
+- Day 0: Customer signs up, trial starts
+- Days 1-6: Full access, no card required
+- Day 7: Trial expires, must add card to continue
+
+## Good-Better-Best
+
+Traditional three-tier pricing.
+
+```json Example: Tiered Plans
 [
   {
-    "product": "starter",
-    "prices": [{ "amount": 900, "interval": "month" }]
+    "id": "starter",
+    "name": "Starter",
+    "price": {
+      "amount": 900,
+      "interval": "month"
+    },
+    "items": [
+      {
+        "feature_id": "api-calls",
+        "included": 1000
+      },
+      {
+        "feature_id": "storage-gb",
+        "included": 5
+      }
+    ]
   },
   {
-    "product": "pro",
-    "prices": [{ "amount": 2900, "interval": "month" }]
+    "id": "professional",
+    "name": "Professional",
+    "price": {
+      "amount": 2900,
+      "interval": "month"
+    },
+    "items": [
+      {
+        "feature_id": "api-calls",
+        "included": 10000
+      },
+      {
+        "feature_id": "storage-gb",
+        "included": 50
+      },
+      {
+        "feature_id": "priority-support",
+        "unlimited": true
+      }
+    ]
   },
   {
-    "product": "enterprise",
-    "prices": [{ "amount": 9900, "interval": "month" }]
+    "id": "enterprise",
+    "name": "Enterprise",
+    "price": {
+      "amount": 9900,
+      "interval": "month"
+    },
+    "items": [
+      {
+        "feature_id": "api-calls",
+        "unlimited": true
+      },
+      {
+        "feature_id": "storage-gb",
+        "unlimited": true
+      },
+      {
+        "feature_id": "priority-support",
+        "unlimited": true
+      },
+      {
+        "feature_id": "sla-guarantee",
+        "unlimited": true
+      }
+    ]
   }
 ]
 ```
 
-### Pay-As-You-Go
+## Add-On Pricing
 
-```json
+Optional extras customers can purchase.
+
+### Storage Add-On
+
+```json Example: Extra Storage
 {
-  "product": "payg",
-  "prices": [
+  "id": "extra-storage",
+  "name": "Extra Storage",
+  "add_on": true,
+  "price": {
+    "amount": 500,
+    "interval": "month"
+  },
+  "items": [
     {
-      "billing_type": "usage",
-      "config": {
-        "feature_id": "compute-hours",
-        "bill_when": "end_of_period",
-        "billing_units": 1,
-        "interval": "month",
-        "usage_tiers": [
-          { "to": "infinite", "amount": 50 }
-        ]
-      }
+      "feature_id": "storage-gb",
+      "included": 100,
+      "unlimited": false
     }
   ]
 }
 ```
 
-### Graduated Tiers
+**Usage:**
 
-```json
+```typescript Attach Add-On
+// Customer has Pro plan
+await autumn.attach({
+  customer_id: "user_123",
+  product_id: "pro"
+});
+
+// Add extra storage
+await autumn.attach({
+  customer_id: "user_123",
+  product_id: "extra-storage"
+});
+
+// Total: $29 (Pro) + $5 (Storage) = $34/month
+```
+
+## Credit System Pricing
+
+Flexible credits that can be spent across features.
+
+```json Example: Universal Credits
 {
-  "usage_tiers": [
-    { "to": 1000, "amount": 100 },
-    { "to": 10000, "amount": 80 },
-    { "to": 100000, "amount": 60 },
-    { "to": "infinite", "amount": 40 }
+  "id": "credits-1000",
+  "name": "1,000 Credits",
+  "price": {
+    "amount": 10000,
+    "interval": "one_off"
+  },
+  "items": [
+    {
+      "feature_id": "credits",
+      "included": 1000,
+      "unlimited": false
+    }
   ]
+}
+```
+
+With credit feature defined as:
+
+```json Credit Schema
+{
+  "id": "credits",
+  "type": "credit_system",
+  "credit_schema": [
+    {
+      "metered_feature_id": "api-calls",
+      "credit_cost": 1
+    },
+    {
+      "metered_feature_id": "ai-generations",
+      "credit_cost": 10
+    },
+    {
+      "metered_feature_id": "video-transcodes",
+      "credit_cost": 50
+    }
+  ]
+}
+```
+
+**How customers spend:**
+- 1,000 API calls (1 credit each) = 1,000 credits
+- OR 100 AI generations (10 credits each) = 1,000 credits
+- OR 20 video transcodes (50 credits each) = 1,000 credits
+- OR any combination
+
+## Enterprise Custom Pricing
+
+Tailored pricing for large customers.
+
+```json Example: Custom Enterprise Deal
+{
+  "id": "enterprise-acme-corp",
+  "name": "Enterprise - Acme Corp",
+  "price": {
+    "amount": 500000,
+    "interval": "year"
+  },
+  "items": [
+    {
+      "feature_id": "api-calls",
+      "unlimited": true
+    },
+    {
+      "feature_id": "storage-gb",
+      "included": 10000,
+      "unlimited": false
+    },
+    {
+      "feature_id": "dedicated-support",
+      "unlimited": true
+    },
+    {
+      "feature_id": "custom-integrations",
+      "unlimited": true
+    }
+  ],
+  "archived": false
 }
 ```
 
 <Note>
-Each tier only applies to usage within that range (graduated pricing).
+Create separate product variants for each enterprise customer to track them independently.
 </Note>
 
-## Billing Timing
+## Choosing the Right Model
 
-### In Advance
+### Use Subscription When:
+- Predictable revenue is critical
+- Costs are mostly fixed (not usage-dependent)
+- Customers want budget certainty
+- Simple pricing is important
 
-```json
-{
-  "bill_when": "start_of_period",
-  "interval": "month"
-}
-```
+### Use Usage-Based When:
+- Costs scale directly with usage
+- Customer usage varies widely
+- Want to attract price-conscious customers
+- Value is clearly tied to consumption
 
-Charge on January 1 for usage during January.
+### Use Hybrid When:
+- Need predictable base revenue
+- Usage varies but want to capture overage
+- Customers want included allowance
+- Balancing simplicity and flexibility
 
-### In Arrears
-
-```json
-{
-  "bill_when": "end_of_period",
-  "interval": "month"
-}
-```
-
-Charge on February 1 for usage during January.
-
-<Info>
-Usage-based pricing typically uses arrears billing to charge for actual consumption.
-</Info>
+### Use Tiered When:
+- Clear customer segments exist
+- Feature bundling makes sense
+- Upselling is important strategy
+- Different value propositions per tier
 
 ## Frequently Asked Questions
 
 <AccordionGroup>
-  <Accordion title="Can a product have multiple prices?">
-    Yes! Common scenarios:
-    - Monthly and annual options
-    - Different currency prices
-    - Regional pricing
-    - Legacy and current pricing
-    
-    Customers choose one price when subscribing.
+  <Accordion title="Can I combine subscription and usage pricing for the same feature?">
+    Yes! Use hybrid pricing:
+    ```json
+    {
+      "price": { "amount": 2900, "interval": "month" },
+      "items": [{
+        "feature_id": "api-calls",
+        "included": 10000,
+        "price": {
+          "amount": 10,
+          "billing_method": "usage_based",
+          "billing_units": 1000
+        }
+      }]
+    }
+    ```
+    Customers pay $29/month + $10 per 1,000 API calls over 10k.
   </Accordion>
 
   <Accordion title="How do I implement volume discounts?">
-    Use tiered usage pricing:
+    Use tiered pricing with decreasing per-unit costs:
     ```json
     {
-      "usage_tiers": [
-        { "to": 1000, "amount": 100 },
-        { "to": 10000, "amount": 80 },
-        { "to": "infinite", "amount": 60 }
+      "tiers": [
+        { "to": 10000, "amount": 100 },
+        { "to": 100000, "amount": 80 },
+        { "to": "infinite", "amount": 50 }
       ]
     }
     ```
-    Higher volumes automatically use lower per-unit prices.
   </Accordion>
 
-  <Accordion title="What's the difference between graduated and volume pricing?">
-    **Graduated (tiered)**: Each tier applies only to usage in that range
-    - 1-1000 units: $0.10/unit
-    - 1001-5000 units: $0.08/unit
-    - Total for 2000 units: (1000 × $0.10) + (1000 × $0.08) = $180
-    
-    **Volume**: One rate applies to all usage based on total volume
-    - 1-1000 units: $0.10/unit
-    - 1001-5000 units: $0.08/unit
-    - Total for 2000 units: 2000 × $0.08 = $160
-    
-    Autumn uses graduated pricing by default.
-  </Accordion>
-
-  <Accordion title="How do I change prices for existing customers?">
-    Create a new price and:
-    1. Set it as the default for new subscriptions
-    2. Keep existing customers on the old price (grandfathered)
-    3. Optionally migrate customers with their consent
-    
-    Never modify existing price configurations that active subscriptions depend on.
-  </Accordion>
-
-  <Accordion title="Can I offer both monthly and annual billing?">
-    Yes! Create multiple prices for the same product:
-    ```json
-    {
-      "product": "pro",
-      "prices": [
-        {
-          "id": "price_monthly",
-          "amount": 2900,
-          "interval": "month"
-        },
-        {
-          "id": "price_annual",
-          "amount": 29900,
-          "interval": "year"
-        }
-      ]
-    }
+  <Accordion title="Can customers switch between pricing models?">
+    Yes, by attaching to a different product:
+    ```typescript
+    // Switch from subscription to usage-based
+    await autumn.attach({
+      customer_id: "user_123",
+      product_id: "pay-as-you-go"
+    });
     ```
-    Let customers choose at checkout.
+    
+    Autumn handles proration automatically.
+  </Accordion>
+
+  <Accordion title="What's the difference between prepaid and usage_based billing?">
+    **Prepaid**: Customer buys capacity upfront, balance decrements
+    ```json
+    { "billing_method": "prepaid" }
+    ```
+    
+    **Usage-based**: Track usage, bill at end of period
+    ```json
+    { "billing_method": "usage_based" }
+    ```
+    
+    Prepaid = pay first, consume later<br/>
+    Usage-based = consume first, pay later
+  </Accordion>
+
+  <Accordion title="How do I grandfather old pricing for existing customers?">
+    Create new product versions:
+    1. Update product with new pricing
+    2. New customers get new pricing automatically
+    3. Existing customers keep old pricing until they upgrade
+    
+    Or create separate product variants:
+    ```json
+    { "id": "pro-legacy", "archived": true }
+    { "id": "pro-v2", "archived": false }
+    ```
   </Accordion>
 </AccordionGroup>
 
@@ -627,15 +769,15 @@ Usage-based pricing typically uses arrears billing to charge for actual consumpt
 
 <CardGroup cols={2}>
   <Card title="Products and Plans" icon="box" href="/concepts/products-and-plans">
-    Learn about product structure
+    Learn how to configure products
   </Card>
-  <Card title="Usage-Based Billing" icon="chart-line" href="/guides/usage-based-billing">
-    Implement metered pricing
+  <Card title="Features" icon="gauge" href="/concepts/features">
+    Understand feature types and configuration
   </Card>
-  <Card title="Attach API" icon="link" href="/api/attach">
-    Subscribe customers to products
+  <Card title="Usage-Based Billing Guide" icon="chart-line" href="/guides/usage-based-billing">
+    Implement usage-based pricing
   </Card>
-  <Card title="Track API" icon="activity" href="/api/track">
-    Send usage events for billing
+  <Card title="Create Product" icon="plus" href="/api/plans/create">
+    Create products via API
   </Card>
 </CardGroup>
