@@ -1,0 +1,199 @@
+{
+  "projectType": "api-service",
+  "projectName": "Autumn",
+  "projectDescription": "Open-source pricing and billing platform that sits between Stripe and your application",
+  "theme": "aspen",
+  "primaryColor": "#FF6B35",
+  "lightColor": "#FFA07A",
+  "darkColor": "#D94A1A",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "self-hosting"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/products-and-plans",
+              "concepts/features",
+              "concepts/customers",
+              "concepts/entities",
+              "concepts/pricing-models"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/subscriptions",
+              "guides/usage-based-billing",
+              "guides/credits",
+              "guides/metered-features",
+              "guides/trials",
+              "guides/webhooks"
+            ]
+          },
+          {
+            "group": "Dashboard",
+            "pages": [
+              "dashboard/overview",
+              "dashboard/products",
+              "dashboard/customers",
+              "dashboard/analytics"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Operations",
+            "pages": [
+              "api/attach",
+              "api/check",
+              "api/track",
+              "api/checkout",
+              "api/cancel"
+            ]
+          },
+          {
+            "group": "Products & Plans",
+            "pages": [
+              "api/products/list",
+              "api/products/create",
+              "api/products/get",
+              "api/products/update",
+              "api/products/delete"
+            ]
+          },
+          {
+            "group": "Customers",
+            "pages": [
+              "api/customers/list",
+              "api/customers/create",
+              "api/customers/get",
+              "api/customers/update",
+              "api/customers/delete",
+              "api/customers/billing-portal"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "api/features/list",
+              "api/features/create",
+              "api/features/get",
+              "api/features/update",
+              "api/features/delete"
+            ]
+          },
+          {
+            "group": "Entities",
+            "pages": [
+              "api/entities/list",
+              "api/entities/create",
+              "api/entities/get",
+              "api/entities/update",
+              "api/entities/delete"
+            ]
+          },
+          {
+            "group": "Balances",
+            "pages": [
+              "api/balances/list",
+              "api/balances/create",
+              "api/balances/update"
+            ]
+          },
+          {
+            "group": "Invoices",
+            "pages": [
+              "api/invoices/list",
+              "api/invoices/get"
+            ]
+          },
+          {
+            "group": "Events",
+            "pages": [
+              "api/events/list"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDKs",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "sdks/introduction"
+            ]
+          },
+          {
+            "group": "Client SDKs",
+            "pages": [
+              "sdks/react",
+              "sdks/typescript",
+              "sdks/python"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Subscription management with flexible billing intervals",
+    "Usage-based billing with real-time metering",
+    "Credit systems with top-ups and rollovers",
+    "Multi-seat pricing with per-seat limits",
+    "Free trials with automatic conversion",
+    "Custom pricing for enterprise customers",
+    "Webhook events for billing lifecycle",
+    "Stripe integration for payment processing",
+    "Customer portal for self-service management",
+    "Analytics and usage insights"
+  ],
+  "publicApiSurface": [
+    "POST /attach - Attach products to customers",
+    "POST /check - Check feature access and remaining usage",
+    "POST /track - Record usage events",
+    "POST /checkout - Create checkout sessions",
+    "POST /cancel - Cancel customer subscriptions",
+    "POST /setup_payment - Setup payment methods",
+    "GET /products - List all products",
+    "POST /products - Create products",
+    "GET /products/{product_id} - Get product details",
+    "PATCH /products/{product_id} - Update products",
+    "DELETE /products/{product_id} - Delete products",
+    "GET /customers - List all customers",
+    "POST /customers - Create customers",
+    "GET /customers/{customer_id} - Get customer details",
+    "PATCH /customers/{customer_id} - Update customers",
+    "DELETE /customers/{customer_id} - Delete customers",
+    "POST /customers/{customer_id}/billing_portal - Get billing portal URL",
+    "GET /features - List all features",
+    "POST /features - Create features",
+    "GET /features/{feature_id} - Get feature details",
+    "PATCH /features/{feature_id} - Update features",
+    "DELETE /features/{feature_id} - Delete features",
+    "GET /entities - List entities",
+    "POST /entities - Create entities",
+    "GET /entities/{entity_id} - Get entity details",
+    "PATCH /entities/{entity_id} - Update entities",
+    "DELETE /entities/{entity_id} - Delete entities",
+    "GET /balances/list - List customer balances",
+    "POST /balances/create - Create balance entries",
+    "POST /balances/update - Update balances",
+    "GET /invoices - List invoices",
+    "GET /invoices/{invoice_id} - Get invoice details",
+    "GET /events - List usage events"
+  ]
+}
