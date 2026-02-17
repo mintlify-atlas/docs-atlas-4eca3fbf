@@ -1,0 +1,302 @@
+---
+title: 'API Versioning'
+description: 'Pin your integration to a specific API version'
+---
+
+## Overview
+
+Autumn uses calendar-based versioning (CalVer) to manage API changes. Each version is identified by a release date in the format `YYYY-MM-DD`.
+
+By pinning to a specific API version, you can ensure your integration remains stable even as the API evolves.
+
+## How Versioning Works
+
+### Version Format
+
+API versions use calendar versioning:
+
+```
+2026-04-01  ← Latest version
+2025-05-05
+2025-04-17
+2025-04-01
+2025-02-01  ← Original version
+```
+
+### Specifying a Version
+
+Include the `x-api-version` header in your requests:
+
+```bash
+curl https://api.useautumn.com/v1/customers \
+  -H "Authorization: Bearer am_live_xxx" \
+  -H "x-api-version: 2025-04-17"
+```
+
+### Default Version
+
+If you don't specify a version, Autumn automatically uses the version that was current when your organization was created. This prevents breaking changes from affecting existing integrations.
+
+For new organizations created after February 17, 2026, the default version is `2025-04-01`.
+
+## Available API Versions
+
+<AccordionGroup>
+  <Accordion title="2026-04-01 (Latest)" icon="star">
+    Released: April 1, 2026
+    
+    **Changes:**
+    - Plan items now support `max_purchase` field
+    - Improved validation for product configurations
+    
+    **Status:** Current
+  </Accordion>
+  
+  <Accordion title="2026-03-31" icon="code-branch">
+    Released: March 31, 2026
+    
+    **Changes:**
+    - Plan features now support `max_purchase` field
+    - Enhanced feature limit enforcement
+    
+    **Status:** Stable
+  </Accordion>
+  
+  <Accordion title="2025-05-05" icon="code-branch">
+    Released: May 5, 2025
+    
+    **Changes:**
+    - Features returned as object (keyed by `feature_id`)
+    - Improved feature access patterns
+    
+    **Breaking Change:** Previously features were an array.
+    
+    **Status:** Stable
+  </Accordion>
+  
+  <Accordion title="2025-04-17" icon="code-branch">
+    Released: April 17, 2025
+    
+    **Changes:**
+    - Merged customer response format
+    - Features returned as array
+    - Simplified customer data structure
+    
+    **Status:** Stable
+  </Accordion>
+  
+  <Accordion title="2025-04-01" icon="code-branch">
+    Released: April 1, 2025
+    
+    **Changes:**
+    - Customer products now include `items` field
+    - Enhanced product pricing details
+    
+    **Status:** Stable
+  </Accordion>
+  
+  <Accordion title="2025-02-01" icon="history">
+    Released: February 1, 2025
+    
+    **Changes:**
+    - Original customer schema
+    - Initial stable release
+    
+    **Status:** Legacy
+  </Accordion>
+</AccordionGroup>
+
+## Beta Version
+
+Autumn also maintains a `beta` version for testing experimental features:
+
+```bash
+curl https://api.useautumn.com/v1/customers \
+  -H "Authorization: Bearer am_test_xxx" \
+  -H "x-api-version: beta"
+```
+
+<Warning>
+  The beta version may include breaking changes and is not recommended for production use.
+</Warning>
+
+## Migration Strategy
+
+### When to Upgrade
+
+Consider upgrading when:
+
+- A new version includes features you need
+- You're building a new integration
+- Your current version is marked as deprecated (you'll receive advance notice)
+
+### How to Upgrade
+
+1. **Review the changelog** for the target version
+2. **Test in your test environment** with the new version header
+3. **Update your integration** to handle any breaking changes
+4. **Deploy to production** with the new version header
+
+### Testing Version Compatibility
+
+```javascript
+// Test with new version
+const response = await fetch('https://api.useautumn.com/v1/customers/cus_123', {
+  headers: {
+    'Authorization': 'Bearer am_test_xxx',
+    'x-api-version': '2026-04-01'  // Test new version
+  }
+});
+
+const data = await response.json();
+
+// Verify response format matches expectations
+console.log(data);
+```
+
+## Version Selection Logic
+
+The API determines which version to use in this order:
+
+1. **Explicit header** - If `x-api-version` header is present, use that version
+2. **Organization creation date** - Use the version current when the org was created
+3. **Fallback** - Use `2025-04-01` as the default
+
+```typescript
+// Middleware logic (simplified)
+if (req.headers['x-api-version']) {
+  // Use explicit version
+  version = parseVersion(req.headers['x-api-version']);
+} else if (organization.created_at) {
+  // Use version from org creation date
+  version = getVersionAtDate(organization.created_at);
+} else {
+  // Fallback to V0_2
+  version = '2025-04-01';
+}
+```
+
+## Invalid Version Handling
+
+If you specify an invalid version, you'll receive an error:
+
+```json
+{
+  "message": "'2024-01-01' is not a valid API version",
+  "code": "invalid_api_version",
+  "statusCode": 400
+}
+```
+
+**Valid version formats:**
+- `YYYY-MM-DD` - Any valid release date
+- `beta` - The beta version
+
+## Backwards Compatibility
+
+Autumn maintains backwards compatibility by:
+
+- **Never removing fields** - Old fields remain in newer versions
+- **Additive changes only** - New fields are added without breaking existing ones
+- **Version transformations** - Responses are transformed to match your pinned version
+
+### Example Version Transformation
+
+If you're on version `2025-04-17` (features as array) but the API now returns features as an object:
+
+```javascript
+// Your pinned version (2025-04-17) returns:
+{
+  "customer_id": "cus_123",
+  "features": [
+    { "feature_id": "feat_1", "limit": 100 },
+    { "feature_id": "feat_2", "limit": 50 }
+  ]
+}
+
+// Latest version (2025-05-05) returns:
+{
+  "customer_id": "cus_123",
+  "features": {
+    "feat_1": { "limit": 100 },
+    "feat_2": { "limit": 50 }
+  }
+}
+```
+
+The API automatically transforms responses based on your version.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always pin to a version in production">
+    Explicitly set the `x-api-version` header to avoid unexpected changes when we update default versions.
+    
+    ```javascript
+    const AUTUMN_API_VERSION = '2025-04-17';
+    
+    fetch(url, {
+      headers: {
+        'x-api-version': AUTUMN_API_VERSION
+      }
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Test version upgrades in development first">
+    Before upgrading in production:
+    1. Test with test mode API keys
+    2. Verify all integrations work
+    3. Check for any behavioral changes
+    4. Update production after validation
+  </Accordion>
+  
+  <Accordion title="Keep version in configuration">
+    Store your API version in configuration, not hardcoded:
+    
+    ```bash
+    # .env
+    AUTUMN_API_VERSION=2025-04-17
+    ```
+    
+    This makes upgrades easier.
+  </Accordion>
+  
+  <Accordion title="Subscribe to changelog updates">
+    Stay informed about new versions and deprecations by subscribing to the [Autumn changelog](https://useautumn.com/changelog).
+  </Accordion>
+</AccordionGroup>
+
+## Version Deprecation Policy
+
+When a version is deprecated:
+
+1. **Announcement** - We'll notify you 6 months in advance
+2. **Migration period** - You'll have 6 months to upgrade
+3. **End of support** - After 6 months, the version may return errors
+
+Currently, no versions are deprecated.
+
+## SDK Version Handling
+
+The official Autumn SDKs handle versioning automatically:
+
+```javascript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({
+  apiKey: 'am_live_xxx',
+  apiVersion: '2025-04-17'  // Pin to specific version
+});
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="API Overview" icon="book" href="/api/overview">
+    Learn about the API structure
+  </Card>
+  <Card title="Error Handling" icon="circle-exclamation" href="/api/errors">
+    Handle version-related errors
+  </Card>
+</CardGroup>

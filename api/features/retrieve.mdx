@@ -1,0 +1,324 @@
+---
+title: "Get Feature"
+description: "Retrieve a specific feature by ID"
+---
+
+## Overview
+
+Retrieve the details of a specific feature by its ID. This endpoint returns the feature configuration including type, display settings, credit schema (if applicable), and archive status.
+
+## Endpoint
+
+```
+GET /features/:feature_id
+```
+
+## Authentication
+
+This endpoint requires authentication. Include your API key in the `Authorization` header:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request
+
+### Path Parameters
+
+<ParamField path="feature_id" type="string" required>
+  The unique identifier of the feature to retrieve (e.g., `api-calls`, `credits`, `seats`).
+</ParamField>
+
+## Response
+
+### Success Response (200)
+
+Returns the feature object.
+
+<ResponseField name="id" type="string">
+  The unique identifier for the feature.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The human-readable name of the feature.
+</ResponseField>
+
+<ResponseField name="type" type="enum">
+  The feature type: `metered`, `credit_system`, or `boolean`.
+</ResponseField>
+
+<ResponseField name="consumable" type="boolean">
+  Whether the feature is consumable (true) or allocated (false). Only present for metered features.
+</ResponseField>
+
+<ResponseField name="credit_schema" type="array">
+  Credit conversion schema. Only present for credit_system features.
+  
+  <Expandable title="Credit Schema Item">
+    <ResponseField name="metered_feature_id" type="string">
+      ID of the metered feature that can be purchased with credits.
+    </ResponseField>
+    
+    <ResponseField name="credit_cost" type="number">
+      Number of credits required per unit of the metered feature.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="display" type="object">
+  Display names for the feature.
+  
+  <Expandable title="properties">
+    <ResponseField name="singular" type="string">
+      Singular display name.
+    </ResponseField>
+    
+    <ResponseField name="plural" type="string">
+      Plural display name.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="event_names" type="array">
+  Array of event names that trigger this feature's usage tracking.
+</ResponseField>
+
+<ResponseField name="archived" type="boolean">
+  Whether the feature is archived.
+</ResponseField>
+
+## Examples
+
+### Retrieve Metered Feature
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET https://api.autumnhq.com/v1/features/api-calls \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```typescript TypeScript
+import { AutumnClient } from '@useautumn/autumn-js';
+
+const autumn = new AutumnClient({
+  apiKey: 'YOUR_API_KEY'
+});
+
+const feature = await autumn.features.retrieve('api-calls');
+
+console.log(`Feature: ${feature.name}`);
+console.log(`Type: ${feature.type}`);
+console.log(`Consumable: ${feature.consumable}`);
+```
+
+```python Python
+from autumn import AutumnClient
+
+autumn = AutumnClient(api_key='YOUR_API_KEY')
+
+feature = autumn.features.retrieve('api-calls')
+
+print(f"Feature: {feature['name']}")
+print(f"Type: {feature['type']}")
+print(f"Consumable: {feature['consumable']}")
+```
+
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "id": "api-calls",
+  "name": "API Calls",
+  "type": "metered",
+  "consumable": true,
+  "display": {
+    "singular": "API Call",
+    "plural": "API Calls"
+  },
+  "event_names": ["api_call"],
+  "archived": false
+}
+```
+
+### Retrieve Credit System Feature
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET https://api.autumnhq.com/v1/features/credits \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```typescript TypeScript
+const feature = await autumn.features.retrieve('credits');
+
+console.log(`Credit system: ${feature.name}`);
+console.log(`Schema:`);
+feature.credit_schema.forEach(item => {
+  console.log(`  ${item.metered_feature_id}: ${item.credit_cost} credits`);
+});
+```
+
+```python Python
+feature = autumn.features.retrieve('credits')
+
+print(f"Credit system: {feature['name']}")
+print("Schema:")
+for item in feature['credit_schema']:
+    print(f"  {item['metered_feature_id']}: {item['credit_cost']} credits")
+```
+
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "id": "credits",
+  "name": "Platform Credits",
+  "type": "credit_system",
+  "consumable": true,
+  "credit_schema": [
+    {
+      "metered_feature_id": "api-calls",
+      "credit_cost": 1
+    },
+    {
+      "metered_feature_id": "storage-gb",
+      "credit_cost": 100
+    },
+    {
+      "metered_feature_id": "compute-hours",
+      "credit_cost": 50
+    }
+  ],
+  "display": {
+    "singular": "Credit",
+    "plural": "Credits"
+  },
+  "archived": false
+}
+```
+
+### Retrieve Boolean Feature
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET https://api.autumnhq.com/v1/features/advanced-analytics \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```typescript TypeScript
+const feature = await autumn.features.retrieve('advanced-analytics');
+
+if (feature.type === 'boolean') {
+  console.log(`${feature.name} is a boolean feature flag`);
+}
+```
+
+```python Python
+feature = autumn.features.retrieve('advanced-analytics')
+
+if feature['type'] == 'boolean':
+    print(f"{feature['name']} is a boolean feature flag")
+```
+
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "id": "advanced-analytics",
+  "name": "Advanced Analytics",
+  "type": "boolean",
+  "archived": false
+}
+```
+
+## Error Handling
+
+### Common Errors
+
+- **401 Unauthorized**: Invalid or missing API key
+- **404 Not Found**: Feature with the specified ID does not exist
+- **500 Internal Server Error**: Something went wrong on the server
+
+### Error Response Example
+
+```json
+{
+  "error": {
+    "message": "Feature with id premium-feature not found",
+    "code": "feature_not_found"
+  }
+}
+```
+
+## Use Cases
+
+### Verify Feature Configuration
+
+Before tracking usage or checking access, verify the feature exists and is configured correctly:
+
+```typescript
+try {
+  const feature = await autumn.features.retrieve('api-calls');
+  
+  if (feature.archived) {
+    console.log('Warning: This feature is archived');
+  }
+  
+  if (feature.type === 'metered' && feature.consumable) {
+    console.log('Feature tracks consumable usage');
+  }
+} catch (error) {
+  if (error.code === 'feature_not_found') {
+    console.log('Feature does not exist, create it first');
+  }
+}
+```
+
+### Inspect Credit System Configuration
+
+Retrieve a credit system to understand conversion rates:
+
+```typescript
+const credits = await autumn.features.retrieve('credits');
+
+if (credits.type === 'credit_system') {
+  console.log('Credit conversion rates:');
+  
+  credits.credit_schema.forEach(item => {
+    console.log(`1 ${item.metered_feature_id} = ${item.credit_cost} credits`);
+  });
+}
+```
+
+### Display Feature Details
+
+Use feature details to render UI elements:
+
+```typescript
+const feature = await autumn.features.retrieve('api-calls');
+
+// Use display names for proper pluralization
+const usageCount = 1;
+const displayName = usageCount === 1 
+  ? feature.display?.singular 
+  : feature.display?.plural;
+
+console.log(`You have used ${usageCount} ${displayName}`);
+```
+
+## Related Resources
+
+- [Features Concept](/concepts/features) - Learn about feature types and configuration
+- [Create Feature](/api/features/create) - Create a new feature
+- [List Features](/api/features/list) - Retrieve all features
+- [Update Feature](/api/features/update) - Modify feature configuration
+- [Delete Feature](/api/features/delete) - Remove a feature

@@ -1,0 +1,590 @@
+---
+title: "Seat-Based Pricing"
+description: "Per-user pricing with flexible quantity management and entity tracking"
+---
+
+## Overview
+
+Seat-based pricing charges customers based on the number of users, team members, or other countable entities. This model scales revenue with team size and is standard for B2B SaaS products.
+
+**Common use cases:**
+- Per-user subscriptions (Slack, GitHub, Figma)
+- Per-device licenses
+- Per-location pricing
+- Per-workspace or per-project charges
+- Per-API key or per-environment
+
+## How Seat Pricing Works
+
+Seat pricing multiplies a base price by the quantity:
+
+```typescript
+{
+  type: "price",
+  price: 1000,           // $10.00 per seat
+  interval: "month"
+}
+
+// Customer has 5 seats
+// Total: 5 × $10.00 = $50.00/month
+```
+
+As customers add or remove seats, billing adjusts automatically with proration.
+
+## Creating Seat-Based Products
+
+<Steps>
+  <Step title="Create a product with per-seat pricing">
+    Define the price per seat:
+
+    ```typescript
+    const teamPlan = await autumn.products.create({
+      name: "Team Plan",
+      description: "$10 per user per month",
+      items: [
+        {
+          type: "price",
+          price: 1000,         // $10.00 per seat
+          interval: "month"
+        }
+      ]
+    });
+    ```
+  </Step>
+
+  <Step title="Subscribe with initial quantity">
+    Specify the number of seats when attaching:
+
+    ```typescript
+    await autumn.attach({
+      customer_id: "customer_123",
+      product_id: teamPlan.id,
+      quantity: 5            // 5 seats
+    });
+    ```
+
+    This creates a subscription for 5 seats at $50/month.
+
+    <Info>Learn more about the [Attach API](/api/billing/attach)</Info>
+  </Step>
+
+  <Step title="Update quantity as needed">
+    When customers add or remove users:
+
+    ```typescript
+    await autumn.attach({
+      customer_id: "customer_123",
+      product_id: teamPlan.id,
+      quantity: 8            // Increase to 8 seats
+    });
+    ```
+
+    Billing adjusts automatically with proration.
+  </Step>
+</Steps>
+
+## Tracking Seats with Entities
+
+For granular seat tracking, use entities to represent individual users:
+
+<Steps>
+  <Step title="Create a seat feature">
+    Define a feature that represents seats:
+
+    ```typescript
+    const seatFeature = await autumn.features.create({
+      name: "Team Members",
+      key: "seats",
+      config: {
+        usage_type: "continuous_use"
+      }
+    });
+    ```
+
+    <Info>Learn more about [Features](/concepts/features)</Info>
+  </Step>
+
+  <Step title="Create the product with seat tracking">
+    Include the seat feature in your product:
+
+    ```typescript
+    const product = await autumn.products.create({
+      name: "Team Plan",
+      items: [
+        {
+          type: "priced_feature",
+          feature_id: seatFeature.id,
+          price: 1000,         // $10 per seat
+          usage_model: "prepaid",
+          interval: "month"
+        }
+      ]
+    });
+    ```
+  </Step>
+
+  <Step title="Create entities for each user">
+    When users join, create an entity:
+
+    ```typescript
+    const user = await autumn.entities.create({
+      customer_id: "customer_123",
+      feature_id: seatFeature.id,
+      entity_id: "user_alice",
+      name: "Alice Smith"
+    });
+    ```
+
+    Autumn automatically tracks the count and bills accordingly.
+
+    <Info>Learn more about [Entities](/concepts/entities)</Info>
+  </Step>
+
+  <Step title="Remove entities when users leave">
+    ```typescript
+    await autumn.entities.delete({
+      customer_id: "customer_123",
+      entity_id: "user_alice"
+    });
+    ```
+
+    Billing adjusts at the next period or immediately with proration.
+  </Step>
+</Steps>
+
+## Proration for Seat Changes
+
+### Adding Seats Mid-Cycle
+
+When customers add seats during a billing period:
+
+```typescript
+// Customer starts with 5 seats on Jan 1
+// Base: 5 × $10 = $50/month
+
+// On Jan 15 (halfway through month), add 3 seats
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: "team_plan",
+  quantity: 8  // Now 8 seats
+});
+
+// Prorated charge for 3 seats for half a month
+// = 3 × $10 × (15/30) = $15
+```
+
+**Proration configuration:**
+
+```typescript
+{
+  type: "price",
+  price: 1000,
+  interval: "month",
+  config: {
+    on_increase: "prorate_immediately"  // Charge now (default)
+  }
+}
+```
+
+### Removing Seats Mid-Cycle
+
+When customers remove seats:
+
+```typescript
+// Customer has 8 seats
+// On Jan 20, reduce to 5 seats
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: "team_plan",
+  quantity: 5
+});
+```
+
+**Proration configuration:**
+
+```typescript
+{
+  type: "price",
+  price: 1000,
+  interval: "month",
+  config: {
+    on_decrease: "prorate_next_cycle"  // Apply at renewal (default)
+  }
+}
+```
+
+<Tip>
+For seat reductions, applying changes at the next renewal prevents mid-cycle credits and maintains access.
+</Tip>
+
+## Seat Management Patterns
+
+### Simple Quantity Tracking
+
+Let customers manually set their seat count:
+
+```typescript
+// Customer dashboard
+async function updateSeats(customerId: string, newQuantity: number) {
+  await autumn.attach({
+    customer_id: customerId,
+    product_id: "team_plan",
+    quantity: newQuantity
+  });
+}
+```
+
+### Automatic Seat Tracking
+
+Automatically sync seats with your user database:
+
+```typescript
+// When user is created
+async function onUserCreated(customerId: string, userId: string) {
+  // Create entity
+  await autumn.entities.create({
+    customer_id: customerId,
+    feature_id: "seats",
+    entity_id: userId,
+    name: user.name
+  });
+  
+  // Get current seat count
+  const customer = await autumn.customers.retrieve({
+    customer_id: customerId
+  });
+  
+  const seatCount = customer.entities?.length || 0;
+  
+  // Update subscription
+  await autumn.attach({
+    customer_id: customerId,
+    product_id: "team_plan",
+    quantity: seatCount
+  });
+}
+
+// When user is removed
+async function onUserRemoved(customerId: string, userId: string) {
+  await autumn.entities.delete({
+    customer_id: customerId,
+    entity_id: userId
+  });
+  
+  // Update seat count
+  const customer = await autumn.customers.retrieve({
+    customer_id: customerId
+  });
+  
+  const seatCount = customer.entities?.length || 0;
+  
+  await autumn.attach({
+    customer_id: customerId,
+    product_id: "team_plan",
+    quantity: seatCount
+  });
+}
+```
+
+### Seat Limits
+
+Enforce maximum seat counts per plan:
+
+```typescript
+const starterPlan = await autumn.products.create({
+  name: "Starter Plan",
+  items: [
+    {
+      type: "priced_feature",
+      feature_id: "seats",
+      price: 1000,
+      usage_model: "prepaid",
+      interval: "month",
+      usage_limit: 10  // Max 10 seats
+    }
+  ]
+});
+
+// When adding a seat
+const customer = await autumn.customers.retrieve({
+  customer_id: "customer_123"
+});
+
+const currentSeats = customer.entities?.length || 0;
+
+if (currentSeats >= 10) {
+  throw new Error("Seat limit reached. Please upgrade to Pro.");
+}
+
+await autumn.entities.create({
+  customer_id: "customer_123",
+  feature_id: "seats",
+  entity_id: "new_user_id"
+});
+```
+
+## Minimum Seat Requirements
+
+Require a minimum number of seats:
+
+```typescript
+const enterprisePlan = await autumn.products.create({
+  name: "Enterprise Plan",
+  description: "Minimum 20 seats",
+  items: [
+    {
+      type: "price",
+      price: 5000,          // $50 per seat
+      interval: "month"
+    }
+  ]
+});
+
+// When subscribing
+const quantity = Math.max(requestedSeats, 20);  // Minimum 20
+
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: enterprisePlan.id,
+  quantity
+});
+```
+
+## Volume Discounts for Seats
+
+Offer discounts for larger teams using tiered pricing:
+
+```typescript
+const volumePlan = await autumn.products.create({
+  name: "Team Plan",
+  items: [
+    {
+      type: "priced_feature",
+      feature_id: "seats",
+      usage_model: "prepaid",
+      interval: "month",
+      tiers: [
+        {
+          to: 10,          // First 10 seats
+          amount: 1000     // $10 per seat
+        },
+        {
+          to: 50,          // Seats 11-50
+          amount: 900      // $9 per seat
+        },
+        {
+          to: "inf",       // 51+ seats
+          amount: 800      // $8 per seat
+        }
+      ]
+    }
+  ]
+});
+
+// Customer with 75 seats:
+// 10 seats × $10 = $100
+// 40 seats × $9 = $360
+// 25 seats × $8 = $200
+// Total: $660/month
+```
+
+<Info>Learn more about [Usage-Based Pricing](/pricing-models/usage-based) for tiered pricing details.</Info>
+
+## Checking Seat Usage
+
+Display current seat usage to customers:
+
+```typescript
+const customer = await autumn.customers.retrieve({
+  customer_id: "customer_123"
+});
+
+// Get seat count from entities
+const seatCount = customer.entities?.filter(
+  e => e.feature_id === "seats"
+).length || 0;
+
+// Get seat allowance from product
+const product = customer.products?.[0];
+const seatLimit = product?.items?.find(
+  i => i.feature_id === "seats"
+)?.usage_limit;
+
+console.log({
+  used: seatCount,
+  limit: seatLimit || "unlimited",
+  remaining: seatLimit ? seatLimit - seatCount : "unlimited"
+});
+```
+
+## Dashboard Configuration
+
+### Creating a Seat-Based Product
+
+1. Navigate to **Products** → **Create Product**
+2. Enter product name (e.g., "Team Plan")
+3. Click **Add Item** → **Fixed Price**
+   - Set price per seat (e.g., $10.00)
+   - Set interval (e.g., "month")
+4. Optionally, configure proration:
+   - Expand **Advanced Settings**
+   - Set **On Increase**: "Prorate Immediately"
+   - Set **On Decrease**: "Prorate Next Cycle"
+5. Save the product
+
+### Managing Customer Seats
+
+1. Navigate to **Customers** → Select customer
+2. Go to **Subscriptions** tab
+3. Click **Edit Subscription**
+4. Update **Quantity** field
+5. Save (proration applies automatically)
+
+## Best Practices
+
+<Card title="Automatic seat sync" icon="arrows-rotate">
+  Automatically sync seat counts with your user database to prevent billing discrepancies.
+</Card>
+
+<Card title="Show seat usage" icon="chart-simple">
+  Display current seat count and limits in your customer dashboard.
+</Card>
+
+<Card title="Warn before limits" icon="triangle-exclamation">
+  Alert customers when approaching seat limits so they can upgrade proactively.
+</Card>
+
+<Card title="Defer downgrades" icon="calendar-minus">
+  Apply seat reductions at next renewal to maintain access and avoid mid-cycle credits.
+</Card>
+
+<Card title="Offer volume discounts" icon="percent">
+  Provide tiered pricing to make larger teams more affordable and encourage growth.
+</Card>
+
+<Card title="Set minimums for enterprise" icon="building">
+  Require minimum seat counts for enterprise plans to ensure appropriate pricing.
+</Card>
+
+## Common Patterns
+
+### Basic Per-User Pricing
+
+```typescript
+const perUserPlan = await autumn.products.create({
+  name: "Pro Plan",
+  items: [
+    {
+      type: "price",
+      price: 1500,           // $15 per user/month
+      interval: "month"
+    }
+  ]
+});
+
+// Subscribe with 10 users
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: perUserPlan.id,
+  quantity: 10             // $150/month total
+});
+```
+
+### Base + Per-Seat
+
+Charge a base fee plus per-seat charges:
+
+```typescript
+const basePlusSeat = await autumn.products.create({
+  name: "Business Plan",
+  items: [
+    {
+      type: "price",
+      price: 9900,           // $99 base fee
+      interval: "month"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "seats",
+      price: 1000,           // $10 per additional seat
+      included_usage: 5,     // 5 seats included
+      usage_model: "prepaid",
+      interval: "month"
+    }
+  ]
+});
+
+// Customer with 12 seats:
+// Base: $99
+// Additional: (12 - 5) × $10 = $70
+// Total: $169/month
+```
+
+### Active vs. Total Users
+
+Charge only for active users:
+
+```typescript
+// Track active users as entities
+async function updateActiveSeats(customerId: string) {
+  // Get active users from your database
+  const activeUsers = await getActiveUsers(customerId);
+  
+  // Get existing entities
+  const customer = await autumn.customers.retrieve({
+    customer_id: customerId
+  });
+  
+  const entities = customer.entities?.filter(
+    e => e.feature_id === "seats"
+  ) || [];
+  
+  // Remove inactive entities
+  for (const entity of entities) {
+    if (!activeUsers.includes(entity.entity_id)) {
+      await autumn.entities.delete({
+        customer_id: customerId,
+        entity_id: entity.entity_id
+      });
+    }
+  }
+  
+  // Add new active entities
+  for (const userId of activeUsers) {
+    if (!entities.find(e => e.entity_id === userId)) {
+      await autumn.entities.create({
+        customer_id: customerId,
+        feature_id: "seats",
+        entity_id: userId
+      });
+    }
+  }
+  
+  // Update subscription quantity
+  await autumn.attach({
+    customer_id: customerId,
+    product_id: "team_plan",
+    quantity: activeUsers.length
+  });
+}
+
+// Run monthly
+setInterval(() => updateActiveSeats(customerId), 30 * 24 * 60 * 60 * 1000);
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Entities" icon="users" href="/concepts/entities">
+    Learn about entity tracking
+  </Card>
+  <Card title="Attach API" icon="link" href="/api/billing/attach">
+    Subscribe customers with quantities
+  </Card>
+  <Card title="Entities API" icon="network-wired" href="/api/entities/create">
+    Create and manage entities
+  </Card>
+  <Card title="Subscription Pricing" icon="repeat" href="/pricing-models/subscriptions">
+    Understand recurring billing
+  </Card>
+</CardGroup>

@@ -1,0 +1,709 @@
+---
+title: "Billing Flow"
+description: "Understand how billing works in Autumn from subscription to payment"
+---
+
+## Overview
+
+Autumn orchestrates the complete billing lifecycle from subscription creation to payment collection. Understanding this flow helps you build reliable billing into your application.
+
+The billing flow consists of these key stages:
+
+1. **Product Attachment** - Customer subscribes to a product
+2. **Entitlement Provisioning** - Access and limits are granted
+3. **Usage Tracking** - Consumption is recorded in real-time
+4. **Invoice Generation** - Charges are calculated at billing cycle end
+5. **Payment Collection** - Payment is processed via Stripe
+6. **State Management** - Subscription status is updated
+
+## The Complete Flow
+
+### 1. Product Attachment
+
+When a customer subscribes to a product via the `/attach` endpoint:
+
+```typescript Example: Attach Product
+const response = await autumn.attach({
+  customer_id: "user_123",
+  product_id: "pro"
+});
+
+// Returns checkout URL or immediate confirmation
+if (response.checkout_url) {
+  // Redirect to Stripe Checkout
+  window.location.href = response.checkout_url;
+} else {
+  // Immediate activation (e.g., free plan)
+  console.log("Product activated immediately");
+}
+```
+
+**What happens internally:**
+
+<Steps>
+  <Step title="Customer Creation">
+    If the customer doesn't exist, Autumn creates a customer record
+  </Step>
+  
+  <Step title="Product Validation">
+    Verifies the product exists and is not archived
+  </Step>
+  
+  <Step title="Eligibility Check">
+    Determines if the customer can subscribe (upgrade/downgrade rules)
+  </Step>
+  
+  <Step title="Customer Product Creation">
+    Creates a `customer_product` record linking customer to product
+  </Step>
+  
+  <Step title="Entitlement Provisioning">
+    Grants all entitlements defined in the product
+  </Step>
+  
+  <Step title="Payment Flow">
+    - **Free products**: Activates immediately with status `active`
+    - **Paid products**: Returns Stripe Checkout URL
+    - **Upgrades/downgrades**: Handles proration and subscription updates
+  </Step>
+</Steps>
+
+### 2. Entitlement Provisioning
+
+Entitlements define what the customer gets access to:
+
+```json Example: Product with Entitlements
+{
+  "product": {
+    "id": "pro",
+    "name": "Pro Plan"
+  },
+  "entitlements": [
+    {
+      "feature_id": "api-calls",
+      "allowance": 10000,
+      "interval": "month"
+    },
+    {
+      "feature_id": "storage-gb",
+      "allowance": 100,
+      "interval": "month"
+    }
+  ]
+}
+```
+
+**Customer Entitlements are created** with:
+
+<ParamField path="balance" type="number">
+  Initial allowance granted to the customer
+</ParamField>
+
+<ParamField path="unlimited" type="boolean">
+  Whether the feature has unlimited access
+</ParamField>
+
+<ParamField path="next_reset_at" type="number">
+  Unix timestamp when the allowance resets
+</ParamField>
+
+<ParamField path="customer_product_id" type="string">
+  Links the entitlement to the subscription
+</ParamField>
+
+### 3. Usage Tracking
+
+As customers use features, usage is tracked in real-time:
+
+```typescript Example: Track Usage
+await autumn.track({
+  customer_id: "user_123",
+  event_name: "api_call",
+  properties: {
+    endpoint: "/users",
+    method: "GET"
+  }
+});
+```
+
+**What happens:**
+
+<Steps>
+  <Step title="Event Ingestion">
+    Event is received and validated
+  </Step>
+  
+  <Step title="Feature Matching">
+    Event is matched against feature filters to determine which features it increments
+  </Step>
+  
+  <Step title="Balance Deduction">
+    Customer's entitlement balance is decremented in Redis (real-time)
+  </Step>
+  
+  <Step title="Event Storage">
+    Event is persisted to PostgreSQL for billing and analytics
+  </Step>
+  
+  <Step title="Usage Limits">
+    If balance reaches zero, future `/check` calls return `allowed: false`
+  </Step>
+</Steps>
+
+### 4. Access Control
+
+Before allowing feature access, check entitlements:
+
+```typescript Example: Check Access
+const { allowed, balance } = await autumn.check({
+  customer_id: "user_123",
+  feature_id: "api-calls"
+});
+
+if (!allowed) {
+  throw new Error("API limit exceeded");
+}
+
+// Proceed with API call
+await handleApiRequest();
+```
+
+**Check Response:**
+
+<ParamField path="allowed" type="boolean">
+  Whether the customer has access to the feature
+</ParamField>
+
+<ParamField path="balance" type="object">
+  Current balance information
+  
+  <Expandable title="properties">
+    <ParamField path="balance" type="number">
+      Remaining allowance
+    </ParamField>
+    <ParamField path="usage" type="number">
+      Amount consumed in current period
+    </ParamField>
+    <ParamField path="limit" type="number">
+      Total allowance for the period
+    </ParamField>
+    <ParamField path="next_reset_at" type="number">
+      When the balance resets
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### 5. Billing Cycle and Invoices
+
+At the end of each billing cycle, Autumn generates invoices:
+
+#### Subscription Billing (Fixed Prices)
+
+```typescript Example: Monthly Subscription
+{
+  "product": "pro",
+  "price": {
+    "amount": 2900,  // $29.00
+    "interval": "month"
+  }
+}
+```
+
+**Invoice Generation:**
+1. On subscription creation, first invoice is created immediately
+2. Subsequent invoices are generated at interval boundaries
+3. Stripe handles the payment collection
+4. Webhook confirms payment success/failure
+
+#### Usage-Based Billing
+
+```typescript Example: Usage Charges
+{
+  "feature": "api-calls",
+  "price": {
+    "per_unit": 10,  // $0.10 per call
+    "billing_type": "end_of_period"
+  }
+}
+```
+
+**Invoice Generation:**
+1. Usage is accumulated throughout the billing period
+2. At period end, total usage is calculated
+3. Charges are computed: `usage × per_unit_price`
+4. Invoice is created with all charges
+5. Payment is collected via Stripe
+
+### 6. Payment Collection
+
+Autumn integrates with Stripe for payment processing:
+
+<Steps>
+  <Step title="Payment Method">
+    Customer provides payment method via Stripe Checkout or billing portal
+  </Step>
+  
+  <Step title="Charge Attempt">
+    Stripe attempts to charge the payment method
+  </Step>
+  
+  <Step title="Success Path">
+    - Webhook: `invoice.payment_succeeded`
+    - Subscription status: `active`
+    - Services continue uninterrupted
+  </Step>
+  
+  <Step title="Failure Path">
+    - Webhook: `invoice.payment_failed`
+    - Subscription status: `past_due`
+    - Retry logic kicks in (Stripe Smart Retries)
+    - Customer is notified
+  </Step>
+</Steps>
+
+### 7. Subscription State Management
+
+Customer products have distinct states throughout their lifecycle:
+
+<ParamField path="status" type="string">
+  Current subscription status
+</ParamField>
+
+**Status Values:**
+
+<AccordionGroup>
+  <Accordion title="scheduled" icon="clock">
+    Subscription is scheduled to start in the future. Not yet active.
+  </Accordion>
+  
+  <Accordion title="trialing" icon="flask">
+    Customer is in free trial period. Full access without payment.
+  </Accordion>
+  
+  <Accordion title="active" icon="circle-check">
+    Subscription is active and paid. Customer has full access.
+  </Accordion>
+  
+  <Accordion title="past_due" icon="triangle-exclamation">
+    Payment failed but subscription is still active. Grace period applies.
+  </Accordion>
+  
+  <Accordion title="expired" icon="circle-xmark">
+    Subscription has ended. Access is revoked.
+  </Accordion>
+  
+  <Accordion title="canceled" icon="ban">
+    Subscription was canceled by customer or admin.
+  </Accordion>
+</AccordionGroup>
+
+## Upgrade and Downgrade Flow
+
+### Upgrading to a Higher Tier
+
+```typescript Example: Upgrade Flow
+// Customer on "starter" plan
+await autumn.attach({
+  customer_id: "user_123",
+  product_id: "pro"  // Upgrade to pro
+});
+```
+
+**What happens:**
+
+<Steps>
+  <Step title="Proration Calculation">
+    Unused time on current plan is credited toward new plan
+  </Step>
+  
+  <Step title="Subscription Update">
+    Stripe subscription is updated with new price
+  </Step>
+  
+  <Step title="Immediate Activation">
+    New entitlements are granted immediately
+  </Step>
+  
+  <Step title="Invoice Adjustment">
+    Prorated credit and new charge appear on next invoice
+  </Step>
+</Steps>
+
+### Downgrading to a Lower Tier
+
+```typescript Example: Downgrade Flow
+// Customer on "pro" plan
+await autumn.attach({
+  customer_id: "user_123",
+  product_id: "starter"  // Downgrade to starter
+});
+```
+
+**What happens:**
+
+<Steps>
+  <Step title="End of Period Scheduling">
+    Downgrade is scheduled for end of current billing period
+  </Step>
+  
+  <Step title="Continued Access">
+    Customer keeps pro features until period ends
+  </Step>
+  
+  <Step title="Downgrade Execution">
+    At period end, entitlements are updated to starter tier
+  </Step>
+  
+  <Step title="New Billing Cycle">
+    Next invoice reflects starter plan pricing
+  </Step>
+</Steps>
+
+<Note>
+Downgrades can be configured to happen immediately with proration by setting `proration_behavior: "always_invoice"`.
+</Note>
+
+## Trial Period Flow
+
+Free trials delay payment collection while granting full access:
+
+```typescript Example: Trial Subscription
+await autumn.attach({
+  customer_id: "user_123",
+  product_id: "pro",
+  trial_days: 14
+});
+```
+
+**Trial Timeline:**
+
+<Steps>
+  <Step title="Trial Start (Day 0)">
+    - Subscription created with status `trialing`
+    - Full pro entitlements granted
+    - No payment method required yet
+  </Step>
+  
+  <Step title="During Trial (Days 1-13)">
+    - Customer has full access
+    - Usage is tracked normally
+    - No charges incurred
+  </Step>
+  
+  <Step title="Trial End (Day 14)">
+    - If payment method on file: Converts to `active`, first payment collected
+    - If no payment method: Subscription `expires`, access revoked
+  </Step>
+</Steps>
+
+## Cancellation Flow
+
+Customers can cancel subscriptions at any time:
+
+```typescript Example: Cancel Subscription
+await autumn.cancel({
+  customer_id: "user_123",
+  product_id: "pro"
+});
+```
+
+**Cancellation Options:**
+
+### Immediate Cancellation
+
+```typescript Example: Cancel Immediately
+await autumn.cancel({
+  customer_id: "user_123",
+  product_id: "pro",
+  cancel_immediately: true
+});
+```
+
+- Access revoked immediately
+- Prorated refund issued (if configured)
+- Status changes to `canceled`
+
+### End of Period Cancellation
+
+```typescript Example: Cancel at Period End
+await autumn.cancel({
+  customer_id: "user_123",
+  product_id: "pro",
+  cancel_immediately: false  // default
+});
+```
+
+- Access continues until period end
+- No refund (customer paid for full period)
+- Status remains `active` until period end
+- Then changes to `expired`
+
+## Webhook Integration
+
+Autumn listens to Stripe webhooks to keep state synchronized:
+
+### Key Webhooks
+
+<AccordionGroup>
+  <Accordion title="invoice.payment_succeeded">
+    - Updates subscription status to `active`
+    - Records successful payment
+    - Renews entitlements for new period
+  </Accordion>
+  
+  <Accordion title="invoice.payment_failed">
+    - Updates subscription status to `past_due`
+    - Triggers retry logic
+    - Sends notification to customer
+  </Accordion>
+  
+  <Accordion title="customer.subscription.updated">
+    - Syncs subscription changes from Stripe
+    - Updates billing cycle dates
+    - Handles plan changes
+  </Accordion>
+  
+  <Accordion title="customer.subscription.deleted">
+    - Marks subscription as `expired`
+    - Revokes entitlements
+    - Stops usage tracking
+  </Accordion>
+</AccordionGroup>
+
+See [Handling Webhooks](/guides/handling-webhooks) for implementation details.
+
+## Balance Reset Flow
+
+Entitlements reset at configured intervals:
+
+```typescript Example: Monthly Reset
+{
+  "entitlement": {
+    "feature_id": "api-calls",
+    "allowance": 10000,
+    "interval": "month",
+    "next_reset_at": 1704067200  // Jan 1, 2024
+  }
+}
+```
+
+**Reset Process:**
+
+<Steps>
+  <Step title="Background Job">
+    Autumn runs periodic jobs to check for entitlements due for reset
+  </Step>
+  
+  <Step title="Balance Refresh">
+    Entitlement balance is reset to original allowance
+  </Step>
+  
+  <Step title="Usage Cleared">
+    Current period usage counter is reset to zero
+  </Step>
+  
+  <Step title="Next Reset Scheduled">
+    `next_reset_at` is updated to next interval boundary
+  </Step>
+</Steps>
+
+### Rollover Configuration
+
+Unused balance can roll over to the next period:
+
+```typescript Example: Rollover Enabled
+{
+  "entitlement": {
+    "feature_id": "api-calls",
+    "allowance": 10000,
+    "interval": "month",
+    "rollover": {
+      "enabled": true,
+      "max_rollover": 5000  // Max 5k calls carry over
+    }
+  }
+}
+```
+
+## Entity-Scoped Billing
+
+For multi-tenant scenarios, billing can be scoped to entities:
+
+```typescript Example: Entity Subscription
+// Entity subscribes to product
+await autumn.attach({
+  customer_id: "user_123",
+  entity_id: "team_acme",
+  product_id: "team-pro"
+});
+
+// Usage tracked per entity
+await autumn.track({
+  customer_id: "user_123",
+  entity_id: "team_acme",
+  event_name: "api_call"
+});
+
+// Check entity access
+const { allowed } = await autumn.check({
+  customer_id: "user_123",
+  entity_id: "team_acme",
+  feature_id: "api-calls"
+});
+```
+
+**Entity Billing Characteristics:**
+
+- Each entity has independent entitlements
+- Usage is tracked separately per entity
+- Invoices can be generated per entity
+- All charges bill to the parent customer
+
+See [Entities](/concepts/entities) for detailed information.
+
+## Custom Pricing Flow
+
+For enterprise customers, create custom pricing:
+
+```typescript Example: Custom Plan
+const customProduct = await autumn.products.create({
+  id: "enterprise-custom-abc",
+  name: "Enterprise - Acme Corp",
+  is_custom: true,
+  prices: [
+    {
+      amount: 50000,  // $500/month
+      interval: "month"
+    }
+  ],
+  entitlements: [
+    {
+      feature_id: "api-calls",
+      allowance_type: "unlimited"
+    }
+  ]
+});
+
+// Attach custom product
+await autumn.attach({
+  customer_id: "enterprise_customer",
+  product_id: "enterprise-custom-abc"
+});
+```
+
+See [Custom Pricing](/guides/custom-pricing) for implementation patterns.
+
+## Payment Failure Recovery
+
+When payments fail, Autumn handles recovery automatically:
+
+<Steps>
+  <Step title="Initial Failure">
+    - Webhook: `invoice.payment_failed`
+    - Status: `past_due`
+    - Customer email notification (via Stripe)
+  </Step>
+  
+  <Step title="Retry Attempts">
+    - Stripe automatically retries payment
+    - Attempts follow Stripe Smart Retry schedule
+    - Status remains `past_due` during retries
+  </Step>
+  
+  <Step title="Success Recovery">
+    - Webhook: `invoice.payment_succeeded`
+    - Status: `active`
+    - Access fully restored
+  </Step>
+  
+  <Step title="Final Failure">
+    - After all retries exhausted
+    - Subscription canceled
+    - Status: `expired`
+    - Access revoked
+  </Step>
+</Steps>
+
+**Grace Period Configuration:**
+
+During `past_due` status, you can choose to:
+- Allow continued access (grace period)
+- Immediately restrict access
+- Provide degraded service
+
+```typescript Example: Check Past Due Status
+const customer = await autumn.customers.get({
+  customer_id: "user_123",
+  expand: ["products"]
+});
+
+const subscription = customer.products[0];
+
+if (subscription.status === "past_due") {
+  // Show banner: "Payment failed, please update payment method"
+  // Optionally allow limited access
+}
+```
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="What happens to usage when a subscription is canceled?">
+    Usage tracking stops immediately upon cancellation. Historical usage data is preserved for analytics and records, but new events are rejected.
+  </Accordion>
+
+  <Accordion title="Can I change pricing for existing customers?">
+    Pricing changes don't affect existing subscriptions automatically. To change pricing:
+    1. Update the product's price
+    2. New subscriptions use new pricing
+    3. Optionally migrate existing customers via API
+    
+    This allows grandfathering of legacy pricing.
+  </Accordion>
+
+  <Accordion title="How does proration work for mid-cycle changes?">
+    Autumn uses Stripe's proration logic:
+    - **Upgrade**: Immediate charge for prorated difference
+    - **Downgrade**: Credit applied to next invoice
+    - **Calculation**: `(unused_time / total_time) × price_difference`
+  </Accordion>
+
+  <Accordion title="What's the difference between 'expired' and 'canceled'?">
+    - **Expired**: Subscription ended naturally (trial ended, not renewed)
+    - **Canceled**: Subscription was explicitly canceled by customer or admin
+    
+    Both result in access revocation, but the distinction helps with analytics.
+  </Accordion>
+
+  <Accordion title="How do I test billing flows without real charges?">
+    Use Stripe test mode:
+    ```typescript
+    // In development environment
+    const autumn = new Autumn({
+      apiKey: process.env.AUTUMN_TEST_KEY,
+      stripe: {
+        publishableKey: process.env.STRIPE_TEST_KEY
+      }
+    });
+    ```
+    
+    All charges in test mode are simulated - no real money moves.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Attach Product" icon="link" href="/api/billing/attach">
+    Subscribe customers to products
+  </Card>
+  <Card title="Track Usage" icon="chart-line" href="/api/billing/track">
+    Record feature consumption
+  </Card>
+  <Card title="Check Access" icon="shield-check" href="/api/billing/check">
+    Verify feature entitlements
+  </Card>
+  <Card title="Handling Webhooks" icon="webhook" href="/guides/handling-webhooks">
+    Process Stripe webhook events
+  </Card>
+</CardGroup>

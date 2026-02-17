@@ -203,6 +203,35 @@ curl -X POST "https://api.autumn.com/v1/events/list" \
 ```
 </CodeGroup>
 
+## Example Response
+
+```json
+{
+  "list": [
+    {
+      "id": "evt_36xpk2TmuQX5zVPPQ8tCtnR5Weg",
+      "timestamp": 1765958215459,
+      "feature_id": "api_calls",
+      "customer_id": "cus_123",
+      "value": 30,
+      "properties": {}
+    },
+    {
+      "id": "evt_36xmHxxjAkqxufDf9yHAPNfRrLM",
+      "timestamp": 1765956512057,
+      "feature_id": "api_calls",
+      "customer_id": "cus_123",
+      "value": 49,
+      "properties": {}
+    }
+  ],
+  "total": 2,
+  "has_more": false,
+  "offset": 0,
+  "limit": 100
+}
+```
+
 ## Error Handling
 
 <ResponseField name="400" type="error">
@@ -223,3 +252,8 @@ curl -X POST "https://api.autumn.com/v1/events/list" \
 <ResponseField name="500" type="error">
   **Internal Server Error** - An unexpected error occurred on the server.
 </ResponseField>
+
+## Related Endpoints
+
+- [Get Event](/api/events/retrieve) - Retrieve a specific event by ID
+- [Track](/api/track) - Create new usage events

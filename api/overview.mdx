@@ -1,0 +1,139 @@
+---
+title: 'API Overview'
+description: 'Introduction to the Autumn API'
+---
+
+## Base URL
+
+The Autumn API is organized around REST. All API requests should be made to:
+
+```
+https://api.useautumn.com/v1
+```
+
+For local development:
+
+```
+http://localhost:8080/v1
+```
+
+## API Structure
+
+The Autumn API provides endpoints for managing:
+
+- **Billing** - Attach products, process checkouts, track usage
+- **Customers** - Create and manage customer accounts
+- **Products & Plans** - Define your pricing and features
+- **Features** - Manage feature flags and entitlements
+- **Entities** - Organize customers into hierarchical structures
+- **Invoices** - Access billing and invoice data
+- **Events** - Query usage and analytics data
+- **Balances** - Track prepaid credits and usage
+- **Rewards & Referrals** - Implement referral programs
+
+## Request Format
+
+All requests should:
+
+- Use HTTPS in production
+- Include proper [authentication](/api/authentication) headers
+- Send JSON request bodies with `Content-Type: application/json`
+- Optionally specify an [API version](/api/versioning) via the `x-api-version` header
+
+## Response Format
+
+The API returns JSON responses with:
+
+- **Success responses** - HTTP status codes 200-299 with response data
+- **Error responses** - HTTP status codes 400-599 with error details
+
+All responses include standard fields:
+
+```json
+{
+  "data": { /* response data */ },
+  "env": "test" | "live"
+}
+```
+
+See [Error Handling](/api/errors) for details on error responses.
+
+## Environments
+
+Autumn supports two environments:
+
+- **Test mode** - Use test API keys (prefix: `am_test_`) for development
+- **Live mode** - Use live API keys (prefix: `am_live_`) for production
+
+All API requests include an `env` field indicating which environment was used.
+
+## Idempotency
+
+The API supports idempotency for safe retries on network failures. Include an `Idempotency-Key` header with a unique value:
+
+```bash
+curl https://api.useautumn.com/v1/attach \
+  -H "Authorization: Bearer am_live_xxx" \
+  -H "Idempotency-Key: unique-key-123" \
+  -H "Content-Type: application/json"
+```
+
+If the same idempotency key is used twice, the API returns the cached response from the first request.
+
+## Pagination
+
+List endpoints support pagination with these parameters:
+
+- `limit` - Number of results to return (default: 10, max: 100)
+- `offset` - Number of results to skip (default: 0)
+
+```json
+{
+  "data": [...],
+  "has_more": true,
+  "total": 150
+}
+```
+
+## Expanding Resources
+
+Some endpoints support expanding related resources using the `expand` query parameter:
+
+```bash
+GET /v1/customers/cus_123?expand=products,features
+```
+
+This returns nested objects instead of just IDs, reducing the number of API calls needed.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Authentication"
+    icon="key"
+    href="/api/authentication"
+  >
+    Learn how to authenticate API requests
+  </Card>
+  <Card
+    title="Error Handling"
+    icon="circle-exclamation"
+    href="/api/errors"
+  >
+    Understand error codes and responses
+  </Card>
+  <Card
+    title="Versioning"
+    icon="code-branch"
+    href="/api/versioning"
+  >
+    Pin to specific API versions
+  </Card>
+  <Card
+    title="Rate Limits"
+    icon="gauge-high"
+    href="/api/rate-limits"
+  >
+    Learn about rate limiting policies
+  </Card>
+</CardGroup>

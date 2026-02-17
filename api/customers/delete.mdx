@@ -1,208 +1,126 @@
 ---
 title: "Delete Customer"
-description: "Delete a customer and optionally remove them from Stripe"
+api: "DELETE /customers/:customer_id"
 ---
 
-## Overview
-
-Permanently delete a customer from your Autumn account. You can optionally also delete the customer from Stripe if they have a linked Stripe account. This operation cannot be undone.
+Permanently deletes a customer. This action cannot be undone.
 
 <Warning>
-  Deleting a customer is permanent and will remove all associated subscriptions, usage data, and history. Consider canceling subscriptions instead if you want to preserve historical data.
+  Deleting a customer will permanently remove all associated data including subscriptions, balances, and usage history. This action cannot be undone.
 </Warning>
 
-## Endpoint
-
-```
-DELETE /customers/{customer_id}
-```
-
-## Authentication
-
-This endpoint requires authentication. Include your API key in the `Authorization` header:
-
-```
-Authorization: Bearer YOUR_API_KEY
-```
-
-## Request
-
-### Path Parameters
+## Path Parameters
 
 <ParamField path="customer_id" type="string" required>
-  The customer's unique identifier. This can be either your custom customer ID or Autumn's internal ID.
+  The unique identifier of the customer to delete.
 </ParamField>
 
-### Query Parameters
+## Query Parameters
 
-<ParamField query="delete_in_stripe" type="boolean" default="false">
-  Whether to also delete the customer from Stripe. If `true`, Autumn will attempt to delete the customer from Stripe before removing them from Autumn.
-  
-  **Note**: If Stripe deletion fails, the customer will still be deleted from Autumn and the response will indicate the Stripe deletion failure.
+<ParamField query="delete_in_stripe" type="boolean" default={false}>
+  Whether to also delete the customer in Stripe. If `true`, Autumn will attempt to delete the associated Stripe customer. If the deletion fails in Stripe, the customer will still be deleted in Autumn.
 </ParamField>
 
 ## Response
 
-### Success Response (200)
+Returns a deletion confirmation object.
 
 <ResponseField name="customer" type="object">
-  The deleted customer object, containing the customer's information as it existed before deletion.
+  The deleted customer object (as it existed before deletion).
 </ResponseField>
 
 <ResponseField name="success" type="boolean">
   Indicates whether the deletion was fully successful. 
-  - `true`: Customer deleted from Autumn (and Stripe if requested)
-  - `false`: Customer deleted from Autumn but Stripe deletion failed (if requested)
+  
+  - `true` - Customer was successfully deleted from Autumn (and Stripe if requested)
+  - `false` - Customer was deleted from Autumn but failed to delete from Stripe
 </ResponseField>
 
-## Examples
+## Deletion Behavior
 
-### Request Example
+1. **Autumn Database**: The customer is permanently removed from Autumn's database
+2. **Cache**: All cached customer data is cleared
+3. **Stripe (Optional)**: If `delete_in_stripe=true`, Autumn attempts to delete the customer from Stripe
+4. **Stripe Failures**: If Stripe deletion fails, the operation continues and the customer is still deleted from Autumn. The response will have `success: false`.
 
-<CodeGroup>
+<Note>
+  Even if `success` is `false`, the customer has been deleted from Autumn. The `false` status only indicates that the Stripe deletion failed.
+</Note>
 
+<RequestExample>
 ```bash cURL
-# Delete from Autumn only
-curl -X DELETE https://api.autumnhq.com/v1/customers/user_123 \
-  -H "Authorization: Bearer YOUR_API_KEY"
-
-# Delete from both Autumn and Stripe
-curl -X DELETE "https://api.autumnhq.com/v1/customers/user_123?delete_in_stripe=true" \
+curl -X DELETE https://api.autumn.com/v1/customers/user_12345 \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-```typescript TypeScript
-import { AutumnClient } from '@useautumn/autumn-js';
+```bash cURL - Delete from Stripe too
+curl -X DELETE "https://api.autumn.com/v1/customers/user_12345?delete_in_stripe=true" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
 
-const autumn = new AutumnClient({
-  apiKey: 'YOUR_API_KEY'
-});
+```javascript JavaScript
+const result = await autumn.customers.delete('user_12345');
+```
 
-// Delete from Autumn only
-const result = await autumn.customers.delete('user_123');
-
-// Delete from both Autumn and Stripe
-const result = await autumn.customers.delete('user_123', {
+```javascript JavaScript - Delete from Stripe too
+const result = await autumn.customers.delete('user_12345', {
   delete_in_stripe: true
 });
-
-if (result.success) {
-  console.log('Customer deleted successfully');
-} else {
-  console.log('Customer deleted from Autumn, but Stripe deletion failed');
-}
 ```
 
 ```python Python
-from autumn import AutumnClient
-
-autumn = AutumnClient(api_key='YOUR_API_KEY')
-
-# Delete from Autumn only
-result = autumn.customers.delete('user_123')
-
-# Delete from both Autumn and Stripe
-result = autumn.customers.delete(
-    'user_123',
-    delete_in_stripe=True
-)
-
-if result['success']:
-    print('Customer deleted successfully')
-else:
-    print('Customer deleted from Autumn, but Stripe deletion failed')
+result = autumn.customers.delete('user_12345')
 ```
 
-</CodeGroup>
+```python Python - Delete from Stripe too
+result = autumn.customers.delete(
+    'user_12345',
+    delete_in_stripe=True
+)
+```
+</RequestExample>
 
-### Response Example
-
-```json
+<ResponseExample>
+```json 200 - Successful deletion
 {
   "customer": {
-    "id": "user_123",
-    "name": "Jane Smith",
-    "email": "jane@example.com",
-    "created_at": 1672531200,
-    "stripe_id": "cus_stripe_xyz",
-    "env": "production",
+    "id": "user_12345",
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "created_at": 1708473600,
+    "fingerprint": "device_abc123",
+    "stripe_id": "cus_PQr8sT9uVwX1yZ",
+    "env": "live",
     "metadata": {
-      "company": "Tech Startup Inc"
-    }
+      "user_tier": "premium"
+    },
+    "send_email_receipts": true
   },
   "success": true
 }
 ```
 
-## Error Handling
-
-### Common Errors
-
-- **401 Unauthorized**: Invalid or missing API key
-  ```json
-  {
-    "error": "Invalid API key"
-  }
-  ```
-
-- **404 Not Found**: Customer with the specified ID does not exist
-  ```json
-  {
-    "error": "Customer not found",
-    "customer_id": "user_123"
-  }
-  ```
-
-### Handling Stripe Deletion Failures
-
-When `delete_in_stripe` is `true`, the customer is deleted from Autumn even if the Stripe deletion fails. Check the `success` field to determine if Stripe deletion was successful:
-
-```typescript
-const result = await autumn.customers.delete('user_123', {
-  delete_in_stripe: true
-});
-
-if (!result.success) {
-  // Customer deleted from Autumn, but Stripe deletion failed
-  console.warn('Stripe customer may still exist');
-  console.log('Stripe ID:', result.customer.stripe_id);
-  
-  // You may want to manually delete the Stripe customer
-  // or track this for later cleanup
+```json 200 - Deleted from Autumn, Stripe deletion failed
+{
+  "customer": {
+    "id": "user_12345",
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "created_at": 1708473600,
+    "stripe_id": "cus_PQr8sT9uVwX1yZ",
+    "env": "live"
+  },
+  "success": false
 }
 ```
 
-### What Gets Deleted
-
-When you delete a customer, the following data is removed:
-
-- Customer record and all profile information
-- Active and scheduled subscriptions
-- Usage records and credits/balances
-- Customer-entity relationships
-- All cached customer data
-
-**Data that is preserved**:
-- Historical invoices remain accessible via Stripe
-- Event logs (if you're using event tracking)
-
-### Soft Delete Alternative
-
-If you want to preserve historical data, consider canceling subscriptions instead of deleting the customer:
-
-```typescript
-// Cancel all active subscriptions instead of deleting
-const customer = await autumn.customers.get('user_123');
-
-for (const subscription of customer.subscriptions) {
-  await autumn.subscriptions.cancel(subscription.id);
+```json 404
+{
+  "error": {
+    "message": "Customer not found",
+    "code": "customer_not_found",
+    "status": 404
+  }
 }
 ```
-
-## Related Resources
-
-- [Customers Concept](/concepts/customers) - Learn about customer management
-- [Get Customer](/api/customers/get) - Retrieve a specific customer
-- [Update Customer](/api/customers/update) - Update customer information
-- [Cancel Subscription](/api/cancel) - Cancel customer subscriptions
-- [Dashboard Customers](/dashboard/customers) - Manage customers in the dashboard
+</ResponseExample>

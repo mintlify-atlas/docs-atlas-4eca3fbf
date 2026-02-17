@@ -1,0 +1,261 @@
+---
+title: "Retrieve Product"
+api: "GET /products/{product_id}"
+---
+
+Retrieves a specific product by ID, including all its pricing, features, and configuration.
+
+## Path Parameters
+
+<ParamField path="product_id" type="string" required>
+  The ID of the product to retrieve.
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="schemaVersion" type="string">
+  The schema version to use for the response. Defaults to version 2 (latest).
+  
+  - `1`: Returns raw product data
+  - `2`: Returns formatted plan response (default)
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  The ID of the product.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The name of the product.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  The description of the product.
+</ResponseField>
+
+<ResponseField name="group" type="string">
+  The product group this product belongs to.
+</ResponseField>
+
+<ResponseField name="version" type="number">
+  The current version of the product. Versions are created automatically when you update pricing or features for a product that has active customers.
+</ResponseField>
+
+<ResponseField name="add_on" type="boolean">
+  Whether this is an add-on product that can be purchased alongside other products.
+</ResponseField>
+
+<ResponseField name="auto_enable" type="boolean">
+  Whether this product is automatically enabled for new customers.
+</ResponseField>
+
+<ResponseField name="price" type="object">
+  Base price information for the product.
+  
+  - `amount`: Price amount in cents
+  - `interval`: Billing interval (`day`, `week`, `month`, `year`)
+  - `interval_count`: Number of intervals between charges
+  - `display`: Display formatting for the price
+</ResponseField>
+
+<ResponseField name="items" type="array">
+  Array of product items defining features and additional pricing.
+  
+  Each item contains:
+  - `feature_id`: The feature this item represents
+  - `feature`: Full feature object with metadata
+  - `included`: Usage included with this product
+  - `unlimited`: Whether the feature provides unlimited usage
+  - `reset`: Reset interval configuration
+  - `price`: Pricing configuration for overages
+  - `display`: Display formatting
+  - `rollover`: Rollover configuration for unused usage
+  - `proration`: Proration settings for mid-cycle changes
+</ResponseField>
+
+<ResponseField name="free_trial" type="object">
+  Free trial configuration if applicable.
+  
+  - `duration`: Duration type (`day`, `week`, `month`, `year`)
+  - `length`: Length of the duration
+  - `unique_fingerprint`: Whether trial is limited per fingerprint
+  - `card_required`: Whether payment method is required
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Timestamp when the product was created (milliseconds since epoch).
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  The environment this product exists in (`sandbox` or `production`).
+</ResponseField>
+
+<ResponseField name="archived" type="boolean">
+  Whether the product has been archived and is no longer available for new purchases.
+</ResponseField>
+
+<ResponseField name="base_variant_id" type="string">
+  ID of the base variant this product is derived from, if applicable.
+</ResponseField>
+
+<ResponseField name="customer_eligibility" type="object">
+  Customer eligibility information (included when `customer_id` query parameter is provided).
+  
+  - `trial_available`: Whether the free trial is available for this customer
+  - `scenario`: Attach scenario (`new`, `upgrade`, `downgrade`, etc.)
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl --request GET \
+  --url https://api.autumn.ai/products/pro-plan \
+  --header 'Authorization: Bearer <token>'
+```
+
+```typescript TypeScript
+import { Autumn } from '@autumnai/node-sdk';
+
+const autumn = new Autumn({
+  apiKey: process.env.AUTUMN_API_KEY,
+});
+
+const product = await autumn.products.retrieve('pro-plan');
+
+console.log(product.name);
+console.log(product.price);
+console.log(product.items);
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key="your_api_key")
+
+product = autumn.products.retrieve("pro-plan")
+
+print(product.name)
+print(product.price)
+print(product.items)
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "id": "pro-plan",
+  "name": "Pro Plan",
+  "description": "Full-featured plan for professionals",
+  "group": "main",
+  "version": 1,
+  "add_on": false,
+  "auto_enable": false,
+  "price": {
+    "amount": 20,
+    "interval": "month",
+    "interval_count": 1,
+    "display": {
+      "primary_text": "$20",
+      "secondary_text": "per month"
+    }
+  },
+  "items": [
+    {
+      "feature_id": "api-calls",
+      "feature": {
+        "id": "api-calls",
+        "name": "API Calls",
+        "type": "single_use",
+        "display": {
+          "singular": "API Call",
+          "plural": "API Calls"
+        },
+        "archived": false
+      },
+      "included": 10000,
+      "unlimited": false,
+      "reset": {
+        "interval": "month",
+        "interval_count": 1
+      },
+      "price": {
+        "amount": 0.001,
+        "interval": "month",
+        "interval_count": 1,
+        "billing_units": 1000,
+        "billing_method": "usage_based",
+        "max_purchase": null
+      },
+      "display": {
+        "primary_text": "10,000 API Calls",
+        "secondary_text": "then $1 per 1,000 calls"
+      }
+    },
+    {
+      "feature_id": "dashboard",
+      "feature": {
+        "id": "dashboard",
+        "name": "Dashboard Access",
+        "type": "boolean",
+        "display": {
+          "singular": "Dashboard",
+          "plural": "Dashboard"
+        },
+        "archived": false
+      },
+      "included": 1,
+      "unlimited": true,
+      "reset": null,
+      "price": null,
+      "display": {
+        "primary_text": "Dashboard Access"
+      }
+    }
+  ],
+  "free_trial": {
+    "duration": "day",
+    "length": 14,
+    "unique_fingerprint": true,
+    "card_required": true
+  },
+  "created_at": 1761296829908,
+  "env": "sandbox",
+  "archived": false,
+  "base_variant_id": null
+}
+```
+</ResponseExample>
+
+## Retrieving Product Versions
+
+Products can have multiple versions when pricing or features change for products with existing customers. By default, retrieving a product returns the latest version.
+
+To retrieve a specific version, you'll need to use the internal API or list all products and filter by version.
+
+## Product with Customer Context
+
+When listing products with a `customer_id` query parameter (available on the list endpoint), the response includes additional customer-specific information:
+
+```json
+{
+  "id": "pro-plan",
+  "name": "Pro Plan",
+  // ... other fields
+  "customer_eligibility": {
+    "trial_available": false,
+    "scenario": "upgrade"
+  }
+}
+```
+
+The `customer_eligibility` object indicates:
+- Whether the customer is eligible for a free trial
+- The upgrade/downgrade scenario if they were to switch to this product
+
+## Notes
+
+- Returns a `404` error if the product doesn't exist
+- Product items include the full feature object for convenience
+- Display fields are automatically generated based on pricing configuration
+- The `version` field indicates which version of the product this is
+- Archived products can still be retrieved but are not available for new purchases

@@ -1,0 +1,639 @@
+---
+title: "Prepaid Pricing"
+description: "Upfront payment models with prepaid balances and package purchases"
+---
+
+## Overview
+
+Prepaid pricing allows customers to pay upfront for a set amount of usage or access. This model improves cash flow, reduces payment friction, and is ideal for customers who prefer predictable costs.
+
+**Common use cases:**
+- Prepaid API credit packages
+- Upfront license purchases
+- Pre-purchased bundles (e.g., 100 hours of compute)
+- Deposit-based services
+- Annual subscriptions paid upfront
+- Gift cards and vouchers
+
+## How Prepaid Pricing Works
+
+Prepaid models typically involve:
+- **Upfront payment** - Customer pays before using the service
+- **Credit balance** - Usage depletes the prepaid balance
+- **Overage handling** - Optional pay-as-you-go after credits run out
+- **Refills** - Customers can top up their balance
+
+```typescript
+{
+  type: "priced_feature",
+  feature_id: "api_calls",
+  included_usage: 10000,      // 10,000 calls prepaid
+  usage_model: "prepaid",     // Deduct from balance
+  interval: "month"
+}
+```
+
+## Creating Prepaid Products
+
+<Steps>
+  <Step title="Create a metered feature">
+    Define what customers are prepaying for:
+
+    ```typescript
+    const feature = await autumn.features.create({
+      name: "API Calls",
+      key: "api_calls",
+      config: {
+        usage_type: "continuous_use"
+      }
+    });
+    ```
+
+    <Info>Learn more about [Features](/concepts/features)</Info>
+  </Step>
+
+  <Step title="Create a prepaid product">
+    Define the prepaid package:
+
+    ```typescript
+    const prepaidPackage = await autumn.products.create({
+      name: "10,000 API Credits",
+      items: [
+        {
+          type: "price",
+          price: 10000,          // $100 upfront
+          interval: null         // One-time payment
+        },
+        {
+          type: "priced_feature",
+          feature_id: feature.id,
+          included_usage: 10000, // 10k prepaid credits
+          usage_model: "prepaid"
+        }
+      ]
+    });
+    ```
+  </Step>
+
+  <Step title="Customer purchases credits">
+    Attach the prepaid product:
+
+    ```typescript
+    await autumn.attach({
+      customer_id: "customer_123",
+      product_id: prepaidPackage.id
+    });
+    ```
+
+    Customer pays $100 and receives 10,000 API credits.
+
+    <Info>Learn more about the [Attach API](/api/billing/attach)</Info>
+  </Step>
+
+  <Step title="Track usage against credits">
+    As customers use your service, deduct from their balance:
+
+    ```typescript
+    await autumn.track({
+      customer_id: "customer_123",
+      feature_id: feature.id,
+      value: 1  // Use 1 credit
+    });
+    ```
+
+    <Info>Learn more about the [Track API](/api/billing/track)</Info>
+  </Step>
+</Steps>
+
+## Prepaid Models
+
+### One-Time Prepaid Package
+
+Customers buy credits that don't expire:
+
+```typescript
+const oneTimePackage = await autumn.products.create({
+  name: "5,000 API Credits",
+  items: [
+    {
+      type: "price",
+      price: 5000,           // $50 one-time
+      interval: null
+    },
+    {
+      type: "feature",
+      feature_id: "api_calls",
+      included_usage: 5000   // 5k perpetual credits
+    }
+  ]
+});
+```
+
+Credits persist until used, with no expiration.
+
+### Recurring Prepaid Subscription
+
+Customers pay monthly/yearly for recurring credit allotments:
+
+```typescript
+const recurringPrepaid = await autumn.products.create({
+  name: "Pro Plan",
+  items: [
+    {
+      type: "price",
+      price: 2900,           // $29/month
+      interval: "month"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 50000, // 50k credits/month
+      usage_model: "prepaid",
+      interval: "month"      // Resets monthly
+    }
+  ]
+});
+```
+
+Customers get 50,000 fresh credits at the start of each billing period.
+
+### Prepaid with Overages
+
+Allow customers to exceed prepaid credits for an additional fee:
+
+```typescript
+const prepaidOverage = await autumn.products.create({
+  name: "Flex Plan",
+  items: [
+    {
+      type: "price",
+      price: 4900,
+      interval: "month"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 100000,  // 100k prepaid
+      price: 10,               // $0.10 per 1k overage
+      billing_units: 1000,
+      usage_model: "pay_per_use",  // Bill overages in arrears
+      interval: "month"
+    }
+  ]
+});
+```
+
+Customers use 100k prepaid credits first, then pay $0.10 per 1,000 additional calls.
+
+### Annual Prepaid Subscription
+
+Charge for a full year upfront:
+
+```typescript
+const annualPlan = await autumn.products.create({
+  name: "Pro Annual",
+  items: [
+    {
+      type: "price",
+      price: 29900,          // $299 upfront
+      interval: "year"       // Billed annually
+    },
+    {
+      type: "feature",
+      feature_id: "pro_features",
+      included_usage: "inf", // Unlimited access
+      interval: "year"
+    }
+  ]
+});
+```
+
+Customers pay once and get access for the full year.
+
+## Prepaid Credit Tiers
+
+Offer multiple package sizes:
+
+```typescript
+const creditPackages = [
+  { name: "Starter", price: 2000, credits: 1000 },
+  { name: "Growth", price: 9000, credits: 5000 },   // 10% discount
+  { name: "Pro", price: 16000, credits: 10000 },     // 20% discount
+  { name: "Enterprise", price: 70000, credits: 50000 } // 30% discount
+];
+
+for (const pkg of creditPackages) {
+  await autumn.products.create({
+    name: `${pkg.name} Package`,
+    items: [
+      {
+        type: "price",
+        price: pkg.price,
+        interval: null
+      },
+      {
+        type: "feature",
+        feature_id: "api_calls",
+        included_usage: pkg.credits
+      }
+    ]
+  });
+}
+```
+
+<Tip>
+Offer volume discounts to incentivize larger prepayments and improve cash flow.
+</Tip>
+
+## Managing Prepaid Quantities
+
+For prepaid subscriptions, customers can adjust their quantity:
+
+```typescript
+// Customer wants more prepaid credits
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: "prepaid_plan",
+  quantity: 3  // 3x the base prepaid amount
+});
+
+// If base includes 10,000 credits:
+// Total prepaid: 3 × 10,000 = 30,000 credits
+// Total cost: 3 × $50 = $150
+```
+
+This is useful for:
+- Scaling prepaid amounts for larger teams
+- Bulk purchases
+- Custom enterprise deals
+
+## Checking Prepaid Balance
+
+Before processing requests, verify remaining credits:
+
+```typescript
+const customer = await autumn.customers.retrieve({
+  customer_id: "customer_123"
+});
+
+const balance = customer.balances?.find(
+  b => b.feature_id === "api_calls"
+);
+
+if (!balance || balance.remaining === 0) {
+  return {
+    error: "Insufficient credits",
+    message: "Please purchase more API credits to continue"
+  };
+}
+
+if (balance.remaining < 100) {
+  // Warn customer they're running low
+  console.warn("Low balance: only", balance.remaining, "credits left");
+}
+
+// Proceed with request
+await processApiRequest();
+
+// Deduct credit
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1
+});
+```
+
+### Pre-Flight Check
+
+```typescript
+const check = await autumn.check({
+  customer_id: "customer_123",
+  feature_id: "api_calls"
+});
+
+if (!check.has_access) {
+  return {
+    error: "No credits remaining",
+    balance: check.remaining
+  };
+}
+```
+
+<Info>Learn more about the [Check API](/api/billing/check)</Info>
+
+## Credit Top-Ups
+
+Allow customers to add more credits anytime:
+
+```typescript
+// Create a top-up product
+const topUp = await autumn.products.create({
+  name: "1,000 API Credits",
+  items: [
+    {
+      type: "price",
+      price: 1000,
+      interval: null
+    },
+    {
+      type: "feature",
+      feature_id: "api_calls",
+      included_usage: 1000
+    }
+  ]
+});
+
+// Customer tops up
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: topUp.id
+});
+```
+
+Existing balance increases by 1,000 credits.
+
+## Credit Expiration
+
+### Expiring Credits
+
+Set expiration dates for promotional or trial credits:
+
+```typescript
+const expiryDate = Date.now() + (30 * 24 * 60 * 60 * 1000); // 30 days
+
+await autumn.balances.create({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  granted_balance: 500,
+  current_balance: 500,
+  next_reset_at: expiryDate,
+  metadata: {
+    type: "trial",
+    expires: new Date(expiryDate).toISOString()
+  }
+});
+```
+
+### Non-Expiring Credits
+
+For purchased credits, set no expiration:
+
+```typescript
+await autumn.balances.create({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  granted_balance: 10000,
+  current_balance: 10000,
+  next_reset_at: null  // Never expires
+});
+```
+
+## Billing Units for Prepaid
+
+Define what one prepaid unit represents:
+
+```typescript
+// 1 credit = 1 API call
+{
+  feature_id: "api_calls",
+  included_usage: 10000,
+  billing_units: 1
+}
+
+// 1 credit = 100 API calls
+{
+  feature_id: "api_calls",
+  included_usage: 100,     // 100 credits
+  billing_units: 100       // = 10,000 API calls
+}
+
+// 1 credit = 1 hour of compute
+{
+  feature_id: "compute_hours",
+  included_usage: 500,     // 500 hours
+  billing_units: 1
+}
+```
+
+Use `billing_units` to define credit denomination.
+
+## Rollover and Reset
+
+### Monthly Reset with Rollover
+
+Allow unused credits to carry over:
+
+```typescript
+const rolloverPlan = await autumn.products.create({
+  name: "Rollover Plan",
+  items: [
+    {
+      type: "price",
+      price: 2900,
+      interval: "month"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 25000,
+      usage_model: "prepaid",
+      interval: "month",
+      config: {
+        rollover: {
+          max: 50000,          // Max 50k can accumulate
+          duration: "month",
+          length: 3            // Expires after 3 months
+        }
+      }
+    }
+  ]
+});
+```
+
+**Example:**
+- Month 1: Customer uses 15k, 10k rolls over (total: 35k next month)
+- Month 2: Customer uses 20k, 15k rolls over (total: 40k next month)
+- Month 3: Customer uses 30k, 10k rolls over (total: 35k next month)
+
+<Info>Learn more about [Credits Pricing](/pricing-models/credits) for rollover details.</Info>
+
+### Hard Reset (No Rollover)
+
+Credits reset to the base amount each period:
+
+```typescript
+{
+  type: "priced_feature",
+  feature_id: "api_calls",
+  included_usage: 10000,
+  usage_model: "prepaid",
+  interval: "month"
+  // No rollover config = hard reset
+}
+```
+
+Unused credits are lost at the end of each month.
+
+## Dashboard Configuration
+
+### Creating Prepaid Packages
+
+1. Navigate to **Products** → **Create Product**
+2. Enter product name (e.g., "5,000 API Credits")
+3. Click **Add Item** → **Fixed Price**
+   - Set price (e.g., $50.00)
+   - Set interval to **One-time** or **Month**
+4. Click **Add Item** → **Priced Feature**
+   - Select the feature
+   - Set **Included Usage** (e.g., 5000)
+   - Set **Usage Model** to **Prepaid**
+   - Optionally set interval for recurring credits
+5. Save the product
+
+### Manually Adding Credits
+
+1. Navigate to **Customers** → Select customer
+2. Go to **Balances** tab
+3. Click **Add Balance** or **Update Balance**
+4. Enter credit amount
+5. Save
+
+## Best Practices
+
+<Card title="Offer package tiers" icon="layer-group">
+  Provide multiple prepaid packages (small, medium, large, enterprise) to match different usage patterns.
+</Card>
+
+<Card title="Discount larger packages" icon="percent">
+  Incentivize bigger prepayments with volume discounts (e.g., 20% off for 10x credits).
+</Card>
+
+<Card title="Show credit value" icon="dollar-sign">
+  Display the per-unit cost so customers understand what they're paying.
+</Card>
+
+<Card title="Send low-balance alerts" icon="bell">
+  Notify customers when credits are running low (e.g., <20% remaining) so they can top up.
+</Card>
+
+<Card title="Allow easy top-ups" icon="circle-plus">
+  Make it simple for customers to add more credits without changing their subscription.
+</Card>
+
+<Card title="Expire promotional credits" icon="calendar-xmark">
+  Set expiration dates for trial or bonus credits to encourage usage and prevent hoarding.
+</Card>
+
+## Common Patterns
+
+### Pure Prepaid (No Subscription)
+
+```typescript
+const creditPack = await autumn.products.create({
+  name: "10,000 API Credits",
+  items: [
+    {
+      type: "price",
+      price: 10000,
+      interval: null         // One-time
+    },
+    {
+      type: "feature",
+      feature_id: "api_calls",
+      included_usage: 10000  // Perpetual credits
+    }
+  ]
+});
+```
+
+### Prepaid Subscription with Hard Reset
+
+```typescript
+const resetPlan = await autumn.products.create({
+  name: "Monthly Plan",
+  items: [
+    {
+      type: "price",
+      price: 4900,
+      interval: "month"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 100000,
+      usage_model: "prepaid",
+      interval: "month"      // Resets monthly
+    }
+  ]
+});
+```
+
+### Prepaid + Overage
+
+```typescript
+const flexPlan = await autumn.products.create({
+  name: "Flex Plan",
+  items: [
+    {
+      type: "price",
+      price: 2900,
+      interval: "month"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 50000,   // 50k prepaid
+      price: 15,               // $0.15 per 1k overage
+      billing_units: 1000,
+      usage_model: "pay_per_use",
+      interval: "month"
+    }
+  ]
+});
+```
+
+### Annual Prepaid with Monthly Rollover
+
+```typescript
+const annualRollover = await autumn.products.create({
+  name: "Annual Plan",
+  items: [
+    {
+      type: "price",
+      price: 99900,          // $999 upfront
+      interval: "year"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 100000,  // 100k credits/month
+      usage_model: "prepaid",
+      interval: "month",       // Allotted monthly
+      config: {
+        rollover: {
+          max: 200000,         // Max 200k accumulation
+          duration: "month",
+          length: 12           // Rollover expires after 12 months
+        }
+      }
+    }
+  ]
+});
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Credits Pricing" icon="coins" href="/pricing-models/credits">
+    Learn about credit-based billing
+  </Card>
+  <Card title="Usage-Based Pricing" icon="chart-line" href="/pricing-models/usage-based">
+    Understand pay-per-use models
+  </Card>
+  <Card title="Track API" icon="activity" href="/api/billing/track">
+    Deduct from prepaid balances
+  </Card>
+  <Card title="Check API" icon="shield-check" href="/api/billing/check">
+    Verify remaining credits
+  </Card>
+</CardGroup>

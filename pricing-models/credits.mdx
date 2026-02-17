@@ -1,0 +1,586 @@
+---
+title: "Credits Pricing"
+description: "Prepaid balances, promotional allowances, and credit-based billing"
+---
+
+## Overview
+
+Credits pricing allows customers to purchase or receive prepaid balances that are consumed as they use your service. This model provides flexibility, reduces billing friction, and is ideal for unpredictable usage patterns.
+
+**Common use cases:**
+- Prepaid API credits
+- Promotional credits for new customers
+- Referral bonuses
+- Credit packages (100, 500, 1000 credits)
+- Refund credits for service issues
+- Rollover allowances
+
+## How Credits Work
+
+Credits are managed through customer balances:
+
+```typescript
+{
+  feature_id: "api_calls",
+  granted: 1000,      // Total credits granted
+  used: 250,          // Credits consumed
+  remaining: 750      // Credits available
+}
+```
+
+When you track usage, Autumn automatically deducts from the balance:
+
+```typescript
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1  // Uses 1 credit
+});
+```
+
+## Granting Credits
+
+<Steps>
+  <Step title="Create a metered feature">
+    Define what credits apply to:
+
+    ```typescript
+    const feature = await autumn.features.create({
+      name: "API Calls",
+      key: "api_calls",
+      config: {
+        usage_type: "continuous_use"
+      }
+    });
+    ```
+  </Step>
+
+  <Step title="Create a balance for the customer">
+    Grant credits by creating a balance:
+
+    ```typescript
+    await autumn.balances.create({
+      customer_id: "customer_123",
+      feature_id: feature.id,
+      granted_balance: 1000,  // Grant 1,000 credits
+      current_balance: 1000   // Starting balance
+    });
+    ```
+
+    <Info>Learn more about the [Balances API](/api/balances/retrieve)</Info>
+  </Step>
+
+  <Step title="Track usage against credits">
+    Usage automatically depletes the balance:
+
+    ```typescript
+    await autumn.track({
+      customer_id: "customer_123",
+      feature_id: feature.id,
+      value: 1
+    });
+    ```
+
+    <Info>Learn more about the [Track API](/api/billing/track)</Info>
+  </Step>
+</Steps>
+
+## Credit Products
+
+### One-Time Credit Packages
+
+Sell credits as one-time purchases:
+
+```typescript
+const creditPack = await autumn.products.create({
+  name: "1,000 API Credits",
+  items: [
+    {
+      type: "price",
+      price: 5000,        // $50.00 one-time
+      interval: null      // One-time payment
+    },
+    {
+      type: "feature",
+      feature_id: "api_calls",
+      included_usage: 1000  // Grant 1,000 credits
+    }
+  ]
+});
+
+// Customer purchases credits
+await autumn.attach({
+  customer_id: "customer_123",
+  product_id: creditPack.id
+});
+```
+
+Customers pay once and receive 1,000 credits that don't expire.
+
+### Recurring Credit Subscriptions
+
+Provide monthly credit allowances:
+
+```typescript
+const subscription = await autumn.products.create({
+  name: "Pro Plan",
+  items: [
+    {
+      type: "price",
+      price: 2900,        // $29/month
+      interval: "month"
+    },
+    {
+      type: "feature",
+      feature_id: "api_calls",
+      included_usage: 10000,  // 10k credits/month
+      interval: "month"       // Resets monthly
+    }
+  ]
+});
+```
+
+Customers get 10,000 fresh credits at the start of each billing period.
+
+### Prepaid with Overages
+
+Combine prepaid credits with pay-per-use overages:
+
+```typescript
+const prepaidOverage = await autumn.products.create({
+  name: "Prepaid Plan",
+  items: [
+    {
+      type: "price",
+      price: 4900,
+      interval: "month"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 50000,    // 50k credits included
+      price: 10,                // $0.10 per 1k overage
+      billing_units: 1000,
+      usage_model: "pay_per_use",
+      interval: "month"
+    }
+  ]
+});
+```
+
+Customers use their 50k included credits first. Additional usage is billed at $0.10 per 1,000 calls.
+
+## Promotional Credits
+
+### Signup Bonuses
+
+Grant credits to new customers:
+
+```typescript
+async function grantSignupBonus(customerId: string) {
+  await autumn.balances.create({
+    customer_id: customerId,
+    feature_id: "api_calls",
+    granted_balance: 500,
+    current_balance: 500,
+    metadata: {
+      campaign: "signup_bonus_2026",
+      expires_at: Date.now() + 30 * 24 * 60 * 60 * 1000  // 30 days
+    }
+  });
+}
+
+// On customer creation
+const customer = await autumn.customers.create({
+  id: "customer_123",
+  name: "Acme Corp"
+});
+
+await grantSignupBonus(customer.id);
+```
+
+### Referral Credits
+
+Reward customers for referrals:
+
+```typescript
+async function grantReferralCredit(referrerId: string) {
+  await autumn.balances.update({
+    customer_id: referrerId,
+    feature_id: "api_calls",
+    add_to_balance: 1000  // Add 1,000 bonus credits
+  });
+}
+```
+
+### Refund Credits
+
+Issue credits for service issues:
+
+```typescript
+await autumn.balances.update({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  add_to_balance: 200,
+  metadata: {
+    reason: "downtime_compensation",
+    incident_id: "inc_2026_01_15"
+  }
+});
+```
+
+## Updating Balances
+
+### Add Credits
+
+```typescript
+await autumn.balances.update({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  add_to_balance: 500  // Add 500 credits
+});
+```
+
+### Set Absolute Balance
+
+```typescript
+await autumn.balances.update({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  current_balance: 2000  // Set to exactly 2,000
+});
+```
+
+### Update Granted Balance
+
+```typescript
+await autumn.balances.update({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  granted_balance: 1500,   // Update total granted
+  current_balance: 1500    // Reset to new amount
+});
+```
+
+## Credit Reset and Expiration
+
+### Monthly Reset
+
+Credits that reset at the start of each period:
+
+```typescript
+{
+  type: "feature",
+  feature_id: "api_calls",
+  included_usage: 5000,
+  interval: "month"      // Resets monthly
+}
+```
+
+On renewal, the balance resets to 5,000 credits.
+
+### Never Reset (Perpetual)
+
+Credits that don't expire:
+
+```typescript
+await autumn.balances.create({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  granted_balance: 1000,
+  current_balance: 1000,
+  next_reset_at: null    // Never expires
+});
+```
+
+### Custom Expiration
+
+Set a specific expiration date:
+
+```typescript
+const thirtyDaysFromNow = Date.now() + (30 * 24 * 60 * 60 * 1000);
+
+await autumn.balances.create({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  granted_balance: 1000,
+  current_balance: 1000,
+  next_reset_at: thirtyDaysFromNow
+});
+```
+
+## Credit Rollover
+
+Allow unused credits to carry over:
+
+```typescript
+const rolloverPlan = await autumn.products.create({
+  name: "Rollover Plan",
+  items: [
+    {
+      type: "price",
+      price: 2900,
+      interval: "month"
+    },
+    {
+      type: "feature",
+      feature_id: "api_calls",
+      included_usage: 5000,
+      interval: "month",
+      config: {
+        rollover: {
+          max: 10000,          // Max 10k can accumulate
+          duration: "month",
+          length: 3            // Rollover expires after 3 months
+        }
+      }
+    }
+  ]
+});
+```
+
+**Rollover behavior:**
+- Customer gets 5,000 credits per month
+- Unused credits roll over (up to 10,000 total)
+- Rolled credits expire after 3 months
+
+<Tip>
+Set rollover limits to prevent unlimited credit accumulation.
+</Tip>
+
+## Checking Credit Balance
+
+Before expensive operations, check available credits:
+
+```typescript
+const customer = await autumn.customers.retrieve({
+  customer_id: "customer_123"
+});
+
+const balance = customer.balances?.find(
+  b => b.feature_id === "api_calls"
+);
+
+if (balance.remaining < 100) {
+  // Warn customer they're running low
+  console.log("Low balance warning");
+}
+
+if (balance.remaining === 0) {
+  // No credits left
+  return { error: "Insufficient credits" };
+}
+```
+
+### Pre-Flight Checks
+
+```typescript
+const check = await autumn.check({
+  customer_id: "customer_123",
+  feature_id: "api_calls"
+});
+
+if (!check.has_access) {
+  return { error: "No credits remaining" };
+}
+
+// Proceed with operation
+await processRequest();
+
+// Deduct credit
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1
+});
+```
+
+<Info>Learn more about the [Check API](/api/billing/check)</Info>
+
+## Monitoring Credit Usage
+
+Track how customers consume credits:
+
+```typescript
+const customer = await autumn.customers.retrieve({
+  customer_id: "customer_123"
+});
+
+for (const balance of customer.balances || []) {
+  const percentUsed = (balance.used / balance.granted) * 100;
+  
+  console.log({
+    feature: balance.feature_id,
+    granted: balance.granted,
+    used: balance.used,
+    remaining: balance.remaining,
+    percent_used: `${percentUsed.toFixed(1)}%`,
+    resets_at: balance.next_reset_at
+  });
+}
+```
+
+## Billing Units for Credits
+
+Credits can represent different real-world units:
+
+```typescript
+// 1 credit = 1 API call
+{
+  feature_id: "api_calls",
+  included_usage: 1000,
+  billing_units: 1
+}
+
+// 1 credit = 100 API calls
+{
+  feature_id: "api_calls",
+  included_usage: 10,      // 10 credits
+  billing_units: 100       // = 1,000 API calls
+}
+
+// 1 credit = 1 GB of storage
+{
+  feature_id: "storage",
+  included_usage: 100,     // 100 GB
+  billing_units: 1
+}
+```
+
+Use `billing_units` to define what one credit represents.
+
+## Dashboard Configuration
+
+### Creating Credit Packages
+
+1. Navigate to **Products** → **Create Product**
+2. Enter product name (e.g., "1,000 API Credits")
+3. Click **Add Item** → **Fixed Price**
+   - Set price (e.g., $50.00)
+   - Set interval to **One-time**
+4. Click **Add Item** → **Feature**
+   - Select the feature (e.g., "API Calls")
+   - Set **Included Usage** (e.g., 1000)
+   - Leave interval blank for perpetual credits
+5. Save the product
+
+### Manually Granting Credits
+
+1. Navigate to **Customers** → Select customer
+2. Go to **Balances** tab
+3. Click **Add Balance**
+4. Select feature
+5. Enter credit amount
+6. Optionally set expiration date
+7. Save
+
+## Best Practices
+
+<Card title="Display credit value" icon="dollar-sign">
+  Show customers the monetary value of their credits to help them understand their balance.
+</Card>
+
+<Card title="Send low-balance alerts" icon="bell">
+  Notify customers when they're running low (e.g., <20% remaining) so they can top up.
+</Card>
+
+<Card title="Use expiration dates" icon="calendar">
+  Promotional credits should expire to encourage usage and prevent indefinite accumulation.
+</Card>
+
+<Card title="Track credit sources" icon="tag">
+  Use metadata to record where credits came from (purchase, promo, refund) for better analytics.
+</Card>
+
+<Card title="Offer credit tiers" icon="layer-group">
+  Provide multiple package sizes (100, 500, 1000, 5000) to match different usage patterns.
+</Card>
+
+<Card title="Show credit history" icon="clock-rotate-left">
+  Let customers see their credit usage history, grants, and expirations.
+</Card>
+
+## Common Patterns
+
+### Freemium with Trial Credits
+
+```typescript
+const freePlan = await autumn.products.create({
+  name: "Free Plan",
+  is_default: true,
+  items: [
+    {
+      type: "price",
+      price: 0,
+      interval: "month"
+    },
+    {
+      type: "feature",
+      feature_id: "api_calls",
+      included_usage: 1000,    // 1k free credits/month
+      interval: "month"
+    }
+  ]
+});
+```
+
+### Credit Top-Up
+
+```typescript
+const topUpPackages = [
+  { name: "100 Credits", price: 1000, credits: 100 },
+  { name: "500 Credits", price: 4500, credits: 500 },
+  { name: "1,000 Credits", price: 8000, credits: 1000 },
+  { name: "5,000 Credits", price: 35000, credits: 5000 }
+];
+
+for (const pkg of topUpPackages) {
+  await autumn.products.create({
+    name: pkg.name,
+    items: [
+      { type: "price", price: pkg.price, interval: null },
+      { 
+        type: "feature",
+        feature_id: "api_calls",
+        included_usage: pkg.credits
+      }
+    ]
+  });
+}
+```
+
+### Expiring Promotional Credits
+
+```typescript
+// Grant 30-day trial credits
+const expiryDate = Date.now() + (30 * 24 * 60 * 60 * 1000);
+
+await autumn.balances.create({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  granted_balance: 500,
+  current_balance: 500,
+  next_reset_at: expiryDate,
+  metadata: {
+    type: "promotional",
+    campaign: "trial_2026"
+  }
+});
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Usage-Based Pricing" icon="chart-line" href="/pricing-models/usage-based">
+    Learn about pay-per-use billing
+  </Card>
+  <Card title="Track API" icon="activity" href="/api/billing/track">
+    Record usage against credits
+  </Card>
+  <Card title="Balances API" icon="scale-balanced" href="/api/balances/retrieve">
+    Manage customer balances
+  </Card>
+  <Card title="Features" icon="puzzle-piece" href="/concepts/features">
+    Understand metered features
+  </Card>
+</CardGroup>

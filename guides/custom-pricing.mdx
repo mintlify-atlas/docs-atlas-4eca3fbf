@@ -1,0 +1,457 @@
+---
+title: "Custom Pricing"
+description: "Learn how to implement custom pricing and discounts for individual customers"
+---
+
+## Overview
+
+Custom pricing allows you to override standard product prices for specific customers. Use this to offer discounts, negotiate custom contracts, or implement account-specific pricing.
+
+## When to Use Custom Pricing
+
+Custom pricing is useful for:
+
+- **Enterprise deals** - Negotiate custom rates for large customers
+- **Promotional discounts** - Offer temporary or permanent price reductions
+- **Partner pricing** - Provide special rates to partners or affiliates
+- **Volume discounts** - Reward high-usage customers
+- **Migration incentives** - Offer discounts to attract new customers
+- **Retention offers** - Prevent churn with special pricing
+
+## Setting Custom Prices
+
+Custom prices are set when attaching products to customers:
+
+<Steps>
+  <Step title="Identify the customer and product">
+    Determine which customer needs custom pricing and which product:
+
+    ```typescript
+    const customerId = 'customer_123';
+    const productId = 'pro_plan';
+    ```
+  </Step>
+
+  <Step title="Define custom pricing">
+    Attach the product with custom price options:
+
+    ```typescript
+    import { Autumn } from '@useautumn/sdk';
+
+    const autumn = new Autumn({ apiKey: process.env.AUTUMN_API_KEY });
+
+    const result = await autumn.attach({
+      customer_id: customerId,
+      product_id: productId,
+      options: [
+        {
+          feature_id: 'base_fee',
+          price: 1900  // $19 instead of standard $29
+        },
+        {
+          feature_id: 'api_calls',
+          price: 0.005  // $0.005 per call instead of $0.01
+        }
+      ]
+    });
+    ```
+  </Step>
+
+  <Step title="Verify custom pricing">
+    Confirm the custom prices are applied:
+
+    ```typescript
+    const customer = await autumn.customers.get({
+      customer_id: customerId
+    });
+
+    const product = customer.products.find(p => p.product_id === productId);
+    console.log('Custom prices:', product.custom_prices);
+    ```
+  </Step>
+</Steps>
+
+## Percentage Discounts
+
+Apply percentage-based discounts:
+
+```typescript
+// Get standard product pricing
+const product = await autumn.products.get({ product_id: 'pro_plan' });
+const standardPrice = product.items.find(i => i.type === 'fixed')?.price;
+
+// Apply 30% discount
+const discountedPrice = Math.round(standardPrice * 0.7);
+
+await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'pro_plan',
+  options: [
+    {
+      feature_id: 'base_fee',
+      price: discountedPrice
+    }
+  ]
+});
+```
+
+## Quantity-Based Pricing
+
+Offer custom per-unit pricing:
+
+```typescript
+// Standard: $10 per seat
+// Custom: $8 per seat for this customer
+
+await autumn.attach({
+  customer_id: 'enterprise_customer',
+  product_id: 'team_plan',
+  options: [
+    {
+      feature_id: 'seats',
+      quantity: 50,
+      price: 800  // $8 per seat
+    }
+  ]
+});
+```
+
+## Usage-Based Discounts
+
+Provide custom rates for metered features:
+
+```typescript
+// Standard rate: $0.01 per API call
+// Custom rate: $0.005 per API call
+
+await autumn.attach({
+  customer_id: 'high_volume_customer',
+  product_id: 'api_plan',
+  options: [
+    {
+      feature_id: 'api_calls',
+      price: 0.005  // Half price
+    }
+  ]
+});
+```
+
+## Free Access
+
+Grant free access to premium features:
+
+```typescript
+// Give free access to pro features
+await autumn.attach({
+  customer_id: 'partner_company',
+  product_id: 'pro_plan',
+  options: [
+    {
+      feature_id: 'base_fee',
+      price: 0  // Free
+    }
+  ]
+});
+```
+
+## Tiered Custom Pricing
+
+Implement custom tiered pricing:
+
+```typescript
+// Custom tiered API pricing
+await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'api_plan',
+  options: [
+    {
+      feature_id: 'api_calls',
+      tiers: [
+        { up_to: 10000, price: 0.01 },    // First 10k: $0.01 each
+        { up_to: 50000, price: 0.007 },   // Next 40k: $0.007 each
+        { up_to: null, price: 0.005 }     // Above 50k: $0.005 each
+      ]
+    }
+  ]
+});
+```
+
+## Time-Limited Discounts
+
+Offer temporary pricing:
+
+```typescript
+import { addMonths } from 'date-fns';
+
+// Offer 50% off for 3 months
+const product = await autumn.products.get({ product_id: 'pro_plan' });
+const standardPrice = product.items.find(i => i.type === 'fixed')?.price;
+
+await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'pro_plan',
+  options: [
+    {
+      feature_id: 'base_fee',
+      price: standardPrice / 2,
+      ends_at: addMonths(new Date(), 3).getTime()
+    }
+  ]
+});
+
+// Schedule a job to revert to standard pricing after 3 months
+await scheduleJob({
+  runAt: addMonths(new Date(), 3),
+  action: 'revert_pricing',
+  customerId: 'customer_123',
+  productId: 'pro_plan'
+});
+```
+
+## Admin Tools for Custom Pricing
+
+Build admin interfaces to manage custom pricing:
+
+```typescript
+import { Request, Response } from 'express';
+
+app.post('/admin/custom-pricing',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const { customer_id, product_id, discount_percent, reason } = req.body;
+
+    try {
+      // Get standard pricing
+      const product = await autumn.products.get({ product_id });
+      
+      // Calculate discounted prices
+      const options = product.items.map(item => {
+        const discountedPrice = Math.round(item.price * (1 - discount_percent / 100));
+        
+        return {
+          feature_id: item.feature_id,
+          price: discountedPrice
+        };
+      });
+
+      // Apply custom pricing
+      await autumn.attach({
+        customer_id,
+        product_id,
+        options
+      });
+
+      // Log admin action
+      await auditLog({
+        action: 'custom_pricing_applied',
+        admin: req.user.id,
+        customer: customer_id,
+        product: product_id,
+        discount: discount_percent,
+        reason
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+```
+
+## Viewing Custom Pricing
+
+Retrieve and display custom pricing:
+
+```typescript
+const customer = await autumn.customers.get({
+  customer_id: 'customer_123'
+});
+
+for (const product of customer.products) {
+  if (product.custom_prices?.length > 0) {
+    console.log(`Custom pricing for ${product.product_id}:`);
+    
+    for (const customPrice of product.custom_prices) {
+      const standardPrice = await getStandardPrice(
+        product.product_id,
+        customPrice.feature_id
+      );
+      
+      const discount = ((standardPrice - customPrice.price) / standardPrice) * 100;
+      
+      console.log(`  ${customPrice.feature_id}: $${customPrice.price} (${discount.toFixed(0)}% off)`);
+    }
+  }
+}
+```
+
+## Communicating Custom Pricing
+
+Notify customers about special pricing:
+
+```typescript
+async function applyCustomPricing(
+  customerId: string,
+  productId: string,
+  discount: number,
+  reason: string
+) {
+  // Apply the custom pricing
+  await autumn.attach({
+    customer_id: customerId,
+    product_id: productId,
+    options: getDiscountedOptions(productId, discount)
+  });
+
+  // Get customer info
+  const customer = await autumn.customers.get({ customer_id: customerId });
+  
+  // Send notification
+  await sendEmail({
+    to: customer.email,
+    subject: 'Special Pricing Applied to Your Account',
+    template: 'custom_pricing',
+    data: {
+      discount,
+      reason,
+      product: productId,
+      customerName: customer.name
+    }
+  });
+}
+```
+
+## Tracking Custom Pricing
+
+Monitor custom pricing usage:
+
+```typescript
+// Get all customers with custom pricing
+const customers = await autumn.customers.list();
+
+const customPricingReport = customers
+  .filter(c => 
+    c.products.some(p => p.custom_prices?.length > 0)
+  )
+  .map(c => ({
+    customer_id: c.id,
+    customer_name: c.name,
+    products: c.products
+      .filter(p => p.custom_prices?.length > 0)
+      .map(p => ({
+        product_id: p.product_id,
+        custom_prices: p.custom_prices
+      }))
+  }));
+
+console.log('Custom Pricing Report:', customPricingReport);
+```
+
+## Removing Custom Pricing
+
+Revert to standard pricing:
+
+```typescript
+// Reattach product without custom options to use standard pricing
+await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'pro_plan'
+  // No options = use standard pricing
+});
+```
+
+## Approval Workflows
+
+Implement approval flows for custom pricing:
+
+```typescript
+import { Request, Response } from 'express';
+
+app.post('/admin/pricing/request',
+  requireSales,
+  async (req: Request, res: Response) => {
+    const { customer_id, product_id, requested_discount, justification } = req.body;
+
+    // Create approval request
+    const request = await db.pricingRequests.insertOne({
+      customer_id,
+      product_id,
+      requested_discount,
+      justification,
+      requested_by: req.user.id,
+      status: 'pending',
+      created_at: new Date()
+    });
+
+    // Notify approvers
+    await notifyApprovers(request);
+
+    res.json({ request_id: request.id, status: 'pending' });
+  }
+);
+
+app.post('/admin/pricing/approve',
+  requireManager,
+  async (req: Request, res: Response) => {
+    const { request_id, approved } = req.body;
+
+    const request = await db.pricingRequests.findOne({ id: request_id });
+
+    if (approved) {
+      // Apply custom pricing
+      await applyCustomPricing(
+        request.customer_id,
+        request.product_id,
+        request.requested_discount,
+        'Manager approved'
+      );
+
+      await db.pricingRequests.updateOne(
+        { id: request_id },
+        { $set: { status: 'approved', approved_by: req.user.id } }
+      );
+    } else {
+      await db.pricingRequests.updateOne(
+        { id: request_id },
+        { $set: { status: 'rejected', rejected_by: req.user.id } }
+      );
+    }
+
+    res.json({ success: true });
+  }
+);
+```
+
+## Best Practices
+
+<Card title="Document justification" icon="file-lines">
+  Always document why custom pricing was applied for audit and analysis.
+</Card>
+
+<Card title="Require approvals" icon="circle-check">
+  Implement approval workflows for discounts above certain thresholds.
+</Card>
+
+<Card title="Set time limits" icon="clock">
+  Make promotional discounts time-limited to prevent permanent revenue loss.
+</Card>
+
+<Card title="Track revenue impact" icon="chart-line">
+  Monitor how custom pricing affects revenue and customer retention.
+</Card>
+
+<Card title="Communicate clearly" icon="envelope">
+  Always notify customers when special pricing is applied or expires.
+</Card>
+
+<Card title="Review periodically" icon="rotate">
+  Regularly review custom pricing to ensure it's still appropriate.
+</Card>
+
+## Related Resources
+
+- [Attach Products Guide](/guides/attach-products)
+- [Products Concept](/concepts/products-and-plans)
+- [Attach API Reference](/api/attach)
+- [Customers API](/api/customers/retrieve)

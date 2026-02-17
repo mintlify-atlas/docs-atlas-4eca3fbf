@@ -1,0 +1,414 @@
+---
+title: 'Rate Limits'
+description: 'Understand rate limiting policies and best practices'
+---
+
+## Overview
+
+The Autumn API implements rate limiting to ensure fair usage and maintain service quality for all customers. Different endpoints have different rate limits based on their typical usage patterns.
+
+## Rate Limit Tiers
+
+Rate limits are applied per organization and vary by endpoint type:
+
+| Endpoint Type | Requests | Time Window | Scope |
+|--------------|----------|-------------|-------|
+| **General** | 1,000 | 1 second | Per organization |
+| **Track** | 10,000 | 1 second | Per customer |
+| **Check** | 10,000 | 1 second | Per customer |
+| **Events** | 5 | 1 second | Per customer |
+| **Attach** | 5 | 1 minute | Per customer |
+| **List Products** | 20 | 1 second | Per organization |
+
+### Endpoint Classifications
+
+**General** (1,000 req/sec per org)
+- Most CRUD operations
+- Customer management
+- Product management
+- Feature management
+
+**Track** (10,000 req/sec per customer)
+- `POST /v1/track`
+- `POST /v1/events`
+
+**Check** (10,000 req/sec per customer)
+- `POST /v1/check`
+- `POST /v1/entitled`
+- `GET /v1/customers/:customer_id`
+
+**Events** (5 req/sec per customer)
+- `POST /v1/events/list`
+- `POST /v1/events/aggregate`
+- `POST /v1/query`
+
+**Attach** (5 req/min per customer)
+- `POST /v1/attach`
+
+**List Products** (20 req/sec per org)
+- `GET /v1/products`
+- `GET /v1/products_beta`
+- `GET /v1/plans`
+
+## Rate Limit Headers
+
+Each API response includes rate limit information in the headers:
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 999
+X-RateLimit-Reset: 1640995200
+```
+
+- `X-RateLimit-Limit` - Maximum requests allowed in the time window
+- `X-RateLimit-Remaining` - Requests remaining in current window
+- `X-RateLimit-Reset` - Unix timestamp when the limit resets
+
+## Rate Limit Exceeded
+
+When you exceed the rate limit, you'll receive a `429 Too Many Requests` response:
+
+```json
+{
+  "message": "Rate limit exceeded. Please try again later.",
+  "code": "rate_limit_exceeded",
+  "retry_after": 1000
+}
+```
+
+The `retry_after` field indicates how many milliseconds to wait before retrying.
+
+## Scope of Rate Limits
+
+### Organization-Scoped
+
+General and List Products endpoints are limited per organization:
+
+```bash
+# All these requests count toward your org's general limit
+curl -H "Authorization: Bearer am_live_xxx" \
+  https://api.useautumn.com/v1/products
+
+curl -H "Authorization: Bearer am_live_xxx" \
+  https://api.useautumn.com/v1/features
+```
+
+### Customer-Scoped
+
+Track, Check, Events, and Attach endpoints are limited per customer:
+
+```bash
+# These count separately for each customer_id
+curl -X POST https://api.useautumn.com/v1/track \
+  -H "Authorization: Bearer am_live_xxx" \
+  -d '{"customer_id": "cus_123", "event": "api_call"}'
+
+curl -X POST https://api.useautumn.com/v1/track \
+  -H "Authorization: Bearer am_live_xxx" \
+  -d '{"customer_id": "cus_456", "event": "api_call"}'
+```
+
+In the example above, each customer has their own 10,000 req/sec limit.
+
+## Best Practices
+
+### 1. Implement Exponential Backoff
+
+Retry failed requests with exponential backoff:
+
+```javascript
+async function callApiWithRetry(url, options, maxRetries = 5) {
+  for (let i = 0; i < maxRetries; i++) {
+    const response = await fetch(url, options);
+    
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('retry-after') || Math.pow(2, i) * 1000;
+      await new Promise(resolve => setTimeout(resolve, retryAfter));
+      continue;
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+```
+
+### 2. Monitor Rate Limit Headers
+
+Track your usage to avoid hitting limits:
+
+```javascript
+const response = await fetch(url, options);
+
+const remaining = parseInt(response.headers.get('x-ratelimit-remaining'));
+const limit = parseInt(response.headers.get('x-ratelimit-limit'));
+
+if (remaining < limit * 0.1) {
+  console.warn(`Rate limit warning: ${remaining}/${limit} remaining`);
+}
+```
+
+### 3. Batch Requests When Possible
+
+Use list endpoints instead of making multiple single-resource requests:
+
+```javascript
+// ❌ Bad: Multiple requests
+for (const id of customerIds) {
+  await fetch(`/v1/customers/${id}`);
+}
+
+// ✅ Good: Single batched request
+await fetch('/v1/customers/list', {
+  method: 'POST',
+  body: JSON.stringify({ customer_ids: customerIds })
+});
+```
+
+### 4. Cache Responses
+
+Cache responses for data that doesn't change frequently:
+
+```javascript
+const cache = new Map();
+const CACHE_TTL = 60000; // 1 minute
+
+async function getProductWithCache(productId) {
+  const cached = cache.get(productId);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  
+  const response = await fetch(`/v1/products/${productId}`);
+  const data = await response.json();
+  
+  cache.set(productId, {
+    data,
+    timestamp: Date.now()
+  });
+  
+  return data;
+}
+```
+
+### 5. Use Webhooks Instead of Polling
+
+For event-driven workflows, use webhooks instead of polling:
+
+```javascript
+// ❌ Bad: Polling every second
+setInterval(async () => {
+  const response = await fetch('/v1/invoices?status=paid');
+  // Process paid invoices
+}, 1000);
+
+// ✅ Good: Use webhooks
+app.post('/webhooks/autumn', (req, res) => {
+  const event = req.body;
+  
+  if (event.type === 'invoice.paid') {
+    // Process paid invoice
+  }
+});
+```
+
+### 6. Distribute Load
+
+For high-volume operations, spread requests over time:
+
+```javascript
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function processCustomersWithThrottle(customers) {
+  const BATCH_SIZE = 100;
+  const DELAY_MS = 100; // 10 requests per second
+  
+  for (let i = 0; i < customers.length; i += BATCH_SIZE) {
+    const batch = customers.slice(i, i + BATCH_SIZE);
+    
+    await Promise.all(
+      batch.map(customer => trackUsage(customer))
+    );
+    
+    // Wait between batches
+    if (i + BATCH_SIZE < customers.length) {
+      await delay(DELAY_MS);
+    }
+  }
+}
+```
+
+## Rate Limit Exemptions
+
+### Test Mode
+
+During development and testing, rate limits are more relaxed for test mode API keys. However, we recommend implementing proper rate limiting in your code even during development.
+
+### Special Cases
+
+Some operations may bypass rate limits:
+
+- Attach endpoint for test organizations (when `NODE_ENV=development` or `test`)
+- Internal dashboard operations
+
+## Handling Rate Limits in SDKs
+
+The official Autumn SDKs handle rate limits automatically:
+
+```javascript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({
+  apiKey: 'am_live_xxx',
+  retryConfig: {
+    maxRetries: 3,
+    retryDelay: 1000,
+    retryOn: [429, 500, 502, 503, 504]
+  }
+});
+
+// Automatically retries on 429
+await autumn.customers.create({ customer_id: 'cus_123' });
+```
+
+## Monitoring Your Usage
+
+To monitor your API usage:
+
+1. Log rate limit headers from responses
+2. Set up alerts when remaining limits drop below thresholds
+3. Track 429 errors in your application monitoring
+4. Review usage patterns in the Autumn dashboard
+
+```javascript
+const rateLimitMonitor = {
+  logRateLimit(response) {
+    const limit = response.headers.get('x-ratelimit-limit');
+    const remaining = response.headers.get('x-ratelimit-remaining');
+    const reset = response.headers.get('x-ratelimit-reset');
+    
+    console.log('Rate Limit Status:', {
+      limit,
+      remaining,
+      reset: new Date(reset * 1000).toISOString(),
+      usage: `${((limit - remaining) / limit * 100).toFixed(1)}%`
+    });
+  }
+};
+```
+
+## Increasing Rate Limits
+
+If your application requires higher rate limits:
+
+1. Review your implementation for optimization opportunities
+2. Implement caching and request batching
+3. Contact Autumn support to discuss your use case
+4. Consider upgrading to an enterprise plan
+
+Enterprise plans include:
+- Custom rate limits
+- Dedicated infrastructure
+- Priority support
+
+## Common Rate Limit Scenarios
+
+<AccordionGroup>
+  <Accordion title="High-frequency usage tracking">
+    For real-time usage tracking with high throughput:
+    
+    - Use the `/track` endpoint (10,000 req/sec per customer)
+    - Implement client-side batching
+    - Consider async event processing
+    
+    ```javascript
+    const eventQueue = [];
+    
+    function queueEvent(event) {
+      eventQueue.push(event);
+      
+      // Flush every 100 events or 1 second
+      if (eventQueue.length >= 100) {
+        flushEvents();
+      }
+    }
+    
+    async function flushEvents() {
+      if (eventQueue.length === 0) return;
+      
+      const batch = eventQueue.splice(0, 100);
+      await fetch('/v1/track', {
+        method: 'POST',
+        body: JSON.stringify({ events: batch })
+      });
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Checking entitlements on every request">
+    For checking feature access frequently:
+    
+    - Use the `/check` endpoint (10,000 req/sec per customer)
+    - Cache results for 1-5 minutes
+    - Use webhooks to invalidate cache on subscription changes
+    
+    ```javascript
+    const cache = new LRU({ max: 10000, ttl: 60000 });
+    
+    async function checkAccess(customerId, featureId) {
+      const cacheKey = `${customerId}:${featureId}`;
+      const cached = cache.get(cacheKey);
+      
+      if (cached) return cached;
+      
+      const result = await autumn.check({ customer_id: customerId, feature_id: featureId });
+      cache.set(cacheKey, result);
+      
+      return result;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Bulk operations on customers">
+    For processing large customer batches:
+    
+    - Use list endpoints with pagination
+    - Implement rate-aware processing
+    - Spread operations over time
+    
+    ```javascript
+    async function processAllCustomers(processor) {
+      let offset = 0;
+      const limit = 100;
+      
+      while (true) {
+        const response = await fetch(`/v1/customers?limit=${limit}&offset=${offset}`);
+        const { data, has_more } = await response.json();
+        
+        // Process batch
+        await Promise.all(data.map(processor));
+        
+        if (!has_more) break;
+        
+        offset += limit;
+        
+        // Brief pause between batches
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Error Handling" icon="circle-exclamation" href="/api/errors">
+    Handle rate limit errors
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/guides/handling-webhooks">
+    Use webhooks instead of polling
+  </Card>
+</CardGroup>

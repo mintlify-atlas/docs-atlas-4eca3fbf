@@ -1,0 +1,383 @@
+---
+title: 'Attach Product'
+api: 'POST /billing/attach'
+description: 'Enable a product for a customer with advanced billing control and immediate payment processing'
+---
+
+## Overview
+
+The attach endpoint enables a product for a customer with fine-grained control over billing behavior, prorations, and payment collection. Use this endpoint when you need precise control over how charges are applied and when products are activated.
+
+For simpler use cases, see the legacy [/attach](/api/attach) endpoint.
+
+## Authentication
+
+This endpoint requires API key authentication. Include your API key in the request header:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request Body
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer to attach the product to.
+
+  ```json
+  "cus_123"
+  ```
+</ParamField>
+
+<ParamField body="product_id" type="string" required>
+  The ID of the product to attach.
+
+  ```json
+  "pro_plan"
+  ```
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  The ID of the entity (optional). Use this when working with entity-scoped products or features.
+
+  ```json
+  "entity_123"
+  ```
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Additional customer properties. These will be used to create or update the customer.
+
+  <Expandable title="Customer Data Properties">
+    <ParamField body="name" type="string">
+      Customer's full name
+    </ParamField>
+    <ParamField body="email" type="string">
+      Customer's email address
+    </ParamField>
+    <ParamField body="fingerprint" type="string">
+      Unique device identifier to detect duplicate accounts
+    </ParamField>
+    <ParamField body="metadata" type="object">
+      Custom metadata to attach to the customer
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="options" type="array">
+  Feature-specific options for configurable features (e.g., quantity for seat-based features).
+
+  <Expandable title="Feature Options">
+    <ParamField body="feature_id" type="string" required>
+      The ID of the feature to configure
+    </ParamField>
+    <ParamField body="quantity" type="number">
+      Quantity for this feature (e.g., number of seats)
+    </ParamField>
+    <ParamField body="reset_after_trial_end" type="boolean">
+      Whether to reset the feature quantity after trial ends. Defaults to `false`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="free_trial" type="object">
+  Free trial configuration for this product.
+
+  <Expandable title="Free Trial Configuration">
+    <ParamField body="length" type="number" required>
+      Length of the trial period
+    </ParamField>
+    <ParamField body="duration" type="string" required>
+      Duration unit: `day`, `week`, `month`, or `year`
+    </ParamField>
+    <ParamField body="card_required" type="boolean">
+      Whether a payment method is required to start the trial. Defaults to `true`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="invoice" type="boolean">
+  If true, creates an invoice instead of charging immediately. Useful for manual payment collection.
+
+  ```json
+  false
+  ```
+</ParamField>
+
+<ParamField body="enable_product_immediately" type="boolean">
+  If true, enables the product immediately even if payment is pending.
+
+  ```json
+  false
+  ```
+</ParamField>
+
+<ParamField body="finalize_invoice" type="boolean">
+  If using invoice mode, whether to finalize the invoice automatically.
+
+  ```json
+  true
+  ```
+</ParamField>
+
+<ParamField body="redirect_mode" type="string">
+  Controls when to redirect to Stripe Checkout:
+  - `always` - Always redirect to checkout (default)
+  - `if_required` - Only redirect if payment action is needed
+  - `never` - Never redirect, return payment URL in response
+
+  ```json
+  "if_required"
+  ```
+</ParamField>
+
+<ParamField body="success_url" type="string">
+  URL to redirect to after successful payment setup (if checkout is required).
+
+  ```json
+  "https://example.com/success"
+  ```
+</ParamField>
+
+<ParamField body="billing_behavior" type="string">
+  Controls how charges are applied for product transitions:
+  - `prorate_immediately` (default) - Invoice line items are charged immediately with prorations
+  - `next_cycle_only` - Do NOT create any charges due to the attach, defer to next billing cycle
+
+  ```json
+  "prorate_immediately"
+  ```
+</ParamField>
+
+<ParamField body="new_billing_subscription" type="boolean">
+  If true, creates a new billing subscription instead of adding to existing one.
+
+  ```json
+  false
+  ```
+</ParamField>
+
+<ParamField body="adjustable_quantity" type="boolean">
+  If true, allows customers to adjust quantities during checkout.
+
+  ```json
+  false
+  ```
+</ParamField>
+
+<ParamField body="items" type="array">
+  Custom product items for advanced pricing configurations. Use this to override default product items.
+</ParamField>
+
+## Response
+
+<ResponseField name="customer_id" type="string">
+  The ID of the customer.
+</ResponseField>
+
+<ResponseField name="entity_id" type="string" optional>
+  The entity ID if one was provided in the request.
+</ResponseField>
+
+<ResponseField name="invoice" type="object" optional>
+  Invoice details if an invoice was created.
+
+  <Expandable title="Invoice Object">
+    <ResponseField name="status" type="string">
+      Invoice status: `draft`, `open`, `paid`, `void`, or `uncollectible`
+    </ResponseField>
+
+    <ResponseField name="stripe_id" type="string">
+      Stripe invoice ID
+    </ResponseField>
+
+    <ResponseField name="total" type="number">
+      Total amount in cents
+    </ResponseField>
+
+    <ResponseField name="currency" type="string">
+      Currency code (e.g., `usd`)
+    </ResponseField>
+
+    <ResponseField name="hosted_invoice_url" type="string" optional>
+      URL to view the invoice
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="payment_url" type="string" optional>
+  URL for the customer to complete payment (if payment action is required).
+</ResponseField>
+
+<ResponseField name="required_action" type="object" optional>
+  Present if additional action is required from the customer.
+
+  <Expandable title="Required Action Object">
+    <ResponseField name="code" type="string">
+      Action code: `3ds_required`, `payment_method_required`, or `payment_failed`
+    </ResponseField>
+
+    <ResponseField name="reason" type="string">
+      Human-readable explanation of why the action is required
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.useautumn.com/billing/attach \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "product_id": "pro_plan",
+    "billing_behavior": "prorate_immediately",
+    "options": [
+      {
+        "feature_id": "seats",
+        "quantity": 5
+      }
+    ]
+  }'
+```
+
+```typescript TypeScript
+import { Autumn } from '@useautumn/sdk';
+
+const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
+
+const result = await autumn.billing.attach({
+  customer_id: 'cus_123',
+  product_id: 'pro_plan',
+  billing_behavior: 'prorate_immediately',
+  options: [
+    {
+      feature_id: 'seats',
+      quantity: 5
+    }
+  ]
+});
+
+if (result.payment_url) {
+  console.log('Payment required:', result.payment_url);
+} else {
+  console.log('Product attached successfully');
+}
+```
+
+```python Python
+from autumn import Autumn
+
+autumn = Autumn(api_key='YOUR_API_KEY')
+
+result = autumn.billing.attach(
+  customer_id='cus_123',
+  product_id='pro_plan',
+  billing_behavior='prorate_immediately',
+  options=[
+    {
+      'feature_id': 'seats',
+      'quantity': 5
+    }
+  ]
+)
+
+if result.get('payment_url'):
+    print(f"Payment required: {result['payment_url']}")
+else:
+    print('Product attached successfully')
+```
+</CodeGroup>
+
+## Example Response
+
+### Successful Attach
+
+```json
+{
+  "customer_id": "cus_123",
+  "invoice": {
+    "status": "paid",
+    "stripe_id": "in_1ABC123",
+    "total": 4900,
+    "currency": "usd",
+    "hosted_invoice_url": "https://invoice.stripe.com/i/acct_1ABC/..."
+  },
+  "payment_url": null
+}
+```
+
+### Payment Action Required
+
+```json
+{
+  "customer_id": "cus_123",
+  "payment_url": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "required_action": {
+    "code": "payment_method_required",
+    "reason": "Customer does not have a default payment method on file"
+  }
+}
+```
+
+## Billing Behavior
+
+The `billing_behavior` parameter controls how charges are applied when attaching a product:
+
+### prorate_immediately (default)
+
+Charges are calculated and applied immediately, with prorations for mid-cycle changes:
+
+```json
+{
+  "billing_behavior": "prorate_immediately"
+}
+```
+
+**Use when:**
+- Customer is upgrading/downgrading mid-cycle
+- You want immediate payment collection
+- Prorated charges should appear on current invoice
+
+### next_cycle_only
+
+No charges are created immediately. The product becomes active, but payment is deferred to the next billing cycle:
+
+```json
+{
+  "billing_behavior": "next_cycle_only"
+}
+```
+
+**Use when:**
+- Customer should have access immediately without payment
+- You want to batch changes into next invoice
+- Avoiding mid-cycle proration complexity
+
+## Error Responses
+
+<ResponseField name="error" type="object">
+  <Expandable title="Error Object">
+    <ResponseField name="code" type="string">
+      Error code identifying the type of error.
+      
+      Common error codes:
+      - `customer_not_found` - The specified customer does not exist
+      - `product_not_found` - The specified product does not exist
+      - `payment_method_required` - Customer has no payment method on file
+      - `already_subscribed` - Customer already has this product
+      - `invalid_billing_behavior` - Invalid billing_behavior value
+      - `stripe_error` - Error from Stripe API
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      Human-readable error message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Related Endpoints
+
+- [Checkout](/api/billing/checkout) - Create checkout session for new customers
+- [Cancel](/api/cancel) - Cancel a product subscription
+- [Check](/api/billing/check) - Verify customer access to features

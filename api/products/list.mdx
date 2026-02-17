@@ -1,232 +1,254 @@
 ---
-title: 'List Products'
-api: 'GET /plans'
+title: "List Products"
+api: "GET /products"
 ---
 
-Retrieve a list of all products (plans) for your organization.
+Retrieves a list of all products in your environment. You can optionally filter by customer to see customer-specific information.
 
 ## Query Parameters
 
-<ParamField query="customer_id" type="string" optional>
-  Filter products by customer eligibility. When provided, the response includes customer-specific information like trial availability and attach scenarios.
+<ParamField query="customer_id" type="string">
+  Optional customer ID. When provided, the response includes customer-specific information like trial eligibility and upgrade/downgrade scenarios.
+</ParamField>
+
+<ParamField query="entity_id" type="string">
+  Optional entity ID to filter products by a specific entity context. Used in conjunction with `customer_id`.
+</ParamField>
+
+<ParamField query="include_archived" type="boolean" default={false}>
+  If `true`, includes archived products in the response. By default, only active products are returned.
 </ParamField>
 
 ## Response
 
-Returns an object with a `list` property containing an array of product objects.
-
 <ResponseField name="list" type="array">
-  Array of product objects
-  
-  <Expandable title="Product Object">
-    <ResponseField name="id" type="string">
-      Unique identifier for the product
-    </ResponseField>
-    
-    <ResponseField name="name" type="string">
-      Display name of the product
-    </ResponseField>
-    
-    <ResponseField name="description" type="string | null">
-      Optional description of the product
-    </ResponseField>
-    
-    <ResponseField name="group" type="string | null">
-      Product group for managing upgrades/downgrades
-    </ResponseField>
-    
-    <ResponseField name="version" type="number">
-      Version number of the product
-    </ResponseField>
-    
-    <ResponseField name="add_on" type="boolean">
-      Whether this is an add-on product
-    </ResponseField>
-    
-    <ResponseField name="default" type="boolean">
-      Whether this is the default product for new customers
-    </ResponseField>
-    
-    <ResponseField name="price" type="object | null">
-      Base subscription price
-      
-      <Expandable title="Price Object">
-        <ResponseField name="amount" type="number">
-          Price amount in cents
-        </ResponseField>
-        
-        <ResponseField name="interval" type="string">
-          Billing interval: `month`, `year`, `week`, or `day`
-        </ResponseField>
-        
-        <ResponseField name="interval_count" type="number" optional>
-          Number of intervals between billings (e.g., 3 for quarterly)
-        </ResponseField>
-        
-        <ResponseField name="display" type="object" optional>
-          Display configuration for pricing UI
-        </ResponseField>
-      </Expandable>
-    </ResponseField>
-    
-    <ResponseField name="features" type="array">
-      Array of features included in this product
-      
-      <Expandable title="Feature Object">
-        <ResponseField name="feature_id" type="string">
-          ID of the feature
-        </ResponseField>
-        
-        <ResponseField name="feature" type="object" optional>
-          Full feature object with name, type, etc.
-        </ResponseField>
-        
-        <ResponseField name="granted_balance" type="number">
-          Amount of usage granted for this feature
-        </ResponseField>
-        
-        <ResponseField name="unlimited" type="boolean">
-          Whether usage is unlimited
-        </ResponseField>
-        
-        <ResponseField name="reset" type="object | null">
-          Reset interval configuration for metered features
-        </ResponseField>
-        
-        <ResponseField name="price" type="object | null">
-          Pricing for additional usage beyond included amount
-        </ResponseField>
-      </Expandable>
-    </ResponseField>
-    
-    <ResponseField name="free_trial" type="object | null" optional>
-      Free trial configuration
-      
-      <Expandable title="Free Trial Object">
-        <ResponseField name="duration_length" type="number">
-          Length of the trial period
-        </ResponseField>
-        
-        <ResponseField name="duration_type" type="string">
-          Unit of duration: `day`, `week`, `month`, or `year`
-        </ResponseField>
-        
-        <ResponseField name="card_required" type="boolean">
-          Whether a payment method is required to start the trial
-        </ResponseField>
-      </Expandable>
-    </ResponseField>
-    
-    <ResponseField name="created_at" type="number">
-      Unix timestamp of creation
-    </ResponseField>
-    
-    <ResponseField name="env" type="string">
-      Environment: `production` or `development`
-    </ResponseField>
-    
-    <ResponseField name="archived" type="boolean">
-      Whether the product is archived
-    </ResponseField>
-    
-    <ResponseField name="base_variant_id" type="string | null">
-      ID of the base product variant
-    </ResponseField>
-    
-    <ResponseField name="customer_eligibility" type="object" optional>
-      Customer-specific eligibility information (only when `customer_id` is provided)
-      
-      <Expandable title="Customer Eligibility Object">
-        <ResponseField name="trial_available" type="boolean" optional>
-          Whether the customer is eligible for a free trial
-        </ResponseField>
-        
-        <ResponseField name="scenario" type="string">
-          Attach scenario: `new`, `upgrade`, `downgrade`, `addon`, etc.
-        </ResponseField>
-      </Expandable>
-    </ResponseField>
-  </Expandable>
+  Array of product objects. Each product contains the same fields as [Retrieve Product](/api/products/retrieve#response).
 </ResponseField>
 
 <RequestExample>
-
 ```bash cURL
 curl --request GET \
-  --url https://api.autumn.com/v1/plans \
+  --url https://api.autumn.ai/products \
   --header 'Authorization: Bearer <token>'
 ```
 
-```javascript Node.js
-const response = await fetch('https://api.autumn.com/v1/plans', {
-  method: 'GET',
-  headers: {
-    'Authorization': 'Bearer <token>'
-  }
+```bash With Customer Context
+curl --request GET \
+  --url 'https://api.autumn.ai/products?customer_id=cus_123' \
+  --header 'Authorization: Bearer <token>'
+```
+
+```typescript TypeScript
+import { Autumn } from '@autumnai/node-sdk';
+
+const autumn = new Autumn({
+  apiKey: process.env.AUTUMN_API_KEY,
 });
 
-const data = await response.json();
-console.log(data.list);
+// List all products
+const products = await autumn.products.list();
+
+console.log(`Found ${products.list.length} products`);
+
+// List with customer context
+const withCustomer = await autumn.products.list({
+  customer_id: 'cus_123',
+});
+
+// Check upgrade opportunities
+for (const product of withCustomer.list) {
+  if (product.customer_eligibility?.scenario === 'upgrade') {
+    console.log(`${product.name} is an upgrade option`);
+  }
+}
+
+// Include archived products
+const allProducts = await autumn.products.list({
+  include_archived: true,
+});
 ```
 
 ```python Python
-import requests
+from autumn import Autumn
 
-response = requests.get(
-    'https://api.autumn.com/v1/plans',
-    headers={'Authorization': 'Bearer <token>'}
-)
+autumn = Autumn(api_key="your_api_key")
 
-products = response.json()['list']
+# List all products
+products = autumn.products.list()
+
+print(f"Found {len(products.list)} products")
+
+# List with customer context
+with_customer = autumn.products.list(customer_id="cus_123")
+
+# Check upgrade opportunities
+for product in with_customer.list:
+    if product.get("customer_eligibility", {}).get("scenario") == "upgrade":
+        print(f"{product['name']} is an upgrade option")
+
+# Include archived products
+all_products = autumn.products.list(include_archived=True)
 ```
-
 </RequestExample>
 
 <ResponseExample>
-
-```json Response
+```json Standard Response
 {
   "list": [
     {
-      "id": "pro",
-      "name": "Pro Plan",
-      "description": "For growing teams",
+      "id": "free-plan",
+      "name": "Free Plan",
+      "description": "Basic features for getting started",
       "group": "main",
       "version": 1,
       "add_on": false,
-      "default": false,
-      "price": {
-        "amount": 2900,
-        "interval": "month",
-        "interval_count": 1
-      },
-      "features": [
+      "auto_enable": true,
+      "price": null,
+      "items": [
         {
-          "feature_id": "api_calls",
-          "granted_balance": 10000,
+          "feature_id": "api-calls",
+          "included": 1000,
           "unlimited": false,
           "reset": {
             "interval": "month",
-            "interval_count": 1,
-            "reset_when_enabled": true
+            "interval_count": 1
+          },
+          "price": null
+        }
+      ],
+      "free_trial": null,
+      "created_at": 1761296829908,
+      "env": "sandbox",
+      "archived": false,
+      "base_variant_id": null
+    },
+    {
+      "id": "pro-plan",
+      "name": "Pro Plan",
+      "description": "Full-featured plan for professionals",
+      "group": "main",
+      "version": 2,
+      "add_on": false,
+      "auto_enable": false,
+      "price": {
+        "amount": 20,
+        "interval": "month",
+        "interval_count": 1
+      },
+      "items": [
+        {
+          "feature_id": "api-calls",
+          "included": 10000,
+          "unlimited": false,
+          "reset": {
+            "interval": "month",
+            "interval_count": 1
           },
           "price": {
-            "amount": 0.01,
+            "amount": 0.001,
             "interval": "month",
             "interval_count": 1,
-            "billing_units": 1,
-            "usage_model": "pay_per_use",
+            "billing_units": 1000,
+            "billing_method": "usage_based",
             "max_purchase": null
           }
+        },
+        {
+          "feature_id": "dashboard",
+          "included": 1,
+          "unlimited": true,
+          "reset": null,
+          "price": null
         }
       ],
       "free_trial": {
-        "duration_length": 14,
-        "duration_type": "day",
+        "duration": "day",
+        "length": 14,
+        "unique_fingerprint": true,
         "card_required": true
       },
-      "created_at": 1640995200,
-      "env": "production",
+      "created_at": 1761296829908,
+      "env": "sandbox",
+      "archived": false,
+      "base_variant_id": null
+    },
+    {
+      "id": "enterprise-plan",
+      "name": "Enterprise Plan",
+      "description": "Custom solutions for large teams",
+      "group": "main",
+      "version": 1,
+      "add_on": false,
+      "auto_enable": false,
+      "price": {
+        "amount": 100,
+        "interval": "month",
+        "interval_count": 1
+      },
+      "items": [
+        {
+          "feature_id": "api-calls",
+          "included": 100000,
+          "unlimited": false,
+          "reset": {
+            "interval": "month",
+            "interval_count": 1
+          },
+          "price": {
+            "amount": 0.0005,
+            "interval": "month",
+            "interval_count": 1,
+            "billing_units": 1000,
+            "billing_method": "usage_based",
+            "max_purchase": null
+          }
+        },
+        {
+          "feature_id": "dashboard",
+          "included": 1,
+          "unlimited": true,
+          "reset": null,
+          "price": null
+        },
+        {
+          "feature_id": "priority-support",
+          "included": 1,
+          "unlimited": true,
+          "reset": null,
+          "price": null
+        }
+      ],
+      "free_trial": null,
+      "created_at": 1761296829908,
+      "env": "sandbox",
+      "archived": false,
+      "base_variant_id": null
+    },
+    {
+      "id": "extra-storage",
+      "name": "Extra Storage",
+      "description": "Additional storage capacity",
+      "group": null,
+      "version": 1,
+      "add_on": true,
+      "auto_enable": false,
+      "price": {
+        "amount": 15,
+        "interval": "month",
+        "interval_count": 1
+      },
+      "items": [
+        {
+          "feature_id": "storage-gb",
+          "included": 100,
+          "unlimited": false,
+          "reset": null,
+          "price": null
+        }
+      ],
+      "free_trial": null,
+      "created_at": 1761296829908,
+      "env": "sandbox",
       "archived": false,
       "base_variant_id": null
     }
@@ -234,31 +256,242 @@ products = response.json()['list']
 }
 ```
 
+```json With Customer Context
+{
+  "list": [
+    {
+      "id": "free-plan",
+      "name": "Free Plan",
+      "group": "main",
+      "version": 1,
+      "add_on": false,
+      "auto_enable": true,
+      "price": null,
+      "items": [...],
+      "free_trial": null,
+      "created_at": 1761296829908,
+      "env": "sandbox",
+      "archived": false,
+      "base_variant_id": null,
+      "customer_eligibility": {
+        "trial_available": false,
+        "scenario": "current"
+      }
+    },
+    {
+      "id": "pro-plan",
+      "name": "Pro Plan",
+      "group": "main",
+      "version": 2,
+      "add_on": false,
+      "auto_enable": false,
+      "price": {
+        "amount": 20,
+        "interval": "month",
+        "interval_count": 1
+      },
+      "items": [...],
+      "free_trial": {
+        "duration": "day",
+        "length": 14,
+        "unique_fingerprint": true,
+        "card_required": true
+      },
+      "created_at": 1761296829908,
+      "env": "sandbox",
+      "archived": false,
+      "base_variant_id": null,
+      "customer_eligibility": {
+        "trial_available": true,
+        "scenario": "upgrade"
+      }
+    },
+    {
+      "id": "extra-storage",
+      "name": "Extra Storage",
+      "group": null,
+      "version": 1,
+      "add_on": true,
+      "auto_enable": false,
+      "price": {
+        "amount": 15,
+        "interval": "month",
+        "interval_count": 1
+      },
+      "items": [...],
+      "free_trial": null,
+      "created_at": 1761296829908,
+      "env": "sandbox",
+      "archived": false,
+      "base_variant_id": null,
+      "customer_eligibility": {
+        "trial_available": false,
+        "scenario": "new"
+      }
+    }
+  ]
+}
+```
 </ResponseExample>
 
-## Error Responses
+## Filtering and Sorting
 
-<ResponseField name="error" type="object">
-  <Expandable title="Error Object">
-    <ResponseField name="message" type="string">
-      Human-readable error message
-    </ResponseField>
-    
-    <ResponseField name="code" type="string">
-      Machine-readable error code
-    </ResponseField>
-  </Expandable>
-</ResponseField>
+### By Product Type
 
-### Common Errors
+Filter products by type in your application code:
 
-- **401 Unauthorized**: Invalid or missing API key
-- **403 Forbidden**: API key doesn't have access to this resource
-- **500 Internal Server Error**: Something went wrong on Autumn's end
+```typescript
+const products = await autumn.products.list();
+
+// Get only subscription products (products with base price)
+const subscriptions = products.list.filter(p => p.price !== null);
+
+// Get only add-ons
+const addons = products.list.filter(p => p.add_on === true);
+
+// Get only free products
+const freePlans = products.list.filter(p => p.price === null);
+
+// Get default product
+const defaultProduct = products.list.find(p => p.auto_enable === true);
+```
+
+### By Product Group
+
+```typescript
+const products = await autumn.products.list();
+
+// Get products in a specific group
+const mainPlans = products.list.filter(p => p.group === 'main');
+
+// Group products by group
+const grouped = products.list.reduce((acc, product) => {
+  const group = product.group || 'ungrouped';
+  if (!acc[group]) acc[group] = [];
+  acc[group].push(product);
+  return acc;
+}, {});
+```
+
+### Sort Products
+
+```typescript
+const products = await autumn.products.list();
+
+// Sort by price (ascending)
+const byPrice = [...products.list].sort((a, b) => {
+  const priceA = a.price?.amount || 0;
+  const priceB = b.price?.amount || 0;
+  return priceA - priceB;
+});
+
+// Sort by name
+const byName = [...products.list].sort((a, b) => 
+  a.name.localeCompare(b.name)
+);
+
+// Sort by creation date (newest first)
+const byDate = [...products.list].sort((a, b) => 
+  b.created_at - a.created_at
+);
+```
+
+## Customer Context
+
+When you provide a `customer_id`, each product includes a `customer_eligibility` object:
+
+### Scenario Types
+
+- `current`: Customer currently has this product
+- `new`: Customer doesn't have any product in this group
+- `upgrade`: Switching to this product would be an upgrade
+- `downgrade`: Switching to this product would be a downgrade
+- `cross_group`: Product is in a different group
+- `add_on`: Product is an add-on (can be purchased alongside current product)
+
+### Trial Availability
+
+```typescript
+const products = await autumn.products.list({
+  customer_id: 'cus_123',
+});
+
+for (const product of products.list) {
+  const { trial_available, scenario } = product.customer_eligibility;
+  
+  if (trial_available) {
+    console.log(`${product.name} offers a free trial`);
+  }
+  
+  if (scenario === 'upgrade') {
+    console.log(`${product.name} is an upgrade from current plan`);
+  }
+}
+```
+
+## Common Use Cases
+
+### Build Pricing Page
+
+```typescript
+const products = await autumn.products.list();
+
+// Filter and sort for pricing page
+const pricingTiers = products.list
+  .filter(p => p.group === 'main' && !p.archived && !p.add_on)
+  .sort((a, b) => (a.price?.amount || 0) - (b.price?.amount || 0));
+
+// Display each tier
+for (const product of pricingTiers) {
+  console.log(`${product.name}: $${product.price?.amount || 0}/month`);
+  console.log('Features:');
+  for (const item of product.items) {
+    if (item.unlimited) {
+      console.log(`  - Unlimited ${item.feature_id}`);
+    } else if (item.included) {
+      console.log(`  - ${item.included} ${item.feature_id}`);
+    }
+  }
+}
+```
+
+### Show Upgrade Options
+
+```typescript
+const products = await autumn.products.list({
+  customer_id: 'cus_123',
+});
+
+const upgrades = products.list.filter(
+  p => p.customer_eligibility?.scenario === 'upgrade'
+);
+
+if (upgrades.length > 0) {
+  console.log('Available upgrades:');
+  for (const product of upgrades) {
+    console.log(`- ${product.name}: $${product.price?.amount}/month`);
+  }
+}
+```
+
+### List Add-ons
+
+```typescript
+const products = await autumn.products.list();
+
+const addons = products.list.filter(p => p.add_on && !p.archived);
+
+console.log('Available add-ons:');
+for (const addon of addons) {
+  console.log(`${addon.name}: $${addon.price?.amount}/${addon.price?.interval}`);
+}
+```
 
 ## Notes
 
-- Products are returned in the order they were created
-- Archived products are excluded by default
-- When `customer_id` is provided, the response includes eligibility information for each product
-- See [Products & Plans](/concepts/products-and-plans) for more information about product structure
+- Returns only the latest version of each product (older versions are not included)
+- Products are not sorted by default, sort in your application as needed
+- Use `include_archived: true` to see all products including archived ones
+- Customer context adds `customer_eligibility` to help build upgrade/downgrade flows
+- Add-ons appear in the list regardless of product groups
+- Empty array is returned if no products exist

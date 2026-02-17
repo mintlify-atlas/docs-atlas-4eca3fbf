@@ -1,0 +1,125 @@
+---
+title: "Create Referral Code"
+api: "POST /referrals"
+description: "Generate a unique referral code for a customer"
+---
+
+Generate a unique referral code for a customer that can be shared to refer others. When another customer redeems this code, both the referrer and referee can receive rewards based on your referral program configuration.
+
+## Request
+
+<ParamField body="customer_id" type="string" required>
+  The unique identifier of the customer who will be the referrer.
+</ParamField>
+
+<ParamField body="program_id" type="string" required>
+  The ID of your referral program that defines the rewards and rules.
+</ParamField>
+
+## Response
+
+<ResponseField name="code" type="string">
+  The generated referral code that can be shared with others. This is a unique alphanumeric code.
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  Your unique identifier for the customer who owns this referral code.
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp (milliseconds) when the referral code was created.
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```typescript TypeScript
+const response = await fetch('https://api.autumn.com/v1/referrals', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    customer_id: 'cus_123',
+    program_id: 'prog_abc'
+  })
+});
+
+const referral = await response.json();
+console.log(`Referral code: ${referral.code}`);
+console.log(`Share this code with others to earn rewards!`);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.autumn.com/v1/referrals',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'customer_id': 'cus_123',
+        'program_id': 'prog_abc'
+    }
+)
+
+referral = response.json()
+print(f"Referral code: {referral['code']}")
+print("Share this code with others to earn rewards!")
+```
+
+```bash cURL
+curl -X POST "https://api.autumn.com/v1/referrals" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "program_id": "prog_abc"
+  }'
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "code": "REF123ABC",
+  "customer_id": "cus_123",
+  "created_at": 1717000000000
+}
+```
+
+## Important Notes
+
+- If a customer already has a referral code for the specified program, the existing code will be returned instead of creating a new one.
+- Referral codes are automatically generated and unique across your organization.
+- The referral code format and length may vary but is designed to be easily shareable.
+
+## Error Handling
+
+<ResponseField name="400" type="error">
+  **Bad Request** - Invalid parameters. Common causes:
+  - Missing customer_id or program_id
+  - Invalid customer or program ID format
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  **Unauthorized** - Invalid or missing API key.
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  **Not Found** - Customer or referral program does not exist.
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  **Internal Server Error** - An unexpected error occurred on the server.
+</ResponseField>
+
+## Related Endpoints
+
+- [Get Referral Code](/api/referrals/retrieve) - Retrieve an existing referral code
+- [Redeem Referral](/api/redemptions/create) - Redeem a referral code
+- [Create Reward](/api/rewards/create) - Create rewards for referral programs

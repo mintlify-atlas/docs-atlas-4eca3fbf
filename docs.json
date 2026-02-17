@@ -1,11 +1,11 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "name": "Autumn",
-  "theme": "aspen",
+  "theme": "mint",
   "colors": {
-    "primary": "#FF6B35",
-    "light": "#FFA07A",
-    "dark": "#D94A1A"
+    "primary": "#F97316",
+    "light": "#FED7AA",
+    "dark": "#EA580C"
   },
   "navbar": {
     "primary": {
@@ -26,11 +26,11 @@
         "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting Started",
+            "group": "Get Started",
             "pages": [
               "introduction",
               "quickstart",
-              "self-hosting"
+              "installation"
             ]
           },
           {
@@ -40,27 +40,37 @@
               "concepts/features",
               "concepts/customers",
               "concepts/entities",
-              "concepts/pricing-models"
+              "concepts/billing-flow"
+            ]
+          },
+          {
+            "group": "Pricing Models",
+            "pages": [
+              "pricing-models/subscriptions",
+              "pricing-models/usage-based",
+              "pricing-models/credits",
+              "pricing-models/seats",
+              "pricing-models/prepaid"
             ]
           },
           {
             "group": "Guides",
             "pages": [
-              "guides/subscriptions",
-              "guides/usage-based-billing",
-              "guides/credits",
-              "guides/metered-features",
-              "guides/trials",
-              "guides/webhooks"
+              "guides/checking-access",
+              "guides/tracking-usage",
+              "guides/attach-products",
+              "guides/handling-webhooks",
+              "guides/custom-pricing",
+              "guides/migrations"
             ]
           },
           {
-            "group": "Dashboard",
+            "group": "Self-Hosting",
             "pages": [
-              "dashboard/overview",
-              "dashboard/products",
-              "dashboard/customers",
-              "dashboard/analytics"
+              "self-hosting/overview",
+              "self-hosting/environment-variables",
+              "self-hosting/database-setup",
+              "self-hosting/docker-deployment"
             ]
           }
         ]
@@ -69,94 +79,93 @@
         "tab": "API Reference",
         "groups": [
           {
-            "group": "Core Operations",
+            "group": "Overview",
             "pages": [
-              "api/attach",
-              "api/check",
-              "api/track",
-              "api/checkout",
-              "api/cancel"
+              "api/overview",
+              "api/authentication",
+              "api/errors",
+              "api/versioning",
+              "api/rate-limits"
             ]
           },
           {
-            "group": "Products & Plans",
+            "group": "Billing",
             "pages": [
-              "api/products/list",
-              "api/products/create",
-              "api/products/get",
-              "api/products/update",
-              "api/products/delete"
+              "api/billing/check",
+              "api/billing/track",
+              "api/billing/attach",
+              "api/billing/checkout"
             ]
           },
           {
             "group": "Customers",
             "pages": [
-              "api/customers/list",
               "api/customers/create",
-              "api/customers/get",
+              "api/customers/retrieve",
               "api/customers/update",
               "api/customers/delete",
-              "api/customers/billing-portal"
+              "api/customers/list"
+            ]
+          },
+          {
+            "group": "Products",
+            "pages": [
+              "api/products/create",
+              "api/products/retrieve",
+              "api/products/update",
+              "api/products/delete",
+              "api/products/list"
             ]
           },
           {
             "group": "Features",
             "pages": [
-              "api/features/list",
               "api/features/create",
-              "api/features/get",
+              "api/features/retrieve",
               "api/features/update",
-              "api/features/delete"
+              "api/features/delete",
+              "api/features/list"
             ]
           },
           {
             "group": "Entities",
             "pages": [
-              "api/entities/list",
               "api/entities/create",
-              "api/entities/get",
+              "api/entities/retrieve",
               "api/entities/update",
-              "api/entities/delete"
-            ]
-          },
-          {
-            "group": "Balances",
-            "pages": [
-              "api/balances/list",
-              "api/balances/create",
-              "api/balances/update"
+              "api/entities/delete",
+              "api/entities/list"
             ]
           },
           {
             "group": "Invoices",
             "pages": [
-              "api/invoices/list",
-              "api/invoices/get"
+              "api/invoices/retrieve",
+              "api/invoices/list"
             ]
           },
           {
             "group": "Events",
             "pages": [
+              "api/events/retrieve",
               "api/events/list"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "SDKs",
-        "groups": [
-          {
-            "group": "Overview",
-            "pages": [
-              "sdks/introduction"
             ]
           },
           {
-            "group": "Client SDKs",
+            "group": "Balances",
             "pages": [
-              "sdks/react",
-              "sdks/typescript",
-              "sdks/python"
+              "api/balances/retrieve",
+              "api/balances/list"
+            ]
+          },
+          {
+            "group": "Rewards & Referrals",
+            "pages": [
+              "api/rewards/create",
+              "api/rewards/retrieve",
+              "api/referrals/create",
+              "api/referrals/retrieve",
+              "api/redemptions/create"
             ]
           }
         ]

@@ -1,335 +1,322 @@
 ---
-title: 'Update Product'
-api: 'POST /plans/{plan_id}'
+title: "Update Product"
+api: "POST /products/{product_id}"
 ---
 
-Update an existing product (plan). If customers are already attached to this product and you modify features or pricing, a new version will be automatically created.
+Updates an existing product's configuration, pricing, or features. How updates are handled depends on whether the product has active customers.
 
 ## Path Parameters
 
-<ParamField path="plan_id" type="string" required>
-  The unique identifier of the product to update.
+<ParamField path="product_id" type="string" required>
+  The ID of the product to update.
 </ParamField>
 
 ## Query Parameters
 
-<ParamField query="version" type="number" optional>
+<ParamField query="version" type="number">
   Specific version of the product to update. If not provided, updates the latest version.
 </ParamField>
 
-<ParamField query="upsert" type="boolean" optional>
+<ParamField query="upsert" type="boolean" default={false}>
   If `true`, creates the product if it doesn't exist.
 </ParamField>
 
-<ParamField query="disable_version" type="boolean" optional>
-  If `true`, prevents automatic versioning even when customers exist. Use with caution as this can affect existing customers.
+<ParamField query="disable_version" type="boolean" default={false}>
+  If `true`, prevents automatic versioning even when customers exist. This will cause an error if customers exist and pricing/features are changed.
 </ParamField>
 
 ## Request Body
 
 All fields are optional. Only include fields you want to update.
 
-<ParamField body="id" type="string" optional>
-  New product ID. Use with caution as this changes how the product is referenced.
+<ParamField body="id" type="string">
+  New ID for the product. Use with caution as this changes how you reference the product.
 </ParamField>
 
-<ParamField body="name" type="string" optional>
-  Updated display name of the product.
+<ParamField body="name" type="string">
+  New name for the product.
 </ParamField>
 
-<ParamField body="description" type="string | null" optional>
-  Updated description of the product.
+<ParamField body="description" type="string">
+  New description for the product. Set to `null` to remove.
 </ParamField>
 
-<ParamField body="add_on" type="boolean" optional>
-  Whether this is an add-on product.
+<ParamField body="is_add_on" type="boolean">
+  Change whether the product is an add-on.
 </ParamField>
 
-<ParamField body="auto_enable" type="boolean" optional>
-  Whether to automatically enable this product for new customers.
+<ParamField body="is_default" type="boolean">
+  Change whether the product is a default product.
 </ParamField>
 
-<ParamField body="group" type="string" optional>
-  Product group name for upgrade/downgrade logic.
+<ParamField body="group" type="string">
+  Change the product group. Set to empty string to remove from group.
 </ParamField>
 
-<ParamField body="archived" type="boolean" optional>
-  Archive or unarchive the product. Archived products are hidden from the dashboard but remain attached to existing customers.
+<ParamField body="archived" type="boolean">
+  Archive or unarchive the product. Archived products are hidden and not available for new purchases.
 </ParamField>
 
-<ParamField body="price" type="object" optional>
-  Updated base subscription price.
+<ParamField body="items" type="array">
+  New array of product items. This completely replaces the existing items.
   
-  <Expandable title="Price Object">
-    <ParamField body="amount" type="number" required>
-      Price amount in cents
-    </ParamField>
-    
-    <ParamField body="interval" type="string" required>
-      Billing interval: `month`, `year`, `week`, or `day`
-    </ParamField>
-    
-    <ParamField body="interval_count" type="number" optional>
-      Number of intervals between billings
-    </ParamField>
-  </Expandable>
+  See [Create Product](/api/products/create#request-body) for the structure of product items.
 </ParamField>
 
-<ParamField body="items" type="array" optional>
-  Updated array of product items. Replaces all existing items.
+<ParamField body="free_trial" type="object">
+  Update the free trial configuration. Set to `null` to remove the free trial.
   
-  <Warning>Modifying `items` when customers exist triggers automatic versioning unless `disable_version=true`.</Warning>
-  
-  <Expandable title="Product Item Object">
-    <ParamField body="feature_id" type="string" required>
-      ID of the feature
-    </ParamField>
-    
-    <ParamField body="granted_balance" type="number" optional>
-      Amount of usage granted
-    </ParamField>
-    
-    <ParamField body="unlimited" type="boolean" optional>
-      Set to `true` for unlimited usage
-    </ParamField>
-    
-    <ParamField body="reset" type="object" optional>
-      Reset configuration for metered features
-    </ParamField>
-    
-    <ParamField body="price" type="object" optional>
-      Pricing for additional usage
-    </ParamField>
-    
-    <ParamField body="rollover" type="object" optional>
-      Rollover configuration
-    </ParamField>
-    
-    <ParamField body="proration" type="object" optional>
-      Proration behavior
-    </ParamField>
-  </Expandable>
+  See [Create Product](/api/products/create#request-body) for the structure of free trial objects.
 </ParamField>
 
-<ParamField body="free_trial" type="object | null" optional>
-  Updated free trial configuration. Set to `null` to remove the trial.
-  
-  <Warning>Modifying `free_trial` when customers exist triggers automatic versioning unless `disable_version=true`.</Warning>
-  
-  <Expandable title="Free Trial Object">
-    <ParamField body="duration_length" type="number" required>
-      Length of the trial period
-    </ParamField>
-    
-    <ParamField body="duration_type" type="string" default="month">
-      Unit of duration: `day`, `week`, `month`, or `year`
-    </ParamField>
-    
-    <ParamField body="card_required" type="boolean" default={true}>
-      Whether a payment method is required
-    </ParamField>
-  </Expandable>
-</ParamField>
+## Response
+
+Returns the updated product object with the same structure as [Retrieve Product](/api/products/retrieve#response).
 
 <RequestExample>
-
 ```bash cURL
 curl --request POST \
-  --url https://api.autumn.com/v1/plans/pro \
+  --url https://api.autumn.ai/products/pro-plan \
   --header 'Authorization: Bearer <token>' \
   --header 'Content-Type: application/json' \
   --data '{
-    "name": "Pro Plan (Updated)",
-    "description": "Enhanced pro plan with more features",
-    "price": {
-      "amount": 3900,
-      "interval": "month"
-    }
-  }'
+  "name": "Pro Plan (Updated)",
+  "description": "Now with more features!"
+}'
 ```
 
-```javascript Node.js
-const response = await fetch('https://api.autumn.com/v1/plans/pro', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer <token>',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    name: 'Pro Plan (Updated)',
-    description: 'Enhanced pro plan with more features',
-    price: {
-      amount: 3900,
-      interval: 'month'
-    }
-  })
+```typescript TypeScript
+import { Autumn } from '@autumnai/node-sdk';
+
+const autumn = new Autumn({
+  apiKey: process.env.AUTUMN_API_KEY,
 });
 
-const product = await response.json();
+// Update product details only
+const product = await autumn.products.update('pro-plan', {
+  name: 'Pro Plan (Updated)',
+  description: 'Now with more features!',
+});
+
+// Update pricing (creates new version if customers exist)
+const updated = await autumn.products.update('pro-plan', {
+  items: [
+    {
+      price: 25, // Increased from $20
+      interval: 'month',
+    },
+    {
+      feature_id: 'api-calls',
+      included_usage: 15000, // Increased from 10,000
+      price: 0.001,
+      interval: 'month',
+      usage_model: 'pay_per_use',
+      billing_units: 1000,
+    },
+  ],
+});
 ```
 
 ```python Python
-import requests
+from autumn import Autumn
 
-response = requests.post(
-    'https://api.autumn.com/v1/plans/pro',
-    headers={
-        'Authorization': 'Bearer <token>',
-        'Content-Type': 'application/json'
-    },
-    json={
-        'name': 'Pro Plan (Updated)',
-        'description': 'Enhanced pro plan with more features',
-        'price': {
-            'amount': 3900,
-            'interval': 'month'
-        }
-    }
+autumn = Autumn(api_key="your_api_key")
+
+# Update product details only
+product = autumn.products.update(
+    "pro-plan",
+    name="Pro Plan (Updated)",
+    description="Now with more features!"
 )
 
-product = response.json()
+# Update pricing (creates new version if customers exist)
+updated = autumn.products.update(
+    "pro-plan",
+    items=[
+        {
+            "price": 25,  # Increased from $20
+            "interval": "month"
+        },
+        {
+            "feature_id": "api-calls",
+            "included_usage": 15000,  # Increased from 10,000
+            "price": 0.001,
+            "interval": "month",
+            "usage_model": "pay_per_use",
+            "billing_units": 1000
+        }
+    ]
+)
 ```
-
 </RequestExample>
 
 <ResponseExample>
-
 ```json Response
 {
-  "id": "pro",
+  "id": "pro-plan",
   "name": "Pro Plan (Updated)",
-  "description": "Enhanced pro plan with more features",
+  "description": "Now with more features!",
   "group": "main",
   "version": 1,
   "add_on": false,
-  "default": false,
+  "auto_enable": false,
   "price": {
-    "amount": 3900,
+    "amount": 20,
     "interval": "month",
     "interval_count": 1
   },
-  "features": [
+  "items": [
     {
-      "feature_id": "api_calls",
-      "granted_balance": 10000,
+      "feature_id": "api-calls",
+      "included": 10000,
       "unlimited": false,
       "reset": {
         "interval": "month",
-        "interval_count": 1,
-        "reset_when_enabled": true
+        "interval_count": 1
       },
       "price": {
-        "amount": 0.01,
+        "amount": 0.001,
         "interval": "month",
         "interval_count": 1,
-        "billing_units": 1,
-        "usage_model": "pay_per_use",
+        "billing_units": 1000,
+        "billing_method": "usage_based",
         "max_purchase": null
       }
     }
   ],
   "free_trial": {
-    "duration_length": 14,
-    "duration_type": "day",
+    "duration": "day",
+    "length": 14,
+    "unique_fingerprint": true,
     "card_required": true
   },
-  "created_at": 1640995200,
-  "env": "production",
+  "created_at": 1761296829908,
+  "env": "sandbox",
   "archived": false,
   "base_variant_id": null
 }
 ```
+</ResponseExample>
 
-```json Versioned Response
+## Update Behavior
+
+### Products Without Customers
+
+When a product has no active or expired customers:
+- Updates are applied directly to the product
+- No versioning occurs
+- Changes take effect immediately for new customers
+
+### Products With Customers
+
+When a product has customers and you update `items` or `free_trial`:
+- **Automatic versioning**: A new version is created automatically
+- **Existing customers**: Remain on their current version
+- **New customers**: Get the new version by default
+- **Version number**: Increments (v1 → v2)
+
+Example: You have a product with `version: 1` and 50 customers. You update the pricing:
+1. A new `version: 2` is created with the new pricing
+2. Existing 50 customers stay on version 1
+3. New customers get version 2
+4. The response returns the version 2 product
+
+### Detail-Only Updates
+
+Updating only `name`, `description`, `group`, `is_add_on`, `is_default`, or `archived`:
+- Does NOT create a new version
+- Updates apply to the current version immediately
+- All customers see the updated details
+
+## Common Update Scenarios
+
+### Update Product Name
+
+```json
 {
-  "id": "pro",
-  "name": "Pro Plan (Updated)",
-  "description": "Enhanced pro plan with more features",
-  "group": "main",
-  "version": 2,
-  "add_on": false,
-  "default": false,
-  "price": {
-    "amount": 3900,
-    "interval": "month",
-    "interval_count": 1
-  },
-  "features": [
-    {
-      "feature_id": "api_calls",
-      "granted_balance": 20000,
-      "unlimited": false,
-      "reset": {
-        "interval": "month",
-        "interval_count": 1,
-        "reset_when_enabled": true
-      },
-      "price": {
-        "amount": 0.01,
-        "interval": "month",
-        "interval_count": 1,
-        "billing_units": 1,
-        "usage_model": "pay_per_use",
-        "max_purchase": null
-      }
-    }
-  ],
-  "free_trial": {
-    "duration_length": 14,
-    "duration_type": "day",
-    "card_required": true
-  },
-  "created_at": 1640995200,
-  "env": "production",
-  "archived": false,
-  "base_variant_id": "pro"
+  "name": "Premium Plan"
 }
 ```
 
-</ResponseExample>
+No versioning occurs, change is immediate.
 
-## Response
+### Archive a Product
 
-Returns the updated product object if successful.
+```json
+{
+  "archived": true
+}
+```
 
-## Error Responses
+Prevents new customers from purchasing, existing customers unaffected.
 
-### Common Errors
+### Change Pricing
 
-- **400 Bad Request**: Invalid request body or parameters
-  - Cannot auto-save when customers exist and `disable_version=true`
-  - Invalid pricing configuration
-  - Referenced feature doesn't exist
-- **404 Not Found**: No product exists with the provided ID
-- **401 Unauthorized**: Invalid or missing API key
-- **403 Forbidden**: API key doesn't have permission to update products
-- **500 Internal Server Error**: Something went wrong on Autumn's end
+```json
+{
+  "items": [
+    {
+      "price": 30,
+      "interval": "month"
+    }
+  ]
+}
+```
 
-## Versioning Behavior
+Creates new version if customers exist. Existing customers keep their current price.
 
-When you update a product that has active customers:
+### Add New Feature
 
-1. **Metadata changes only** (name, description, group, archived): Updates in place, no new version
-2. **Feature/pricing changes** (items, free_trial): Creates a new version automatically
-   - New customers get the new version
-   - Existing customers remain on their current version
-   - The `version` field increments
-   - The `base_variant_id` points to the original product ID
+```json
+{
+  "items": [
+    {
+      "price": 20,
+      "interval": "month"
+    },
+    {
+      "feature_id": "api-calls",
+      "included_usage": 10000,
+      "price": 0.001,
+      "interval": "month",
+      "usage_model": "pay_per_use",
+      "billing_units": 1000
+    },
+    {
+      "feature_id": "new-feature",
+      "unlimited": true
+    }
+  ]
+}
+```
 
-### Preventing Auto-Versioning
+Creates new version if customers exist. Must include ALL items, not just the new one.
 
-Use `disable_version=true` to update the product in place even when customers exist. This will:
-- Update the product for ALL customers, including existing ones
-- Not create a new version
-- Should be used carefully as it affects existing subscriptions
+### Remove Free Trial
 
-<Warning>
-Using `disable_version=true` when customers exist will throw an error for safety. Only use this when you understand the implications.
-</Warning>
+```json
+{
+  "free_trial": null
+}
+```
+
+Creates new version if customers exist. Existing customers' trials are unaffected.
+
+### Update Without Versioning
+
+```json
+{
+  "items": [...]
+}
+```
+
+With query parameter `?disable_version=true`. This will throw an error if customers exist.
 
 ## Notes
 
-- Product updates are reflected immediately
-- Updating `items` replaces all existing product items
-- See [Products & Plans](/concepts/products-and-plans) for more about versioning
-- For migration between versions, see the Migration API
+- When updating `items`, you must provide the complete array of items, not just changes
+- You cannot update a product that doesn't exist (unless `upsert=true`)
+- Changing `is_default` to `true` will unset other default products in the same group
+- Product ID changes should be done carefully as they affect API references
+- Versioning protects existing customers from unexpected pricing changes
+- To migrate customers between versions, use the [Migrations API](/api/migrations/create)

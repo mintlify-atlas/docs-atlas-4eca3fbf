@@ -1,0 +1,485 @@
+---
+title: "Migrating Customers"
+description: "Learn how to migrate customers between products and plans while preserving their data and billing"
+---
+
+## Overview
+
+Migrations allow you to move customers from one product to another while maintaining their subscription continuity, usage data, and billing cycle. Use migrations when restructuring your pricing or consolidating products.
+
+## When to Use Migrations
+
+Migrations are useful for:
+
+- **Pricing restructuring** - Moving customers to new pricing models
+- **Plan consolidation** - Merging multiple plans into fewer options
+- **Feature reorganization** - Changing how features are packaged
+- **Grandfathering** - Moving customers off legacy plans
+- **Bulk updates** - Applying changes to multiple customers at once
+
+## Planning a Migration
+
+<Steps>
+  <Step title="Analyze current state">
+    Understand your current customer distribution:
+
+    ```typescript
+    import { Autumn } from '@useautumn/sdk';
+
+    const autumn = new Autumn({ apiKey: process.env.AUTUMN_API_KEY });
+
+    // Get all customers
+    const customers = await autumn.customers.list();
+
+    // Group by product
+    const byProduct = new Map<string, number>();
+    
+    for (const customer of customers) {
+      for (const product of customer.products) {
+        byProduct.set(
+          product.product_id,
+          (byProduct.get(product.product_id) || 0) + 1
+        );
+      }
+    }
+
+    console.log('Current distribution:', Object.fromEntries(byProduct));
+    ```
+  </Step>
+
+  <Step title="Create migration mapping">
+    Define which old products map to which new products:
+
+    ```typescript
+    const migrationMap = {
+      'old_starter_plan': 'new_basic_plan',
+      'old_pro_plan': 'new_pro_plan',
+      'old_enterprise_plan': 'new_enterprise_plan'
+    };
+    ```
+  </Step>
+
+  <Step title="Test with a small group">
+    Migrate a few customers first to validate the process:
+
+    ```typescript
+    const testCustomers = customers.slice(0, 5);
+    
+    for (const customer of testCustomers) {
+      await migrateCustomer(customer.id, migrationMap);
+    }
+    ```
+  </Step>
+</Steps>
+
+## Migrating a Single Customer
+
+Migrate one customer to a new product:
+
+```typescript
+async function migrateCustomer(
+  customerId: string,
+  fromProductId: string,
+  toProductId: string
+) {
+  console.log(`Migrating ${customerId} from ${fromProductId} to ${toProductId}`);
+
+  try {
+    // Get current customer state
+    const customer = await autumn.customers.get({
+      customer_id: customerId
+    });
+
+    const currentProduct = customer.products.find(
+      p => p.product_id === fromProductId
+    );
+
+    if (!currentProduct) {
+      console.log(`Customer ${customerId} not on ${fromProductId}`);
+      return;
+    }
+
+    // Preserve custom options if any
+    const options = currentProduct.options?.map(opt => ({
+      feature_id: opt.feature_id,
+      quantity: opt.quantity
+    }));
+
+    // Attach new product
+    await autumn.attach({
+      customer_id: customerId,
+      product_id: toProductId,
+      options: options || undefined
+    });
+
+    console.log(`Successfully migrated ${customerId}`);
+    
+    return { success: true, customer_id: customerId };
+  } catch (error) {
+    console.error(`Failed to migrate ${customerId}:`, error);
+    return { success: false, customer_id: customerId, error: error.message };
+  }
+}
+```
+
+## Bulk Migration
+
+Migrate multiple customers:
+
+```typescript
+async function bulkMigrate(
+  migrationMap: Record<string, string>,
+  options: {
+    batchSize?: number;
+    dryRun?: boolean;
+  } = {}
+) {
+  const { batchSize = 10, dryRun = false } = options;
+
+  // Get all customers
+  const customers = await autumn.customers.list();
+
+  const migrations: Array<{
+    customer_id: string;
+    from: string;
+    to: string;
+  }> = [];
+
+  // Build migration list
+  for (const customer of customers) {
+    for (const product of customer.products) {
+      const newProductId = migrationMap[product.product_id];
+      
+      if (newProductId) {
+        migrations.push({
+          customer_id: customer.id,
+          from: product.product_id,
+          to: newProductId
+        });
+      }
+    }
+  }
+
+  console.log(`Found ${migrations.length} customers to migrate`);
+
+  if (dryRun) {
+    console.log('Dry run - no changes made');
+    return migrations;
+  }
+
+  // Process in batches
+  const results = [];
+  
+  for (let i = 0; i < migrations.length; i += batchSize) {
+    const batch = migrations.slice(i, i + batchSize);
+    
+    console.log(`Processing batch ${i / batchSize + 1}/${Math.ceil(migrations.length / batchSize)}`);
+
+    const batchResults = await Promise.allSettled(
+      batch.map(m => 
+        migrateCustomer(m.customer_id, m.from, m.to)
+      )
+    );
+
+    results.push(...batchResults);
+
+    // Wait between batches to avoid rate limits
+    if (i + batchSize < migrations.length) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+
+  // Summarize results
+  const successful = results.filter(r => r.status === 'fulfilled').length;
+  const failed = results.filter(r => r.status === 'rejected').length;
+
+  console.log(`Migration complete: ${successful} successful, ${failed} failed`);
+
+  return results;
+}
+
+// Run migration
+const migrationMap = {
+  'old_starter': 'new_basic',
+  'old_pro': 'new_pro'
+};
+
+// Dry run first
+await bulkMigrate(migrationMap, { dryRun: true });
+
+// Then run for real
+await bulkMigrate(migrationMap);
+```
+
+## Preserving Custom Pricing
+
+Maintain custom pricing during migration:
+
+```typescript
+async function migrateWithCustomPricing(
+  customerId: string,
+  toProductId: string
+) {
+  const customer = await autumn.customers.get({ customer_id: customerId });
+  const currentProduct = customer.products[0];
+
+  // Extract custom pricing
+  const customPrices = currentProduct.custom_prices?.map(cp => ({
+    feature_id: cp.feature_id,
+    price: cp.price
+  }));
+
+  // Apply to new product
+  await autumn.attach({
+    customer_id: customerId,
+    product_id: toProductId,
+    options: customPrices || undefined
+  });
+}
+```
+
+## Grandfathering Customers
+
+Keep customers on legacy plans:
+
+```typescript
+interface LegacyPlan {
+  id: string;
+  name: string;
+  sunsetDate: Date;
+  migrateTo: string;
+}
+
+const legacyPlans: LegacyPlan[] = [
+  {
+    id: 'legacy_unlimited',
+    name: 'Legacy Unlimited',
+    sunsetDate: new Date('2026-12-31'),
+    migrateTo: 'new_enterprise'
+  }
+];
+
+async function handleLegacyPlans() {
+  const customers = await autumn.customers.list();
+
+  for (const legacyPlan of legacyPlans) {
+    const customersOnPlan = customers.filter(c =>
+      c.products.some(p => p.product_id === legacyPlan.id)
+    );
+
+    console.log(`${customersOnPlan.length} customers on ${legacyPlan.name}`);
+
+    // Check if sunset date is approaching
+    const daysUntilSunset = Math.floor(
+      (legacyPlan.sunsetDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (daysUntilSunset <= 30) {
+      console.log(`Sunset in ${daysUntilSunset} days - sending notifications`);
+
+      for (const customer of customersOnPlan) {
+        await sendEmail({
+          to: customer.email,
+          subject: `Action Required: ${legacyPlan.name} Ending Soon`,
+          template: 'legacy_plan_sunset',
+          data: {
+            plan: legacyPlan.name,
+            sunsetDate: legacyPlan.sunsetDate,
+            newPlan: legacyPlan.migrateTo
+          }
+        });
+      }
+    }
+
+    if (daysUntilSunset <= 0) {
+      console.log('Sunset date reached - migrating customers');
+
+      for (const customer of customersOnPlan) {
+        await migrateCustomer(
+          customer.id,
+          legacyPlan.id,
+          legacyPlan.migrateTo
+        );
+      }
+    }
+  }
+}
+```
+
+## Communicating Migrations
+
+Notify customers about migrations:
+
+```typescript
+async function notifyMigration(
+  customerId: string,
+  fromProduct: string,
+  toProduct: string,
+  reason: string
+) {
+  const customer = await autumn.customers.get({ customer_id: customerId });
+  const [oldProduct, newProduct] = await Promise.all([
+    autumn.products.get({ product_id: fromProduct }),
+    autumn.products.get({ product_id: toProduct })
+  ]);
+
+  await sendEmail({
+    to: customer.email,
+    subject: 'Important: Your Plan Has Been Updated',
+    template: 'plan_migration',
+    data: {
+      customerName: customer.name,
+      oldPlan: oldProduct.name,
+      newPlan: newProduct.name,
+      reason,
+      features: newProduct.features,
+      supportEmail: 'support@example.com'
+    }
+  });
+}
+```
+
+## Rollback Plan
+
+Implement rollback capability:
+
+```typescript
+interface MigrationRecord {
+  customer_id: string;
+  from_product: string;
+  to_product: string;
+  migrated_at: Date;
+  previous_options?: any[];
+}
+
+const migrationLog: MigrationRecord[] = [];
+
+async function migrateWithRollback(
+  customerId: string,
+  fromProductId: string,
+  toProductId: string
+) {
+  // Get current state
+  const customer = await autumn.customers.get({ customer_id: customerId });
+  const currentProduct = customer.products.find(p => p.product_id === fromProductId);
+
+  // Log migration
+  const record: MigrationRecord = {
+    customer_id: customerId,
+    from_product: fromProductId,
+    to_product: toProductId,
+    migrated_at: new Date(),
+    previous_options: currentProduct?.options
+  };
+
+  try {
+    // Perform migration
+    await autumn.attach({
+      customer_id: customerId,
+      product_id: toProductId
+    });
+
+    migrationLog.push(record);
+    
+    return { success: true, record };
+  } catch (error) {
+    console.error('Migration failed:', error);
+    throw error;
+  }
+}
+
+async function rollbackMigration(customerId: string) {
+  // Find most recent migration
+  const record = migrationLog
+    .filter(r => r.customer_id === customerId)
+    .sort((a, b) => b.migrated_at.getTime() - a.migrated_at.getTime())[0];
+
+  if (!record) {
+    throw new Error('No migration found to rollback');
+  }
+
+  // Rollback to previous product
+  await autumn.attach({
+    customer_id: customerId,
+    product_id: record.from_product,
+    options: record.previous_options
+  });
+
+  console.log(`Rolled back ${customerId} to ${record.from_product}`);
+}
+```
+
+## Migration Validation
+
+Validate migrations were successful:
+
+```typescript
+async function validateMigration(
+  customerId: string,
+  expectedProductId: string
+) {
+  const customer = await autumn.customers.get({ customer_id: customerId });
+  
+  const hasProduct = customer.products.some(
+    p => p.product_id === expectedProductId && p.status === 'active'
+  );
+
+  if (!hasProduct) {
+    throw new Error(
+      `Migration validation failed: ${customerId} not on ${expectedProductId}`
+    );
+  }
+
+  console.log(`✓ Validated ${customerId} successfully migrated`);
+  return true;
+}
+
+// Validate all migrations
+const results = await bulkMigrate(migrationMap);
+
+for (const result of results) {
+  if (result.status === 'fulfilled') {
+    await validateMigration(
+      result.value.customer_id,
+      migrationMap[result.value.from]
+    );
+  }
+}
+```
+
+## Best Practices
+
+<Card title="Test thoroughly" icon="vial">
+  Always test migrations with a small group of customers first.
+</Card>
+
+<Card title="Communicate clearly" icon="envelope">
+  Notify customers well in advance about upcoming migrations.
+</Card>
+
+<Card title="Preserve customization" icon="wrench">
+  Maintain custom pricing and options during migrations.
+</Card>
+
+<Card title="Batch carefully" icon="layer-group">
+  Process migrations in small batches to manage load and errors.
+</Card>
+
+<Card title="Log everything" icon="file">
+  Keep detailed records of all migrations for auditing and rollback.
+</Card>
+
+<Card title="Validate results" icon="circle-check">
+  Confirm each migration was successful before proceeding.
+</Card>
+
+<Card title="Plan for rollback" icon="rotate-left">
+  Have a rollback plan ready in case issues arise.
+</Card>
+
+## Related Resources
+
+- [Attach Products Guide](/guides/attach-products)
+- [Products Concept](/concepts/products-and-plans)
+- [Customers API](/api/customers/list)
+- [Attach API Reference](/api/attach)

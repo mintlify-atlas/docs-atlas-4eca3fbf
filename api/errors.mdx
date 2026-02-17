@@ -1,0 +1,439 @@
+---
+title: 'Error Handling'
+description: 'Understand API error responses and error codes'
+---
+
+## Error Response Format
+
+When an error occurs, the API returns a JSON response with an appropriate HTTP status code:
+
+```json
+{
+  "message": "Customer not found",
+  "code": "customer_not_found",
+  "env": "test"
+}
+```
+
+All error responses include:
+
+- `message` - Human-readable error description
+- `code` - Machine-readable error code for programmatic handling
+- `env` - The environment where the error occurred (`test` or `live`)
+
+## HTTP Status Codes
+
+The API uses standard HTTP status codes:
+
+| Status Code | Meaning |
+|-------------|----------|
+| `200` | OK - Request succeeded |
+| `400` | Bad Request - Invalid request parameters |
+| `401` | Unauthorized - Authentication failed |
+| `404` | Not Found - Resource doesn't exist |
+| `429` | Too Many Requests - Rate limit exceeded |
+| `500` | Internal Server Error - Something went wrong |
+
+## Error Types
+
+### Authentication Errors (401)
+
+<AccordionGroup>
+  <Accordion title="no_secret_key">
+    Missing Authorization header.
+    
+    ```json
+    {
+      "message": "Secret key not found in Authorization header",
+      "code": "no_secret_key"
+    }
+    ```
+    
+    **Solution:** Include `Authorization: Bearer YOUR_API_KEY` header.
+  </Accordion>
+  
+  <Accordion title="invalid_secret_key">
+    Invalid or revoked API key.
+    
+    ```json
+    {
+      "message": "Invalid secret key: am_live_sk_xxx***",
+      "code": "invalid_secret_key"
+    }
+    ```
+    
+    **Solution:** Verify your API key is correct and not revoked.
+  </Accordion>
+  
+  <Accordion title="invalid_publishable_key">
+    Invalid publishable key.
+    
+    ```json
+    {
+      "message": "Invalid publishable key",
+      "code": "invalid_publishable_key"
+    }
+    ```
+    
+    **Solution:** Check your publishable key is valid.
+  </Accordion>
+  
+  <Accordion title="endpoint_not_public">
+    Attempted to use publishable key on a secret-only endpoint.
+    
+    ```json
+    {
+      "message": "This endpoint is not accessible with a publishable key",
+      "code": "endpoint_not_public"
+    }
+    ```
+    
+    **Solution:** Use a secret key for this endpoint.
+  </Accordion>
+</AccordionGroup>
+
+### Validation Errors (400)
+
+<AccordionGroup>
+  <Accordion title="invalid_inputs">
+    Request validation failed.
+    
+    ```json
+    {
+      "message": "Invalid customer_id: must be a string",
+      "code": "invalid_inputs"
+    }
+    ```
+    
+    **Solution:** Check request parameters match the API specification.
+  </Accordion>
+  
+  <Accordion title="invalid_request">
+    Malformed or conflicting request.
+    
+    ```json
+    {
+      "message": "Cannot cancel an already canceled subscription",
+      "code": "invalid_request"
+    }
+    ```
+    
+    **Solution:** Review the operation you're attempting.
+  </Accordion>
+  
+  <Accordion title="invalid_options">
+    Invalid configuration or options.
+    
+    ```json
+    {
+      "message": "Invalid pricing configuration",
+      "code": "invalid_options"
+    }
+    ```
+    
+    **Solution:** Verify your configuration matches requirements.
+  </Accordion>
+  
+  <Accordion title="invalid_api_version">
+    Invalid API version in header.
+    
+    ```json
+    {
+      "message": "'2024-01-01' is not a valid API version",
+      "code": "invalid_api_version"
+    }
+    ```
+    
+    **Solution:** Use a valid API version or omit the header.
+  </Accordion>
+</AccordionGroup>
+
+### Resource Not Found Errors (404)
+
+<AccordionGroup>
+  <Accordion title="customer_not_found">
+    Customer ID doesn't exist.
+    
+    ```json
+    {
+      "message": "Customer not found",
+      "code": "customer_not_found"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="product_not_found">
+    Product ID doesn't exist.
+    
+    ```json
+    {
+      "message": "Product not found",
+      "code": "product_not_found"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="feature_not_found">
+    Feature ID doesn't exist.
+    
+    ```json
+    {
+      "message": "Feature not found",
+      "code": "feature_not_found"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="entity_not_found">
+    Entity ID doesn't exist.
+    
+    ```json
+    {
+      "message": "Entity not found",
+      "code": "entity_not_found"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Business Logic Errors (400)
+
+<AccordionGroup>
+  <Accordion title="customer_already_has_product">
+    Customer is already subscribed to this product.
+    
+    ```json
+    {
+      "message": "Customer already has this product",
+      "code": "customer_already_has_product"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="insufficient_balance">
+    Not enough prepaid credits to complete the operation.
+    
+    ```json
+    {
+      "message": "Insufficient balance",
+      "code": "insufficient_balance"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="feature_limit_reached">
+    Feature usage limit has been reached.
+    
+    ```json
+    {
+      "message": "Feature limit reached",
+      "code": "feature_limit_reached"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="duplicate_idempotency_key">
+    Idempotency key conflict with a different request.
+    
+    ```json
+    {
+      "message": "Duplicate idempotency key",
+      "code": "duplicate_idempotency_key"
+    }
+    ```
+    
+    **Solution:** Use a unique idempotency key for each request.
+  </Accordion>
+</AccordionGroup>
+
+### Stripe Errors (400)
+
+<AccordionGroup>
+  <Accordion title="stripe_error">
+    Error from Stripe payment processor.
+    
+    ```json
+    {
+      "message": "(Stripe Error) Your card was declined",
+      "code": "stripe_error",
+      "env": "live"
+    }
+    ```
+    
+    The original Stripe error message is included.
+  </Accordion>
+  
+  <Accordion title="stripe_card_declined">
+    Payment method was declined.
+    
+    ```json
+    {
+      "message": "Card was declined",
+      "code": "stripe_card_declined"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="stripe_config_not_found">
+    Stripe is not configured for your organization.
+    
+    ```json
+    {
+      "message": "Stripe configuration not found",
+      "code": "stripe_config_not_found"
+    }
+    ```
+    
+    **Solution:** Connect Stripe in the dashboard.
+  </Accordion>
+</AccordionGroup>
+
+### Internal Errors (500)
+
+<AccordionGroup>
+  <Accordion title="internal_error">
+    An unexpected error occurred on the server.
+    
+    ```json
+    {
+      "message": "Internal server error",
+      "code": "internal_error"
+    }
+    ```
+    
+    **Solution:** If this persists, contact Autumn support.
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling Best Practices
+
+### Check the Status Code
+
+```javascript
+const response = await fetch('https://api.useautumn.com/v1/customers', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ customer_id: 'cus_123' })
+});
+
+if (!response.ok) {
+  const error = await response.json();
+  console.error(`Error ${response.status}: ${error.code} - ${error.message}`);
+}
+```
+
+### Handle Specific Error Codes
+
+```javascript
+try {
+  const customer = await autumnClient.customers.create({ 
+    customer_id: 'cus_123' 
+  });
+} catch (error) {
+  switch (error.code) {
+    case 'duplicate_customer_id':
+      // Customer already exists, fetch instead
+      return await autumnClient.customers.retrieve('cus_123');
+    
+    case 'invalid_inputs':
+      // Validation error, log and notify user
+      console.error('Invalid customer data:', error.message);
+      break;
+    
+    case 'stripe_card_declined':
+      // Payment failed, prompt for new payment method
+      showPaymentError('Card declined');
+      break;
+    
+    default:
+      // Unexpected error
+      throw error;
+  }
+}
+```
+
+### Implement Retry Logic
+
+For `500` errors and rate limits, implement exponential backoff:
+
+```javascript
+async function fetchWithRetry(url, options, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    const response = await fetch(url, options);
+    
+    if (response.ok) {
+      return response;
+    }
+    
+    // Retry on 500 errors and rate limits
+    if (response.status >= 500 || response.status === 429) {
+      const delay = Math.pow(2, i) * 1000; // Exponential backoff
+      await new Promise(resolve => setTimeout(resolve, delay));
+      continue;
+    }
+    
+    // Don't retry client errors
+    throw new Error(`HTTP ${response.status}`);
+  }
+}
+```
+
+### Log Errors for Debugging
+
+Always log error details for troubleshooting:
+
+```javascript
+catch (error) {
+  console.error('Autumn API Error:', {
+    code: error.code,
+    message: error.message,
+    env: error.env,
+    timestamp: new Date().toISOString()
+  });
+}
+```
+
+## Complete Error Code Reference
+
+For a complete list of all error codes, see the table below:
+
+<Accordion title="View All Error Codes">
+
+| Error Code | Description |
+|------------|-------------|
+| `no_secret_key` | Missing Authorization header |
+| `invalid_secret_key` | Invalid API key |
+| `invalid_publishable_key` | Invalid publishable key |
+| `endpoint_not_public` | Endpoint requires secret key |
+| `invalid_api_version` | Invalid API version header |
+| `invalid_inputs` | Request validation failed |
+| `invalid_request` | Malformed request |
+| `invalid_options` | Invalid configuration |
+| `customer_not_found` | Customer doesn't exist |
+| `product_not_found` | Product doesn't exist |
+| `feature_not_found` | Feature doesn't exist |
+| `entity_not_found` | Entity doesn't exist |
+| `customer_already_has_product` | Duplicate subscription |
+| `insufficient_balance` | Not enough credits |
+| `feature_limit_reached` | Usage limit exceeded |
+| `duplicate_idempotency_key` | Idempotency key conflict |
+| `stripe_error` | Stripe processing error |
+| `stripe_card_declined` | Payment declined |
+| `stripe_config_not_found` | Stripe not configured |
+| `internal_error` | Server error |
+
+</Accordion>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Learn about authentication errors
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/api/rate-limits">
+    Understand rate limiting
+  </Card>
+</CardGroup>

@@ -1,0 +1,125 @@
+---
+title: "Get Referral Code"
+api: "POST /referrals"
+description: "Retrieve or create a referral code for a customer"
+---
+
+Retrieve an existing referral code for a customer, or create one if it doesn't exist. This endpoint is idempotent - calling it multiple times with the same parameters will return the same referral code.
+
+## Request
+
+<ParamField body="customer_id" type="string" required>
+  The unique identifier of the customer whose referral code you want to retrieve.
+</ParamField>
+
+<ParamField body="program_id" type="string" required>
+  The ID of your referral program.
+</ParamField>
+
+## Response
+
+<ResponseField name="code" type="string">
+  The referral code that can be shared with others. This is a unique alphanumeric code.
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  Your unique identifier for the customer who owns this referral code.
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp (milliseconds) when the referral code was originally created.
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```typescript TypeScript
+const response = await fetch('https://api.autumn.com/v1/referrals', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    customer_id: 'cus_123',
+    program_id: 'prog_abc'
+  })
+});
+
+const referral = await response.json();
+console.log(`Referral code: ${referral.code}`);
+console.log(`Created at: ${new Date(referral.created_at).toISOString()}`);
+```
+
+```python Python
+import requests
+from datetime import datetime
+
+response = requests.post(
+    'https://api.autumn.com/v1/referrals',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'customer_id': 'cus_123',
+        'program_id': 'prog_abc'
+    }
+)
+
+referral = response.json()
+print(f"Referral code: {referral['code']}")
+print(f"Created at: {datetime.fromtimestamp(referral['created_at']/1000).isoformat()}")
+```
+
+```bash cURL
+curl -X POST "https://api.autumn.com/v1/referrals" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "program_id": "prog_abc"
+  }'
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "code": "REF123ABC",
+  "customer_id": "cus_123",
+  "created_at": 1717000000000
+}
+```
+
+## Important Notes
+
+- This endpoint is **idempotent** - if the customer already has a referral code for this program, it will return the existing code rather than creating a new one.
+- The referral code is automatically generated and unique across your organization.
+- Use this endpoint when you need to display a customer's referral code in your application.
+
+## Error Handling
+
+<ResponseField name="400" type="error">
+  **Bad Request** - Invalid parameters. Common causes:
+  - Missing customer_id or program_id
+  - Invalid customer or program ID format
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  **Unauthorized** - Invalid or missing API key.
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  **Not Found** - Customer or referral program does not exist.
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  **Internal Server Error** - An unexpected error occurred on the server.
+</ResponseField>
+
+## Related Endpoints
+
+- [Redeem Referral](/api/redemptions/create) - Redeem a referral code
+- [Create Reward](/api/rewards/create) - Create rewards for referral programs

@@ -1,270 +1,580 @@
 ---
-title: 'Create Feature'
-description: 'Create a new feature in your organization'
-api: 'POST /v1/features'
+title: "Create Feature"
+description: "Define a new feature for usage tracking, metering, or credit systems"
 ---
 
-Creates a new feature that can be attached to products and tracked for usage.
+## Overview
 
-## Request Body
+Create a new feature to track usage, enforce limits, and enable usage-based billing. Features define what can be metered in your application - API calls, storage, credits, seats, or any custom resource.
+
+## Endpoint
+
+```
+POST /features
+```
+
+## Authentication
+
+This endpoint requires authentication. Include your API key in the `Authorization` header:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request
+
+### Body Parameters
 
 <ParamField body="id" type="string" required>
-  The unique identifier for the feature. Must be lowercase alphanumeric with underscores or hyphens. This is used to reference the feature in other API calls like `/track` or `/check`.
+  Unique identifier for the feature (e.g., `api-calls`, `storage`, `credits`). Used to reference this feature in other API calls like `/track` or `/check`.
   
-  Examples: `api_calls`, `team-seats`, `storage_gb`
+  Must match the pattern: lowercase letters, numbers, hyphens, and underscores only.
 </ParamField>
 
-<ParamField body="name" type="string" required>
-  The human-readable name of the feature.
-  
-  Examples: `API Calls`, `Team Seats`, `Storage (GB)`
+<ParamField body="name" type="string">
+  Human-readable name for the feature (e.g., "API Calls", "Storage", "Credits").
 </ParamField>
 
 <ParamField body="type" type="enum" required>
-  The type of the feature. Determines how the feature is tracked and consumed:
+  The type of feature to create:
   
+  - `metered` - Track consumable or continuous usage (API calls, storage, seats)
+  - `credit_system` - Universal currency that converts to metered features
   - `boolean` - Simple on/off feature flag
-  - `metered` - Usage-based feature with consumption tracking (requires `consumable` field)
-  - `credit_system` - Credit-based feature that unifies multiple metered features (requires `credit_schema` field)
+  
+  See [Feature Types](/concepts/features#feature-types) for details.
 </ParamField>
 
 <ParamField body="consumable" type="boolean">
-  Whether the feature is consumable. **Required for `metered` type features.**
+  **Required for metered features.** Specifies whether the feature is consumed or allocated:
   
-  - `true` - Consumable features are depleted with usage (e.g., API calls, tokens, messages)
-  - `false` - Non-consumable features are allocated (e.g., seats, workspaces, projects)
+  - `true` - Consumable (e.g., API tokens, credits, messages) - usage accumulates
+  - `false` - Allocated (e.g., seats, workspaces, projects) - usage is a snapshot
   
-  **Note:** Credit system features must always be consumable.
+  Not applicable for `boolean` or `credit_system` types.
+</ParamField>
+
+<ParamField body="credit_schema" type="array">
+  **Required for credit_system features.** Defines conversion rates from credits to metered features.
+  
+  <Expandable title="Credit Schema Item">
+    <ParamField body="metered_feature_id" type="string" required>
+      ID of the metered feature that can be purchased with credits.
+    </ParamField>
+    
+    <ParamField body="credit_cost" type="number" required>
+      Number of credits required per unit of the metered feature.
+    </ParamField>
+  </Expandable>
+  
+  Example:
+  ```json
+  [
+    {
+      "metered_feature_id": "api-calls",
+      "credit_cost": 1
+    },
+    {
+      "metered_feature_id": "storage-gb",
+      "credit_cost": 100
+    }
+  ]
+  ```
 </ParamField>
 
 <ParamField body="display" type="object">
-  Display names for the feature in your user interface.
+  Display names for proper pluralization in your UI.
   
-  <Expandable title="Display Object">
+  <Expandable title="properties">
     <ParamField body="singular" type="string">
-      Singular form of the feature name.
-      
-      Examples: `credit`, `seat`, `API call`
+      Singular form (e.g., "API Call", "Credit", "Seat").
     </ParamField>
     
     <ParamField body="plural" type="string">
-      Plural form of the feature name.
-      
-      Examples: `credits`, `seats`, `API calls`
+      Plural form (e.g., "API Calls", "Credits", "Seats").
     </ParamField>
   </Expandable>
 </ParamField>
 
 <ParamField body="event_names" type="array">
-  Array of event names that trigger usage tracking for this feature. When you call `/track` with one of these event names, usage will be recorded for this feature.
+  Optional array of event names that contribute to this feature's usage tracking. When specified, only events with these names will increment usage for this feature.
   
-  Example: `["api.call", "api.request"]`
-</ParamField>
-
-<ParamField body="credit_schema" type="array">
-  Credit conversion schema. **Required for `credit_system` type features.**
-  
-  Defines how different metered features consume credits from this credit system.
-  
-  <Expandable title="Credit Schema Item">
-    <ParamField body="metered_feature_id" type="string" required>
-      The ID of the metered feature that consumes credits.
-    </ParamField>
-    
-    <ParamField body="credit_cost" type="number" required>
-      The number of credits consumed per unit of the metered feature.
-      
-      Example: If `credit_cost` is 10, then using 1 unit of the metered feature consumes 10 credits.
-    </ParamField>
-  </Expandable>
+  Example: `["api_call", "api_request"]`
 </ParamField>
 
 ## Response
 
+### Success Response (200)
+
 Returns the created feature object.
 
-<ResponseField name="id" type="string" required>
+<ResponseField name="id" type="string">
   The unique identifier for the feature.
 </ResponseField>
 
-<ResponseField name="name" type="string" required>
+<ResponseField name="name" type="string">
   The human-readable name of the feature.
 </ResponseField>
 
-<ResponseField name="type" type="enum" required>
-  The type of the feature: `boolean`, `metered`, or `credit_system`.
+<ResponseField name="type" type="enum">
+  The feature type: `metered`, `credit_system`, or `boolean`.
 </ResponseField>
 
-<ResponseField name="consumable" type="boolean" required>
-  Whether the feature is consumable.
+<ResponseField name="consumable" type="boolean">
+  Whether the feature is consumable (true) or allocated (false). Only present for metered features.
+</ResponseField>
+
+<ResponseField name="credit_schema" type="array">
+  Credit conversion schema. Only present for credit_system features.
 </ResponseField>
 
 <ResponseField name="display" type="object">
   Display names for the feature.
+  
+  <Expandable title="properties">
+    <ResponseField name="singular" type="string">
+      Singular display name.
+    </ResponseField>
+    
+    <ResponseField name="plural" type="string">
+      Plural display name.
+    </ResponseField>
+  </Expandable>
 </ResponseField>
 
 <ResponseField name="event_names" type="array">
-  Array of event names that trigger usage tracking.
+  Array of event names that trigger this feature's usage tracking.
 </ResponseField>
 
-<ResponseField name="credit_schema" type="array">
-  Credit conversion schema (only for credit_system features).
-</ResponseField>
-
-<ResponseField name="archived" type="boolean" required>
+<ResponseField name="archived" type="boolean">
   Whether the feature is archived. Always `false` for newly created features.
 </ResponseField>
 
-<RequestExample>
-```bash cURL - Metered Feature
-curl -X POST https://api.useautumn.com/v1/features \
-  -H "Authorization: Bearer YOUR_SECRET_KEY" \
+## Examples
+
+### Metered Feature (Consumable)
+
+Create a feature for tracking API call usage:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/features \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "id": "api_calls",
+    "id": "api-calls",
     "name": "API Calls",
     "type": "metered",
     "consumable": true,
     "display": {
-      "singular": "API call",
-      "plural": "API calls"
+      "singular": "API Call",
+      "plural": "API Calls"
     },
-    "event_names": ["api.call"]
+    "event_names": ["api_call"]
   }'
 ```
 
-```bash cURL - Credit System
-curl -X POST https://api.useautumn.com/v1/features \
-  -H "Authorization: Bearer YOUR_SECRET_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "credits",
-    "name": "AI Credits",
-    "type": "credit_system",
-    "consumable": true,
-    "credit_schema": [
-      {
-        "metered_feature_id": "gpt4_tokens",
-        "credit_cost": 10
-      },
-      {
-        "metered_feature_id": "gpt3_tokens",
-        "credit_cost": 1
-      }
-    ]
-  }'
-```
+```typescript TypeScript
+import { AutumnClient } from '@useautumn/autumn-js';
 
-```javascript JavaScript
-const response = await fetch('https://api.useautumn.com/v1/features', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer YOUR_SECRET_KEY',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    id: 'api_calls',
-    name: 'API Calls',
-    type: 'metered',
-    consumable: true,
-    display: {
-      singular: 'API call',
-      plural: 'API calls'
-    },
-    event_names: ['api.call']
-  })
+const autumn = new AutumnClient({
+  apiKey: 'YOUR_API_KEY'
 });
 
-const feature = await response.json();
-console.log(feature);
+const feature = await autumn.features.create({
+  id: 'api-calls',
+  name: 'API Calls',
+  type: 'metered',
+  consumable: true,
+  display: {
+    singular: 'API Call',
+    plural: 'API Calls'
+  },
+  event_names: ['api_call']
+});
+
+console.log(`Feature created: ${feature.id}`);
 ```
 
 ```python Python
-import requests
+from autumn import AutumnClient
 
-response = requests.post(
-    'https://api.useautumn.com/v1/features',
-    headers={'Authorization': 'Bearer YOUR_SECRET_KEY'},
-    json={
-        'id': 'api_calls',
-        'name': 'API Calls',
-        'type': 'metered',
-        'consumable': True,
-        'display': {
-            'singular': 'API call',
-            'plural': 'API calls'
-        },
-        'event_names': ['api.call']
-    }
+autumn = AutumnClient(api_key='YOUR_API_KEY')
+
+feature = autumn.features.create(
+    id='api-calls',
+    name='API Calls',
+    type='metered',
+    consumable=True,
+    display={
+        'singular': 'API Call',
+        'plural': 'API Calls'
+    },
+    event_names=['api_call']
 )
 
-feature = response.json()
-print(feature)
+print(f"Feature created: {feature['id']}")
 ```
-</RequestExample>
 
-<ResponseExample>
-```json 200 - Success
+</CodeGroup>
+
+### Response
+
+```json
 {
-  "id": "api_calls",
+  "id": "api-calls",
   "name": "API Calls",
   "type": "metered",
   "consumable": true,
   "display": {
-    "singular": "API call",
-    "plural": "API calls"
+    "singular": "API Call",
+    "plural": "API Calls"
   },
-  "event_names": ["api.call"],
+  "event_names": ["api_call"],
   "archived": false
 }
 ```
 
-```json 400 - Validation Error
+### Metered Feature (Allocated)
+
+Create a feature for tracking team seats:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/features \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "seats",
+    "name": "Team Seats",
+    "type": "metered",
+    "consumable": false,
+    "display": {
+      "singular": "Seat",
+      "plural": "Seats"
+    }
+  }'
+```
+
+```typescript TypeScript
+const feature = await autumn.features.create({
+  id: 'seats',
+  name: 'Team Seats',
+  type: 'metered',
+  consumable: false,
+  display: {
+    singular: 'Seat',
+    plural: 'Seats'
+  }
+});
+```
+
+```python Python
+feature = autumn.features.create(
+    id='seats',
+    name='Team Seats',
+    type='metered',
+    consumable=False,
+    display={
+        'singular': 'Seat',
+        'plural': 'Seats'
+    }
+)
+```
+
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "id": "seats",
+  "name": "Team Seats",
+  "type": "metered",
+  "consumable": false,
+  "display": {
+    "singular": "Seat",
+    "plural": "Seats"
+  },
+  "archived": false
+}
+```
+
+### Credit System Feature
+
+Create a credit system that converts to multiple metered features:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/features \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "credits",
+    "name": "Platform Credits",
+    "type": "credit_system",
+    "credit_schema": [
+      {
+        "metered_feature_id": "api-calls",
+        "credit_cost": 1
+      },
+      {
+        "metered_feature_id": "storage-gb",
+        "credit_cost": 100
+      },
+      {
+        "metered_feature_id": "compute-hours",
+        "credit_cost": 50
+      }
+    ],
+    "display": {
+      "singular": "Credit",
+      "plural": "Credits"
+    }
+  }'
+```
+
+```typescript TypeScript
+const feature = await autumn.features.create({
+  id: 'credits',
+  name: 'Platform Credits',
+  type: 'credit_system',
+  credit_schema: [
+    {
+      metered_feature_id: 'api-calls',
+      credit_cost: 1
+    },
+    {
+      metered_feature_id: 'storage-gb',
+      credit_cost: 100
+    },
+    {
+      metered_feature_id: 'compute-hours',
+      credit_cost: 50
+    }
+  ],
+  display: {
+    singular: 'Credit',
+    plural: 'Credits'
+  }
+});
+```
+
+```python Python
+feature = autumn.features.create(
+    id='credits',
+    name='Platform Credits',
+    type='credit_system',
+    credit_schema=[
+        {
+            'metered_feature_id': 'api-calls',
+            'credit_cost': 1
+        },
+        {
+            'metered_feature_id': 'storage-gb',
+            'credit_cost': 100
+        },
+        {
+            'metered_feature_id': 'compute-hours',
+            'credit_cost': 50
+        }
+    ],
+    display={
+        'singular': 'Credit',
+        'plural': 'Credits'
+    }
+)
+```
+
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "id": "credits",
+  "name": "Platform Credits",
+  "type": "credit_system",
+  "consumable": true,
+  "credit_schema": [
+    {
+      "metered_feature_id": "api-calls",
+      "credit_cost": 1
+    },
+    {
+      "metered_feature_id": "storage-gb",
+      "credit_cost": 100
+    },
+    {
+      "metered_feature_id": "compute-hours",
+      "credit_cost": 50
+    }
+  ],
+  "display": {
+    "singular": "Credit",
+    "plural": "Credits"
+  },
+  "archived": false
+}
+```
+
+### Boolean Feature
+
+Create a simple on/off feature flag:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/features \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "advanced-analytics",
+    "name": "Advanced Analytics",
+    "type": "boolean"
+  }'
+```
+
+```typescript TypeScript
+const feature = await autumn.features.create({
+  id: 'advanced-analytics',
+  name: 'Advanced Analytics',
+  type: 'boolean'
+});
+```
+
+```python Python
+feature = autumn.features.create(
+    id='advanced-analytics',
+    name='Advanced Analytics',
+    type='boolean'
+)
+```
+
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "id": "advanced-analytics",
+  "name": "Advanced Analytics",
+  "type": "boolean",
+  "archived": false
+}
+```
+
+## Error Handling
+
+### Common Errors
+
+- **400 Bad Request**: Invalid request parameters
+  - Missing required fields (`id`, `type`)
+  - Invalid `id` format (must be lowercase with hyphens/underscores)
+  - Missing `consumable` for metered features
+  - Missing `credit_schema` for credit_system features
+  - Credit system features must be consumable
+- **401 Unauthorized**: Invalid or missing API key
+- **409 Conflict**: Feature with this ID already exists
+- **500 Internal Server Error**: Something went wrong on the server
+
+### Validation Examples
+
+**Missing consumable for metered feature:**
+
+```json
 {
   "error": {
     "message": "Please specify whether the feature is consumable",
     "code": "validation_error",
-    "field": "consumable"
+    "path": ["consumable"]
   }
 }
 ```
 
-```json 400 - Missing Credit Schema
+**Missing credit_schema for credit_system:**
+
+```json
 {
   "error": {
     "message": "Please specify the credit schema for the feature",
     "code": "validation_error",
-    "field": "credit_schema"
+    "path": ["credit_schema"]
   }
 }
 ```
 
-```json 409 - Already Exists
+**Invalid credit_system configuration:**
+
+```json
 {
   "error": {
-    "message": "Feature with id 'api_calls' already exists",
-    "code": "already_exists"
+    "message": "Credit system features must be consumable",
+    "code": "validation_error",
+    "path": ["consumable"]
   }
 }
 ```
-</ResponseExample>
 
-## Error Codes
+## Feature Configuration Best Practices
 
-| Status Code | Error Code | Description |
-|------------|------------|-------------|
-| 400 | `validation_error` | Invalid or missing required fields |
-| 401 | `unauthorized` | Invalid or missing API key |
-| 403 | `forbidden` | Insufficient permissions |
-| 409 | `already_exists` | A feature with this ID already exists |
-| 500 | `internal_error` | An unexpected error occurred |
+### Consumable vs Allocated
 
-## Validation Rules
+Choose the right configuration for your use case:
 
-- The `id` field must be unique within your organization
-- For `metered` type features, the `consumable` field is required
-- For `credit_system` type features:
-  - The `credit_schema` field is required
-  - The feature must be consumable (`consumable: true`)
-  - All referenced `metered_feature_id` values must exist as metered features
-- Credit system features cannot be non-consumable
+**Consumable features** (`consumable: true`):
+- API calls, tokens, messages
+- Credits or points
+- Processing time
+- Usage accumulates over time
+
+**Allocated features** (`consumable: false`):
+- Team seats or users
+- Projects or workspaces
+- Concurrent connections
+- Usage is a snapshot at a point in time
+
+### Credit System Design
+
+When creating credit systems:
+
+1. **Start with metered features** - Create all the metered features first
+2. **Define conversion rates** - Set appropriate credit costs based on resource value
+3. **Test the math** - Ensure credit costs align with your pricing model
+
+```typescript Example workflow
+// 1. Create metered features
+await autumn.features.create({
+  id: 'api-calls',
+  type: 'metered',
+  consumable: true
+});
+
+await autumn.features.create({
+  id: 'storage-gb',
+  type: 'metered',
+  consumable: true
+});
+
+// 2. Create credit system
+await autumn.features.create({
+  id: 'credits',
+  type: 'credit_system',
+  credit_schema: [
+    { metered_feature_id: 'api-calls', credit_cost: 1 },
+    { metered_feature_id: 'storage-gb', credit_cost: 100 }
+  ]
+});
+```
+
+## Related Resources
+
+- [Features Concept](/concepts/features) - Learn about feature types and configuration
+- [List Features](/api/features/list) - Retrieve all features
+- [Get Feature](/api/features/retrieve) - Retrieve a specific feature
+- [Update Feature](/api/features/update) - Modify feature configuration
+- [Track Usage](/api/track) - Send usage events for features
+- [Check Access](/api/check) - Verify feature access and limits

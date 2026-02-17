@@ -1,46 +1,14 @@
 ---
-title: "Create Customer"
-api: "POST /customers"
+title: "Retrieve Customer"
+api: "GET /customers/:customer_id"
 ---
 
-Creates a new customer in Autumn. If a customer with the provided ID already exists, this endpoint returns the existing customer.
+Retrieves the details of an existing customer. You can retrieve a customer by their unique ID.
 
-## Request Body
+## Path Parameters
 
-<ParamField body="id" type="string" required>
-  Your unique identifier for the customer. This will be used to reference the customer in future API calls.
-</ParamField>
-
-<ParamField body="name" type="string">
-  Customer's name.
-</ParamField>
-
-<ParamField body="email" type="string">
-  Customer's email address. Must be a valid email format.
-</ParamField>
-
-<ParamField body="fingerprint" type="string">
-  Unique identifier (e.g., device serial number) to detect duplicate customers and prevent free trial abuse.
-</ParamField>
-
-<ParamField body="metadata" type="object">
-  Additional metadata for the customer. Can store any key-value pairs.
-</ParamField>
-
-<ParamField body="stripe_id" type="string">
-  Stripe customer ID if you already have one. If provided, Autumn will link to this existing Stripe customer.
-</ParamField>
-
-<ParamField body="create_in_stripe" type="boolean">
-  Whether to create the customer in Stripe. Set to `true` to automatically create a corresponding Stripe customer.
-</ParamField>
-
-<ParamField body="auto_enable_plan_id" type="string">
-  The ID of the free plan to auto-enable for the customer upon creation.
-</ParamField>
-
-<ParamField body="send_email_receipts" type="boolean">
-  Whether to send email receipts to this customer for purchases and invoices.
+<ParamField path="customer_id" type="string" required>
+  The unique identifier of the customer to retrieve. This is the ID you provided when creating the customer.
 </ParamField>
 
 ## Query Parameters
@@ -51,7 +19,7 @@ Creates a new customer in Autumn. If a customer with the provided ID already exi
 
 ## Response
 
-Returns the created [Customer](/api/customers/retrieve#response) object.
+Returns a Customer object if a valid identifier was provided.
 
 <ResponseField name="id" type="string">
   Your unique identifier for the customer.
@@ -118,47 +86,33 @@ Example: `?expand[]=invoices&expand[]=payment_method`
 
 <RequestExample>
 ```bash cURL
-curl -X POST https://api.autumn.com/v1/customers \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "user_12345",
-    "name": "John Doe",
-    "email": "john.doe@example.com",
-    "metadata": {
-      "user_tier": "premium",
-      "signup_source": "web"
-    },
-    "create_in_stripe": true,
-    "send_email_receipts": true
-  }'
+curl -X GET https://api.autumn.com/v1/customers/user_12345 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```bash cURL with expand
+curl -X GET "https://api.autumn.com/v1/customers/user_12345?expand[]=invoices&expand[]=payment_method" \
+  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ```javascript JavaScript
-const customer = await autumn.customers.create({
-  id: 'user_12345',
-  name: 'John Doe',
-  email: 'john.doe@example.com',
-  metadata: {
-    user_tier: 'premium',
-    signup_source: 'web'
-  },
-  create_in_stripe: true,
-  send_email_receipts: true
+const customer = await autumn.customers.retrieve('user_12345');
+```
+
+```javascript JavaScript with expand
+const customer = await autumn.customers.retrieve('user_12345', {
+  expand: ['invoices', 'payment_method']
 });
 ```
 
 ```python Python
-customer = autumn.customers.create(
-    id="user_12345",
-    name="John Doe",
-    email="john.doe@example.com",
-    metadata={
-        "user_tier": "premium",
-        "signup_source": "web"
-    },
-    create_in_stripe=True,
-    send_email_receipts=True
+customer = autumn.customers.retrieve('user_12345')
+```
+
+```python Python with expand
+customer = autumn.customers.retrieve(
+    'user_12345',
+    expand=['invoices', 'payment_method']
 )
 ```
 </RequestExample>
@@ -170,7 +124,7 @@ customer = autumn.customers.create(
   "name": "John Doe",
   "email": "john.doe@example.com",
   "created_at": 1708473600,
-  "fingerprint": null,
+  "fingerprint": "device_abc123",
   "stripe_id": "cus_PQr8sT9uVwX1yZ",
   "env": "live",
   "metadata": {
@@ -178,9 +132,80 @@ customer = autumn.customers.create(
     "signup_source": "web"
   },
   "send_email_receipts": true,
-  "subscriptions": [],
+  "subscriptions": [
+    {
+      "id": "sub_xyz789",
+      "plan_id": "plan_premium",
+      "status": "active",
+      "current_period_start": 1708473600,
+      "current_period_end": 1711152000
+    }
+  ],
   "scheduled_subscriptions": [],
-  "balances": {}
+  "balances": {
+    "feat_api_calls": {
+      "feature_id": "feat_api_calls",
+      "balance": 10000,
+      "reset_at": 1711152000
+    }
+  }
+}
+```
+
+```json 200 with expanded fields
+{
+  "id": "user_12345",
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "created_at": 1708473600,
+  "fingerprint": "device_abc123",
+  "stripe_id": "cus_PQr8sT9uVwX1yZ",
+  "env": "live",
+  "metadata": {
+    "user_tier": "premium",
+    "signup_source": "web"
+  },
+  "send_email_receipts": true,
+  "subscriptions": [
+    {
+      "id": "sub_xyz789",
+      "plan_id": "plan_premium",
+      "status": "active",
+      "current_period_start": 1708473600,
+      "current_period_end": 1711152000
+    }
+  ],
+  "scheduled_subscriptions": [],
+  "balances": {
+    "feat_api_calls": {
+      "feature_id": "feat_api_calls",
+      "balance": 10000,
+      "reset_at": 1711152000
+    }
+  },
+  "invoices": [
+    {
+      "id": "inv_abc123",
+      "amount": 2999,
+      "status": "paid",
+      "created_at": 1708473600
+    }
+  ],
+  "payment_method": {
+    "type": "card",
+    "last4": "4242",
+    "brand": "visa"
+  }
+}
+```
+
+```json 404
+{
+  "error": {
+    "message": "Customer not found",
+    "code": "customer_not_found",
+    "status": 404
+  }
 }
 ```
 </ResponseExample>

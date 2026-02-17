@@ -1,0 +1,201 @@
+---
+title: "Get Balance"
+api: "POST /check"
+description: "Retrieve a customer's balance for a specific feature"
+---
+
+Retrieve the current balance for a specific feature and customer. This endpoint checks feature access and returns detailed balance information including granted amounts, usage, and reset schedules.
+
+## Request
+
+<ParamField body="customer_id" type="string" required>
+  The ID of the customer whose balance you want to retrieve.
+</ParamField>
+
+<ParamField body="feature_id" type="string" required>
+  The ID of the feature to check the balance for.
+</ParamField>
+
+<ParamField body="entity_id" type="string">
+  If using entity balances (e.g., seats), the entity ID to check the balance for.
+</ParamField>
+
+<ParamField body="customer_data" type="object">
+  Properties used if customer is automatically created. Will also update if the name or email is not already set.
+
+  <Expandable title="Customer Data Properties">
+    <ParamField body="name" type="string">
+      Customer's full name
+    </ParamField>
+    <ParamField body="email" type="string">
+      Customer's email address
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="skip_cache" type="boolean">
+  If true, bypasses the cache and fetches fresh data from the database.
+</ParamField>
+
+<ParamField query="expand" type="string[]">
+  Additional data to include in the response. Supports `balance.feature` to include full feature details.
+</ParamField>
+
+## Response
+
+<ResponseField name="allowed" type="boolean">
+  Whether the customer has access to the feature. Returns `true` if they have sufficient balance or unlimited access.
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  The ID of the customer.
+</ResponseField>
+
+<ResponseField name="entity_id" type="string" optional>
+  The entity ID if one was provided in the request.
+</ResponseField>
+
+<ResponseField name="balance" type="object">
+  The customer's current balance for this feature.
+
+  <Expandable title="Balance Object">
+    <ResponseField name="feature_id" type="string">
+      The ID of the feature.
+    </ResponseField>
+
+    <ResponseField name="granted" type="number">
+      The total balance granted from their subscription plans and prepaid amounts.
+    </ResponseField>
+
+    <ResponseField name="remaining" type="number">
+      The remaining balance available. Cannot go below 0.
+    </ResponseField>
+
+    <ResponseField name="usage" type="number">
+      The amount of the feature that has been consumed.
+    </ResponseField>
+
+    <ResponseField name="unlimited" type="boolean">
+      Whether the customer has unlimited access to this feature.
+    </ResponseField>
+
+    <ResponseField name="overage_allowed" type="boolean">
+      Whether the customer can exceed their granted balance (enabling pay-as-you-go billing).
+    </ResponseField>
+
+    <ResponseField name="max_purchase" type="number | null">
+      Maximum amount that can be purchased. `null` if unlimited.
+    </ResponseField>
+
+    <ResponseField name="next_reset_at" type="number | null">
+      Unix timestamp (milliseconds) when the balance will next reset, or null if no reset is scheduled.
+    </ResponseField>
+
+    <ResponseField name="breakdown" type="array" optional>
+      Detailed breakdown of balance by plan and entitlement.
+    </ResponseField>
+
+    <ResponseField name="rollovers" type="array" optional>
+      Information about rolled over balance from previous periods.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```typescript TypeScript
+const response = await fetch('https://api.autumn.com/v1/check', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    customer_id: 'cus_123',
+    feature_id: 'api_calls'
+  })
+});
+
+const result = await response.json();
+console.log(`Access allowed: ${result.allowed}`);
+console.log(`Remaining balance: ${result.balance.remaining}`);
+console.log(`Usage: ${result.balance.usage}`);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.autumn.com/v1/check',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'customer_id': 'cus_123',
+        'feature_id': 'api_calls'
+    }
+)
+
+result = response.json()
+print(f"Access allowed: {result['allowed']}")
+print(f"Remaining balance: {result['balance']['remaining']}")
+print(f"Usage: {result['balance']['usage']}")
+```
+
+```bash cURL
+curl -X POST "https://api.autumn.com/v1/check" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_123",
+    "feature_id": "api_calls"
+  }'
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "allowed": true,
+  "customer_id": "cus_123",
+  "balance": {
+    "feature_id": "api_calls",
+    "granted": 10000,
+    "remaining": 7500,
+    "usage": 2500,
+    "unlimited": false,
+    "overage_allowed": true,
+    "max_purchase": null,
+    "next_reset_at": 1717200000000
+  }
+}
+```
+
+## Error Handling
+
+<ResponseField name="400" type="error">
+  **Bad Request** - Missing or invalid request parameters.
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  **Unauthorized** - Invalid or missing API key.
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  **Not Found** - Customer or feature does not exist.
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  **Internal Server Error** - An unexpected error occurred on the server.
+</ResponseField>
+
+## Related Endpoints
+
+- [List Balances](/api/balances/list) - Get all balances for a customer
+- [Track](/api/track) - Record usage events
+- [Create Balance](/api/balances/create) - Create a standalone balance

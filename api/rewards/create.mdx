@@ -1,0 +1,236 @@
+---
+title: "Create Reward"
+api: "POST /rewards"
+description: "Create a new reward (coupon) for discounts or free products"
+---
+
+Create a reward that can be used to offer discounts or free products to customers. Rewards can be configured as percentage or fixed-amount discounts, or as free product grants.
+
+## Request
+
+<ParamField body="id" type="string" required>
+  Unique identifier for the reward. This is your custom ID for the reward.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Display name for the reward.
+</ParamField>
+
+<ParamField body="promo_codes" type="array" required>
+  Array of promotional codes that can be used to apply this reward.
+
+  <Expandable title="Promo Code Object">
+    <ParamField body="code" type="string" required>
+      The promotional code string (e.g., "SUMMER2024").
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="type" type="enum">
+  The type of reward. Options:
+  - `discount` - Percentage or fixed-amount discount
+  - `free_product` - Free product grant
+</ParamField>
+
+<ParamField body="discount_config" type="object">
+  Configuration for discount rewards. Required if type is `discount`.
+
+  <Expandable title="Discount Config">
+    <ParamField body="discount_value" type="number" required>
+      The discount amount. For percentage discounts, this is a value between 0-100. For fixed discounts, this is the amount in cents.
+    </ParamField>
+
+    <ParamField body="duration_type" type="enum" required>
+      How long the discount applies:
+      - `once` - Applied once
+      - `forever` - Applied to all future invoices
+      - `repeating` - Applied for a specific number of billing cycles
+    </ParamField>
+
+    <ParamField body="duration_value" type="number" required>
+      Number of billing cycles the discount applies (only used when duration_type is `repeating`).
+    </ParamField>
+
+    <ParamField body="should_rollover" type="boolean">
+      Whether unused discount should roll over to the next period.
+    </ParamField>
+
+    <ParamField body="apply_to_all" type="boolean">
+      Whether to apply the discount to all products.
+    </ParamField>
+
+    <ParamField body="price_ids" type="array">
+      Array of specific price IDs to apply the discount to (if not applying to all).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="free_product_id" type="string">
+  The product ID to grant for free. Required if type is `free_product`.
+</ParamField>
+
+<ParamField body="free_product_config" type="object">
+  Configuration for free product rewards. Required if type is `free_product`.
+
+  <Expandable title="Free Product Config">
+    <ParamField body="duration_type" type="enum" required>
+      How long the free product is granted:
+      - `once` - One-time grant
+      - `forever` - Permanent access
+      - `repeating` - Granted for a specific number of billing cycles
+    </ParamField>
+
+    <ParamField body="duration_value" type="number" required>
+      Number of billing cycles the free product applies (only used when duration_type is `repeating`).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response
+
+Returns the created reward object with all configuration details and automatically generated fields.
+
+<ResponseField name="id" type="string">
+  Your unique identifier for the reward.
+</ResponseField>
+
+<ResponseField name="internal_id" type="string">
+  System-generated internal identifier.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Display name for the reward.
+</ResponseField>
+
+<ResponseField name="type" type="enum">
+  The type of reward: `discount` or `free_product`.
+</ResponseField>
+
+<ResponseField name="promo_codes" type="array">
+  Array of promotional code objects.
+</ResponseField>
+
+<ResponseField name="discount_config" type="object | null">
+  Discount configuration if applicable.
+</ResponseField>
+
+<ResponseField name="free_product_id" type="string | null">
+  Free product ID if applicable.
+</ResponseField>
+
+<ResponseField name="free_product_config" type="object | null">
+  Free product configuration if applicable.
+</ResponseField>
+
+<ResponseField name="org_id" type="string">
+  Organization ID.
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  Environment: `production` or `development`.
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp (milliseconds) when the reward was created.
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```typescript TypeScript
+// Create a discount reward
+const response = await fetch('https://api.autumn.com/v1/rewards', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    id: 'summer-discount',
+    name: 'Summer 2024 Discount',
+    promo_codes: [{ code: 'SUMMER2024' }],
+    type: 'discount',
+    discount_config: {
+      discount_value: 20,
+      duration_type: 'once',
+      duration_value: 1,
+      apply_to_all: true
+    }
+  })
+});
+
+const reward = await response.json();
+console.log(`Created reward: ${reward.id}`);
+```
+
+```python Python
+import requests
+
+# Create a free product reward
+response = requests.post(
+    'https://api.autumn.com/v1/rewards',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'id': 'free-trial',
+        'name': 'Free Trial Product',
+        'promo_codes': [{'code': 'FREETRIAL'}],
+        'type': 'free_product',
+        'free_product_id': 'pro-plan',
+        'free_product_config': {
+            'duration_type': 'repeating',
+            'duration_value': 3
+        }
+    }
+)
+
+reward = response.json()
+print(f"Created reward: {reward['id']}")
+```
+
+```bash cURL
+curl -X POST "https://api.autumn.com/v1/rewards" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "summer-discount",
+    "name": "Summer 2024 Discount",
+    "promo_codes": [{"code": "SUMMER2024"}],
+    "type": "discount",
+    "discount_config": {
+      "discount_value": 20,
+      "duration_type": "once",
+      "duration_value": 1,
+      "apply_to_all": true
+    }
+  }'
+```
+</CodeGroup>
+
+## Error Handling
+
+<ResponseField name="400" type="error">
+  **Bad Request** - Invalid parameters. Common causes:
+  - Missing required fields
+  - Invalid discount or free product configuration
+  - Duplicate reward ID
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  **Unauthorized** - Invalid or missing API key.
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  **Conflict** - A reward with this ID already exists.
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  **Internal Server Error** - An unexpected error occurred on the server.
+</ResponseField>
+
+## Related Endpoints
+
+- [Get Reward](/api/rewards/retrieve) - Retrieve a specific reward
+- [Create Referral](/api/referrals/create) - Create a referral code

@@ -1,0 +1,120 @@
+---
+title: 'Self-Hosting Overview'
+description: 'Deploy and manage your own Autumn instance'
+---
+
+## Introduction
+
+Autumn can be self-hosted, giving you full control over your billing infrastructure. This guide covers everything you need to deploy and maintain your own Autumn instance.
+
+## Architecture
+
+Autumn consists of several core services:
+
+- **Server**: Express.js API server handling billing operations
+- **Workers**: BullMQ background workers for async processing
+- **Vite**: React frontend dashboard
+- **Valkey**: Redis-compatible cache for queue management
+- **PostgreSQL**: Primary database for billing data
+
+## Prerequisites
+
+Before self-hosting Autumn, ensure you have:
+
+- **Bun** v1.3.2 or higher ([install from bun.sh](https://bun.sh))
+- **Docker** and Docker Compose
+- **PostgreSQL** database (v14 or higher)
+- **Stripe** account for payment processing
+
+<Note>
+  We recommend using [Supabase](https://supabase.com) for managed PostgreSQL hosting, but any PostgreSQL instance will work.
+</Note>
+
+## Quick Start
+
+Get Autumn running locally in under 5 minutes:
+
+```bash
+# Install dependencies
+bun install
+
+# Run setup script to configure environment
+bun setup
+
+# Generate database schema
+bun db:generate && bun db:migrate
+
+# Start services
+docker compose -f docker-compose.unix.yml up  # Mac/Linux
+docker compose -f docker-compose.dev.yml up   # Windows
+```
+
+The dashboard will be available at `http://localhost:3000`.
+
+<Warning>
+  The setup script will prompt you for an OTP code in the terminal when signing in. For production deployments, configure email providers (Resend) or Google OAuth.
+</Warning>
+
+## Deployment Options
+
+### Development
+
+For local development with hot reload:
+
+- Use `docker-compose.unix.yml` (Mac/Linux) or `docker-compose.dev.yml` (Windows)
+- Source code is mounted as volumes for live updates
+- Includes localtunnel service for webhook testing
+
+### Production
+
+For production deployments:
+
+- Build the production Docker image from `docker/Dockerfile`
+- Set `NODE_ENV=production`
+- Use managed services for PostgreSQL and Redis
+- Configure proper secrets and encryption keys
+
+See [Docker Deployment](/self-hosting/docker-deployment) for detailed instructions.
+
+## Key Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Full Data Control" icon="database">
+    All billing data stays in your infrastructure
+  </Card>
+  <Card title="Custom Integrations" icon="plug">
+    Extend Autumn with custom logic and integrations
+  </Card>
+  <Card title="No Usage Limits" icon="infinity">
+    Scale without per-seat or usage-based pricing
+  </Card>
+  <Card title="Open Source" icon="code">
+    Audit, modify, and contribute to the codebase
+  </Card>
+</CardGroup>
+
+## Support & Updates
+
+When self-hosting:
+
+- Monitor the [GitHub repository](https://github.com/useautumn/autumn) for updates
+- Join the [Discord community](https://discord.gg/STqxY92zuS) for support
+- Follow migration guides when upgrading between versions
+- Review the changelog before updating production instances
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="gear" href="/self-hosting/environment-variables">
+    Configure your Autumn instance
+  </Card>
+  <Card title="Database Setup" icon="database" href="/self-hosting/database-setup">
+    Set up and migrate your database
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/self-hosting/docker-deployment">
+    Deploy with Docker Compose
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Integrate Autumn into your app
+  </Card>
+</CardGroup>

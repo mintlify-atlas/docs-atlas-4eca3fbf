@@ -1,0 +1,490 @@
+---
+title: "Attaching Products"
+description: "Learn how to subscribe customers to products and manage their subscriptions programmatically"
+---
+
+## Overview
+
+The `/attach` endpoint subscribes customers to products, enabling them to access features and starting billing. Use attach to programmatically manage customer subscriptions from your application.
+
+## When to Use Attach
+
+Use the attach endpoint when:
+
+- **Customer has payment method** - They've already provided payment information
+- **Internal provisioning** - Admin dashboard or support tools
+- **Free plans** - No payment required
+- **Trial activation** - Starting trial periods
+- **Upgrades/downgrades** - Changing existing subscriptions
+
+<Info>
+For new customers without payment info, use the [Checkout API](/api/checkout) instead.
+</Info>
+
+## Basic Product Attachment
+
+<Steps>
+  <Step title="Attach a product">
+    Call the `/attach` endpoint with customer and product IDs:
+
+    ```typescript
+    import { Autumn } from '@useautumn/sdk';
+
+    const autumn = new Autumn({ apiKey: process.env.AUTUMN_API_KEY });
+
+    const result = await autumn.attach({
+      customer_id: 'customer_123',
+      product_id: 'pro_plan'
+    });
+
+    console.log(result.message); // "Product attached successfully"
+    ```
+  </Step>
+
+  <Step title="Handle the response">
+    Check if the attachment was successful:
+
+    ```typescript
+    if (result.success) {
+      // Product attached successfully
+      console.log('Subscription activated');
+      
+      // Provision access in your system
+      await enableFeatures(result.customer_id, result.product_ids);
+    }
+    ```
+  </Step>
+
+  <Step title="Handle checkout requirement">
+    If payment is required, the response includes a checkout URL:
+
+    ```typescript
+    if (result.checkout_url) {
+      // Redirect customer to complete payment
+      return {
+        message: 'Payment required',
+        redirect_url: result.checkout_url
+      };
+    }
+    ```
+  </Step>
+</Steps>
+
+## Attaching Multiple Products
+
+Subscribe a customer to multiple products at once:
+
+```typescript
+const result = await autumn.attach({
+  customer_id: 'customer_123',
+  product_ids: ['base_plan', 'addon_analytics', 'addon_priority_support']
+});
+
+console.log(`Attached ${result.product_ids.length} products`);
+```
+
+## Upgrading Plans
+
+Change a customer's subscription to a higher tier:
+
+```typescript
+// Customer currently on 'starter_plan'
+const result = await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'pro_plan'
+});
+
+// Autumn automatically:
+// - Prorates the upgrade
+// - Charges the difference
+// - Updates feature access
+// - Maintains the billing cycle
+```
+
+<Tip>
+Upgrades are typically prorated and charged immediately. Configure proration settings in your product configuration.
+</Tip>
+
+## Downgrading Plans
+
+Move a customer to a lower tier:
+
+```typescript
+const result = await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'starter_plan'
+});
+
+// By default, downgrades take effect at the end of the billing period
+// The customer keeps pro access until then
+```
+
+## Setting Feature Quantities
+
+For seat-based or quantity-based features:
+
+```typescript
+const result = await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'team_plan',
+  options: [
+    {
+      feature_id: 'seats',
+      quantity: 5
+    }
+  ]
+});
+
+// Update quantity later
+const updated = await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'team_plan',
+  options: [
+    {
+      feature_id: 'seats',
+      quantity: 10  // Increase to 10 seats
+    }
+  ]
+});
+```
+
+## Starting Free Trials
+
+Attach a product with a free trial:
+
+```typescript
+// Use product's default trial settings
+const result = await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'pro_plan',
+  free_trial: true
+});
+
+// Override trial duration
+const customTrial = await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'pro_plan',
+  free_trial: true,
+  trial_days: 30
+});
+```
+
+## Entity-Scoped Products
+
+Attach products scoped to specific entities:
+
+```typescript
+// Attach a product for a specific workspace
+const result = await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'workspace_pro',
+  entity_id: 'workspace_456'
+});
+
+// Each workspace can have its own subscription
+const workspace2 = await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'workspace_starter',
+  entity_id: 'workspace_789'
+});
+```
+
+## Handling New Customers
+
+Automatically create customers when attaching:
+
+```typescript
+const result = await autumn.attach({
+  customer_id: 'new_customer_456',
+  product_id: 'pro_plan',
+  customer_data: {
+    name: 'Jane Smith',
+    email: 'jane@example.com'
+  }
+});
+
+// Customer is created if it doesn't exist
+// Or updated if name/email are not set
+```
+
+## Forcing Checkout
+
+Force a checkout flow even if payment method exists:
+
+```typescript
+const result = await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'enterprise_plan',
+  force_checkout: true,
+  success_url: 'https://example.com/success',
+  cancel_url: 'https://example.com/cancel'
+});
+
+if (result.checkout_url) {
+  // Redirect to checkout
+  return { redirect: result.checkout_url };
+}
+```
+
+Useful when:
+- You want customer to review charges
+- Collecting updated payment information
+- Large price changes requiring explicit confirmation
+
+## Admin Provisioning
+
+Implement admin tools to manage customer subscriptions:
+
+```typescript
+import { Request, Response } from 'express';
+
+// Admin endpoint to provision subscriptions
+app.post('/admin/subscriptions/attach',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const { customer_id, product_id, reason } = req.body;
+
+    try {
+      const result = await autumn.attach({
+        customer_id,
+        product_id
+      });
+
+      // Log admin action
+      await auditLog({
+        action: 'attach_product',
+        admin: req.user.id,
+        customer: customer_id,
+        product: product_id,
+        reason
+      });
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+```
+
+## Self-Service Upgrades
+
+Let customers upgrade themselves:
+
+```typescript
+app.post('/api/upgrade',
+  authenticate,
+  async (req: Request, res: Response) => {
+    const customerId = req.user.autumnCustomerId;
+    const { plan_id } = req.body;
+
+    // Validate plan is an upgrade
+    const currentPlan = await getCurrentPlan(customerId);
+    if (!isUpgrade(currentPlan, plan_id)) {
+      return res.status(400).json({ error: 'Invalid upgrade path' });
+    }
+
+    try {
+      const result = await autumn.attach({
+        customer_id: customerId,
+        product_id: plan_id
+      });
+
+      if (result.checkout_url) {
+        // Payment info needed
+        return res.json({
+          success: false,
+          checkout_required: true,
+          checkout_url: result.checkout_url
+        });
+      }
+
+      // Upgraded successfully
+      return res.json({
+        success: true,
+        message: 'Plan upgraded successfully',
+        new_plan: plan_id
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+);
+```
+
+## Handling Proration
+
+Understand proration in upgrades:
+
+```typescript
+const result = await autumn.attach({
+  customer_id: 'customer_123',
+  product_id: 'pro_plan'
+});
+
+if (result.invoice) {
+  // Check prorated amount
+  console.log('Prorated charge:', result.invoice.amount);
+  console.log('Breakdown:', result.invoice.line_items);
+}
+```
+
+## Error Handling
+
+Handle common attach errors:
+
+```typescript
+try {
+  const result = await autumn.attach({
+    customer_id: 'customer_123',
+    product_id: 'pro_plan'
+  });
+
+  return result;
+} catch (error) {
+  if (error.code === 'customer_not_found') {
+    // Create customer first
+    await autumn.customers.create({
+      customer_id: 'customer_123',
+      email: 'user@example.com'
+    });
+    
+    // Retry attach
+    return await autumn.attach({
+      customer_id: 'customer_123',
+      product_id: 'pro_plan'
+    });
+  }
+
+  if (error.code === 'product_not_found') {
+    return {
+      error: 'Invalid plan selected',
+      code: 'invalid_plan'
+    };
+  }
+
+  if (error.code === 'payment_method_required') {
+    // Redirect to checkout
+    return {
+      error: 'Payment method required',
+      action: 'collect_payment'
+    };
+  }
+
+  if (error.code === 'already_subscribed') {
+    return {
+      error: 'Already subscribed to this plan',
+      code: 'duplicate_subscription'
+    };
+  }
+
+  // Unknown error
+  console.error('Attach failed:', error);
+  throw error;
+}
+```
+
+## Webhooks After Attach
+
+Listen for webhooks to provision access:
+
+```typescript
+app.post('/webhooks/autumn', async (req, res) => {
+  const event = verifyWebhook(req);
+
+  if (event.type === 'customer.product.created') {
+    const { customer_id, product_id, status } = event.data;
+
+    if (status === 'active') {
+      // Provision access immediately
+      await enableFeatures(customer_id, product_id);
+
+      // Send welcome email
+      await sendEmail({
+        to: await getCustomerEmail(customer_id),
+        template: 'subscription_started',
+        data: { product_id }
+      });
+    }
+  }
+
+  if (event.type === 'customer.product.updated') {
+    // Handle upgrades/downgrades
+    await updateFeatureAccess(event.data.customer_id);
+  }
+
+  res.json({ received: true });
+});
+```
+
+## Testing Attach Flows
+
+Test subscription flows in development:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+
+describe('Attach Product', () => {
+  it('should attach product to customer', async () => {
+    const result = await autumn.attach({
+      customer_id: 'test_customer',
+      product_id: 'pro_plan'
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.product_ids).toContain('pro_plan');
+  });
+
+  it('should handle upgrade with proration', async () => {
+    // First attach starter plan
+    await autumn.attach({
+      customer_id: 'test_customer',
+      product_id: 'starter_plan'
+    });
+
+    // Then upgrade to pro
+    const result = await autumn.attach({
+      customer_id: 'test_customer',
+      product_id: 'pro_plan'
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.invoice).toBeDefined();
+    expect(result.invoice.amount).toBeGreaterThan(0);
+  });
+});
+```
+
+## Best Practices
+
+<Card title="Use webhooks for provisioning" icon="webhook">
+  Always provision access via webhooks, not directly after attach calls.
+</Card>
+
+<Card title="Handle checkout redirects" icon="arrow-right">
+  Check for `checkout_url` in responses and redirect customers when needed.
+</Card>
+
+<Card title="Log admin actions" icon="file-lines">
+  Audit all admin-initiated subscription changes for accountability.
+</Card>
+
+<Card title="Validate upgrades" icon="shield-check">
+  Verify that plan changes are valid for your business logic.
+</Card>
+
+<Card title="Communicate changes" icon="envelope">
+  Always email customers about subscription changes, especially downgrades.
+</Card>
+
+<Card title="Test proration" icon="calculator">
+  Thoroughly test upgrade/downgrade flows to ensure proration works correctly.
+</Card>
+
+## Related Resources
+
+- [Subscriptions Guide](/guides/subscriptions)
+- [Attach API Reference](/api/attach)
+- [Checkout API Reference](/api/checkout)
+- [Webhooks Guide](/guides/handling-webhooks)
+- [Products Concept](/concepts/products-and-plans)

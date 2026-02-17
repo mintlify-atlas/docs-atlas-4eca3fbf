@@ -1,12 +1,12 @@
 ---
-title: 'Check Feature Access'
-api: 'POST /check'
-description: 'Check whether a customer has access to a feature and retrieve their current balance'
+title: 'Track Event'
+api: 'POST /track'
+description: 'Record usage events for metered features and track customer activity'
 ---
 
 ## Overview
 
-The check endpoint verifies whether a customer has access to a specific feature and returns their current balance. This is commonly used to implement feature gates and display usage limits in your application.
+The track endpoint records usage events for metered features and enables usage-based billing. Each call increments usage counters and deducts from the customer's balance according to their plan limits.
 
 ## Authentication
 
@@ -19,55 +19,67 @@ Authorization: Bearer YOUR_API_KEY
 ## Request Body
 
 <ParamField body="customer_id" type="string" required>
-  The ID of the customer to check access for.
+  The ID of the customer tracking usage.
 
   ```json
   "cus_123"
   ```
 </ParamField>
 
-<ParamField body="feature_id" type="string" required>
-  The ID of the feature to check access to.
+<ParamField body="feature_id" type="string">
+  The ID of the feature to track usage for. Required if `event_name` is not provided. Use this for direct feature tracking.
 
   ```json
   "api_calls"
   ```
 </ParamField>
 
-<ParamField body="entity_id" type="string">
-  If using entity balances (e.g., seats), the entity ID to check access for.
+<ParamField body="event_name" type="string">
+  An event name can be used in place of `feature_id`. This can be used if multiple features are tracked in the same event. See [event-based tracking](/features/tracking-usage#using-event-names) for more details.
 
   ```json
-  "entity_123"
+  "api.request.sent"
   ```
 </ParamField>
 
-<ParamField body="required_balance" type="number">
-  If you know the amount of the feature the end user is consuming in advance. If their balance is below this quantity, `allowed` will be false.
+<ParamField body="value" type="number">
+  The amount of usage to record. Defaults to `1`. Can be negative to increase the balance (e.g., when removing a seat).
 
   ```json
   5
   ```
 </ParamField>
 
-<ParamField body="send_event" type="boolean">
-  If true, a usage event will be recorded together with checking access. The `required_balance` field will be used as the usage value.
+<ParamField body="entity_id" type="string">
+  If using entity balances (e.g., seats), the entity ID to track usage for.
 
   ```json
-  false
+  "entity_123"
   ```
 </ParamField>
 
-<ParamField body="with_preview" type="boolean">
-  If true, the response will include a preview object, which can be used to display information such as a paywall or upgrade confirmation.
+<ParamField body="properties" type="object">
+  Additional properties to attach to this usage event. Useful for analytics and filtering.
 
   ```json
-  false
+  {
+    "endpoint": "/api/users",
+    "method": "POST",
+    "region": "us-east-1"
+  }
+  ```
+</ParamField>
+
+<ParamField body="idempotency_key" type="string">
+  Unique key to prevent duplicate event recording. Use this to safely retry requests without creating duplicate usage records.
+
+  ```json
+  "evt_abc123xyz789"
   ```
 </ParamField>
 
 <ParamField body="customer_data" type="object">
-  Properties used if customer is automatically created. Will also update if the name or email is not already set.
+  Additional customer properties. These will be used to create or update the customer if they don't exist or their properties are not already set.
 
   <Expandable title="Customer Data Properties">
     <ParamField body="name" type="string">
@@ -79,10 +91,21 @@ Authorization: Bearer YOUR_API_KEY
   </Expandable>
 </ParamField>
 
+<ParamField body="overage_behavior" type="string">
+  How to handle usage when balance is insufficient.
+  
+  - `cap` - Limits usage to available balance
+  - `reject` - Prevents the usage entirely and returns an error
+
+  ```json
+  "cap"
+  ```
+</ParamField>
+
 ## Query Parameters
 
 <ParamField query="skip_cache" type="boolean">
-  If true, bypasses the cache and fetches fresh data from the database.
+  If true, bypasses the cache and writes directly to the database.
 
   ```
   ?skip_cache=true
@@ -99,10 +122,6 @@ Authorization: Bearer YOUR_API_KEY
 
 ## Response
 
-<ResponseField name="allowed" type="boolean">
-  Whether the customer has access to the feature. Returns `true` if they have sufficient balance or unlimited access.
-</ResponseField>
-
 <ResponseField name="customer_id" type="string">
   The ID of the customer.
 </ResponseField>
@@ -111,12 +130,16 @@ Authorization: Bearer YOUR_API_KEY
   The entity ID if one was provided in the request.
 </ResponseField>
 
-<ResponseField name="required_balance" type="number" optional>
-  The required balance amount that was checked.
+<ResponseField name="event_name" type="string" optional>
+  The name of the event that was tracked.
+</ResponseField>
+
+<ResponseField name="value" type="number">
+  The amount of usage that was recorded.
 </ResponseField>
 
 <ResponseField name="balance" type="object">
-  The customer's current balance for this feature.
+  The customer's updated balance for this feature after recording the usage.
 
   <Expandable title="Balance Object">
     <ResponseField name="feature_id" type="string">
@@ -136,15 +159,15 @@ Authorization: Bearer YOUR_API_KEY
     </ResponseField>
 
     <ResponseField name="current_balance" type="number">
-      The remaining balance available. This is `granted_balance + purchased_balance - usage`.
+      The remaining balance available after this usage event.
     </ResponseField>
 
     <ResponseField name="usage" type="number">
-      The amount of the feature that has been consumed.
+      The total amount of the feature that has been consumed.
     </ResponseField>
 
     <ResponseField name="overage_allowed" type="boolean">
-      Whether the customer can exceed their granted balance (enabling pay-as-you-go billing).
+      Whether the customer can exceed their granted balance.
     </ResponseField>
 
     <ResponseField name="max_purchase" type="number" optional>
@@ -175,20 +198,25 @@ Authorization: Bearer YOUR_API_KEY
   </Expandable>
 </ResponseField>
 
-<ResponseField name="preview" type="object" optional>
-  Preview information for paywalls and upgrade flows (only included if `with_preview: true`).
+<ResponseField name="balances" type="object" optional>
+  If tracking an event that affects multiple features, this contains a map of feature IDs to their updated balances.
 </ResponseField>
 
 ## Example Request
 
 <CodeGroup>
 ```bash cURL
-curl -X POST https://api.useautumn.com/check \
+curl -X POST https://api.useautumn.com/track \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "customer_id": "cus_123",
-    "feature_id": "api_calls"
+    "feature_id": "api_calls",
+    "value": 1,
+    "properties": {
+      "endpoint": "/api/users",
+      "method": "POST"
+    }
   }'
 ```
 
@@ -197,17 +225,17 @@ import { Autumn } from '@useautumn/sdk';
 
 const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
 
-const result = await autumn.check({
+const result = await autumn.track({
   customer_id: 'cus_123',
-  feature_id: 'api_calls'
+  feature_id: 'api_calls',
+  value: 1,
+  properties: {
+    endpoint: '/api/users',
+    method: 'POST'
+  }
 });
 
-if (result.allowed) {
-  console.log('Access granted');
-  console.log(`Remaining: ${result.balance.current_balance}`);
-} else {
-  console.log('Access denied - upgrade required');
-}
+console.log(`Remaining balance: ${result.balance.current_balance}`);
 ```
 
 ```python Python
@@ -215,16 +243,17 @@ from autumn import Autumn
 
 autumn = Autumn(api_key='YOUR_API_KEY')
 
-result = autumn.check(
+result = autumn.track(
   customer_id='cus_123',
-  feature_id='api_calls'
+  feature_id='api_calls',
+  value=1,
+  properties={
+    'endpoint': '/api/users',
+    'method': 'POST'
+  }
 )
 
-if result['allowed']:
-    print('Access granted')
-    print(f"Remaining: {result['balance']['current_balance']}")
-else:
-    print('Access denied - upgrade required')
+print(f"Remaining balance: {result['balance']['current_balance']}")
 ```
 </CodeGroup>
 
@@ -232,15 +261,15 @@ else:
 
 ```json
 {
-  "allowed": true,
   "customer_id": "cus_123",
+  "value": 1,
   "balance": {
     "feature_id": "api_calls",
     "unlimited": false,
     "granted_balance": 10000,
     "purchased_balance": 0,
-    "current_balance": 7500,
-    "usage": 2500,
+    "current_balance": 7499,
+    "usage": 2501,
     "overage_allowed": true,
     "max_purchase": null,
     "reset": {
@@ -262,6 +291,8 @@ else:
       Common error codes:
       - `customer_not_found` - The specified customer does not exist
       - `feature_not_found` - The specified feature does not exist
+      - `insufficient_balance` - Customer doesn't have enough balance (when `overage_behavior: "reject"`)
+      - `duplicate_event` - Event with this idempotency key was already processed
       - `invalid_parameters` - Missing or invalid request parameters
     </ResponseField>
     <ResponseField name="message" type="string">
@@ -270,8 +301,21 @@ else:
   </Expandable>
 </ResponseField>
 
+## Idempotency
+
+Use the `idempotency_key` parameter to safely retry track requests. If you send multiple requests with the same idempotency key, only the first request will be processed. Subsequent requests will return the result of the first request.
+
+```json
+{
+  "customer_id": "cus_123",
+  "feature_id": "api_calls",
+  "value": 1,
+  "idempotency_key": "evt_unique_identifier_123"
+}
+```
+
 ## Related Endpoints
 
-- [Track](/api/track) - Record usage events for metered features
-- [Attach](/api/attach) - Enable products for customers
+- [Check](/api/billing/check) - Verify customer access before usage
+- [Events List](/api/events/list) - Query historical usage events
 - [Balances List](/api/balances/list) - Get all balances for a customer

@@ -1,52 +1,38 @@
 ---
 title: "List Customers"
-description: "Retrieve a paginated list of customers with optional filtering"
+api: "POST /customers/list"
 ---
 
-## Overview
+Retrieves a paginated list of customers. Use this endpoint to browse through all customers in your organization.
 
-Retrieve a paginated list of all customers in your account. You can filter customers by plan subscriptions, search by customer details, and control pagination.
+<Note>
+  This endpoint uses `POST` instead of `GET` to support complex filtering options in the request body.
+</Note>
 
-## Endpoint
+## Request Body
 
-```
-POST /customers/list
-```
-
-## Authentication
-
-This endpoint requires authentication. Include your API key in the `Authorization` header:
-
-```
-Authorization: Bearer YOUR_API_KEY
-```
-
-## Request
-
-### Body Parameters
-
-<ParamField body="offset" type="number" default="0">
-  Number of items to skip before returning results. Use for pagination.
+<ParamField body="limit" type="number" default={10}>
+  Number of items to return. Default is 10, maximum is 1000.
 </ParamField>
 
-<ParamField body="limit" type="number" default="10">
-  Number of items to return per page. Default is 10, maximum is 1000.
+<ParamField body="offset" type="number" default={0}>
+  Number of items to skip before returning results. Use this for pagination.
 </ParamField>
 
 <ParamField body="plans" type="array">
-  Filter customers by active plan subscriptions. Each object contains:
-  - `id` (string, required): The plan ID
-  - `versions` (number[], optional): Specific plan versions to filter by
+  Filter by plan ID and version. Returns customers with active subscriptions to the specified plan(s).
   
-  Example: `[{ "id": "pro-plan", "versions": [1, 2] }]`
+  Each item should be an object with:
+  - `id` (string, required) - The plan ID
+  - `versions` (number[], optional) - Specific plan versions to filter by
 </ParamField>
 
-<ParamField body="subscription_status" type="enum">
+<ParamField body="subscription_status" type="string">
   Filter by customer product status. Options:
-  - `active` - Customers with active subscriptions
-  - `scheduled` - Customers with scheduled subscriptions
+  - `active` - Only customers with active subscriptions
+  - `scheduled` - Only customers with scheduled subscriptions
   
-  Defaults to returning both active and scheduled.
+  If not provided, returns customers with both active and scheduled subscriptions.
 </ParamField>
 
 <ParamField body="search" type="string">
@@ -55,165 +41,43 @@ Authorization: Bearer YOUR_API_KEY
 
 ## Response
 
-### Success Response (200)
+Returns a paginated list of [Customer](/api/customers/retrieve#response) objects.
 
 <ResponseField name="list" type="array">
-  Array of customer objects matching the query.
-  
-  <ResponseField name="list[].id" type="string | null">
-    Your unique identifier for the customer.
-  </ResponseField>
-  
-  <ResponseField name="list[].name" type="string | null">
-    Customer's name.
-  </ResponseField>
-  
-  <ResponseField name="list[].email" type="string | null">
-    Customer's email address.
-  </ResponseField>
-  
-  <ResponseField name="list[].created_at" type="number">
-    Unix timestamp when the customer was created.
-  </ResponseField>
-  
-  <ResponseField name="list[].fingerprint" type="string | null">
-    Unique device identifier used to prevent trial abuse.
-  </ResponseField>
-  
-  <ResponseField name="list[].stripe_id" type="string | null">
-    Stripe customer ID if using Stripe for payments.
-  </ResponseField>
-  
-  <ResponseField name="list[].env" type="enum">
-    Environment: `production` or `development`.
-  </ResponseField>
-  
-  <ResponseField name="list[].metadata" type="object">
-    Custom metadata attached to the customer.
-  </ResponseField>
-  
-  <ResponseField name="list[].send_email_receipts" type="boolean">
-    Whether to send email receipts to this customer.
-  </ResponseField>
-</ResponseField>
-
-<ResponseField name="has_more" type="boolean">
-  Whether more results exist after this page. Use to determine if you should fetch the next page.
-</ResponseField>
-
-<ResponseField name="offset" type="number">
-  Current offset position in the result set.
-</ResponseField>
-
-<ResponseField name="limit" type="number">
-  Number of items per page as specified in the request.
+  Array of Customer objects for the current page.
 </ResponseField>
 
 <ResponseField name="total" type="number">
   Total number of items returned in the current page.
 </ResponseField>
 
-## Examples
+<ResponseField name="limit" type="number">
+  The limit that was used in the request.
+</ResponseField>
 
-### Request Example
+<ResponseField name="offset" type="number">
+  The offset that was used in the request.
+</ResponseField>
 
-<CodeGroup>
+<ResponseField name="has_more" type="boolean">
+  Whether more results exist after this page. Use this to determine if you should fetch the next page.
+</ResponseField>
 
-```bash cURL
-curl -X POST https://api.autumnhq.com/v1/customers/list \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "limit": 50,
-    "offset": 0,
-    "search": "john",
-    "subscription_status": "active"
-  }'
-```
+## Pagination
 
-```typescript TypeScript
-import { AutumnClient } from '@useautumn/autumn-js';
+To paginate through results:
 
-const autumn = new AutumnClient({
-  apiKey: 'YOUR_API_KEY'
-});
-
-const customers = await autumn.customers.list({
-  limit: 50,
-  offset: 0,
-  search: 'john',
-  subscription_status: 'active'
-});
-
-console.log(`Found ${customers.list.length} customers`);
-console.log(`Has more: ${customers.has_more}`);
-```
-
-```python Python
-from autumn import AutumnClient
-
-autumn = AutumnClient(api_key='YOUR_API_KEY')
-
-customers = autumn.customers.list(
-    limit=50,
-    offset=0,
-    search='john',
-    subscription_status='active'
-)
-
-print(f"Found {len(customers['list'])} customers")
-print(f"Has more: {customers['has_more']}")
-```
-
-</CodeGroup>
-
-### Response Example
-
-```json
-{
-  "list": [
-    {
-      "id": "cus_123",
-      "name": "John Doe",
-      "email": "john@example.com",
-      "created_at": 1672531200,
-      "fingerprint": "fp_abc123",
-      "stripe_id": "cus_stripe_abc",
-      "env": "production",
-      "metadata": {
-        "company": "Acme Corp"
-      },
-      "send_email_receipts": true
-    }
-  ],
-  "has_more": true,
-  "offset": 0,
-  "limit": 50,
-  "total": 50
-}
-```
-
-## Error Handling
-
-### Common Errors
-
-- **400 Bad Request**: Invalid request parameters (e.g., limit exceeds maximum)
-- **401 Unauthorized**: Invalid or missing API key
-- **500 Internal Server Error**: Something went wrong on the server
-
-### Pagination Best Practices
-
-To paginate through all customers:
-
-1. Start with `offset: 0`
+1. Start with `offset: 0` and your desired `limit`
 2. Check the `has_more` field in the response
-3. If `has_more` is `true`, increment offset by the limit and make another request
+3. If `has_more` is `true`, increment `offset` by `limit` and make another request
 4. Continue until `has_more` is `false`
 
-```typescript
+**Example pagination:**
+
+```javascript
 let offset = 0;
 const limit = 100;
-const allCustomers = [];
+let allCustomers = [];
 
 while (true) {
   const response = await autumn.customers.list({ limit, offset });
@@ -224,9 +88,158 @@ while (true) {
 }
 ```
 
-## Related Resources
+## Filtering by Plans
 
-- [Customers Concept](/concepts/customers) - Learn about customer management in Autumn
-- [Create Customer](/api/customers/create) - Create a new customer
-- [Get Customer](/api/customers/get) - Retrieve a specific customer
-- [Dashboard Customers](/dashboard/customers) - Manage customers in the dashboard
+You can filter customers who are subscribed to specific plans:
+
+```json
+{
+  "plans": [
+    {
+      "id": "plan_premium"
+    },
+    {
+      "id": "plan_enterprise",
+      "versions": [2, 3]
+    }
+  ]
+}
+```
+
+This returns customers subscribed to:
+- Any version of `plan_premium`, OR
+- Version 2 or 3 of `plan_enterprise`
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.autumn.com/v1/customers/list \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "limit": 25,
+    "offset": 0
+  }'
+```
+
+```bash cURL - With filters
+curl -X POST https://api.autumn.com/v1/customers/list \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "limit": 50,
+    "offset": 0,
+    "search": "example.com",
+    "subscription_status": "active",
+    "plans": [
+      {
+        "id": "plan_premium"
+      }
+    ]
+  }'
+```
+
+```javascript JavaScript
+const response = await autumn.customers.list({
+  limit: 25,
+  offset: 0
+});
+
+console.log(`Retrieved ${response.total} customers`);
+console.log(`Has more: ${response.has_more}`);
+```
+
+```javascript JavaScript - With filters
+const response = await autumn.customers.list({
+  limit: 50,
+  offset: 0,
+  search: 'example.com',
+  subscription_status: 'active',
+  plans: [
+    { id: 'plan_premium' }
+  ]
+});
+```
+
+```python Python
+response = autumn.customers.list(
+    limit=25,
+    offset=0
+)
+
+print(f"Retrieved {response.total} customers")
+print(f"Has more: {response.has_more}")
+```
+
+```python Python - With filters
+response = autumn.customers.list(
+    limit=50,
+    offset=0,
+    search='example.com',
+    subscription_status='active',
+    plans=[
+        {'id': 'plan_premium'}
+    ]
+)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "list": [
+    {
+      "id": "user_12345",
+      "name": "John Doe",
+      "email": "john.doe@example.com",
+      "created_at": 1708473600,
+      "fingerprint": "device_abc123",
+      "stripe_id": "cus_PQr8sT9uVwX1yZ",
+      "env": "live",
+      "metadata": {
+        "user_tier": "premium"
+      },
+      "send_email_receipts": true,
+      "subscriptions": [
+        {
+          "id": "sub_xyz789",
+          "plan_id": "plan_premium",
+          "status": "active"
+        }
+      ],
+      "scheduled_subscriptions": [],
+      "balances": {}
+    },
+    {
+      "id": "user_67890",
+      "name": "Jane Smith",
+      "email": "jane.smith@example.com",
+      "created_at": 1708560000,
+      "fingerprint": null,
+      "stripe_id": "cus_ABC123xyz",
+      "env": "live",
+      "metadata": {},
+      "send_email_receipts": false,
+      "subscriptions": [],
+      "scheduled_subscriptions": [],
+      "balances": {}
+    }
+  ],
+  "total": 2,
+  "limit": 25,
+  "offset": 0,
+  "has_more": false
+}
+```
+
+```json 200 - With more results
+{
+  "list": [
+    // ... 100 customer objects
+  ],
+  "total": 100,
+  "limit": 100,
+  "offset": 0,
+  "has_more": true
+}
+```
+</ResponseExample>

@@ -1,0 +1,538 @@
+---
+title: "Usage-Based Pricing"
+description: "Charge customers based on their actual consumption with pay-as-you-go and metered billing"
+---
+
+## Overview
+
+Usage-based pricing charges customers for their actual consumption of your service. This aligns costs with value and scales naturally as customers grow.
+
+**Common use cases:**
+- API calls and requests
+- Storage (GB, TB)
+- Compute time (CPU hours, GPU minutes)
+- Data transfer (bandwidth)
+- Messages sent or emails delivered
+- AI model API calls
+
+## How Usage-Based Pricing Works
+
+Usage-based pricing consists of:
+- **Feature** - The metric you're tracking (e.g., API calls)
+- **Usage tracking** - Recording consumption via `/track`
+- **Billing** - Charging based on usage at period end
+- **Tiers** - Optional volume discounts
+
+```typescript
+{
+  type: "priced_feature",
+  feature_id: "api_calls",
+  price: 10,                  // $0.10 per unit
+  billing_units: 1000,        // Bill per 1,000 calls
+  usage_model: "pay_per_use", // Charge for actual usage
+  interval: "month"
+}
+```
+
+## Setting Up Usage-Based Pricing
+
+<Steps>
+  <Step title="Create a metered feature">
+    Define what you want to track:
+
+    ```typescript
+    const feature = await autumn.features.create({
+      name: "API Calls",
+      key: "api_calls",
+      config: {
+        usage_type: "continuous_use"  // Metered feature
+      }
+    });
+    ```
+
+    <Info>Learn more about [Features](/concepts/features)</Info>
+  </Step>
+
+  <Step title="Create a product with usage pricing">
+    Add usage-based pricing to your product:
+
+    ```typescript
+    const product = await autumn.products.create({
+      name: "Pay As You Go",
+      items: [
+        {
+          type: "priced_feature",
+          feature_id: feature.id,
+          price: 10,              // $0.10 per 1,000 calls
+          billing_units: 1000,
+          usage_model: "pay_per_use",
+          interval: "month"
+        }
+      ]
+    });
+    ```
+  </Step>
+
+  <Step title="Attach the product to customers">
+    Subscribe customers to your usage-based product:
+
+    ```typescript
+    await autumn.attach({
+      customer_id: "customer_123",
+      product_id: product.id
+    });
+    ```
+
+    <Info>Learn more about the [Attach API](/api/billing/attach)</Info>
+  </Step>
+
+  <Step title="Track usage as it occurs">
+    Report usage events in real-time:
+
+    ```typescript
+    await autumn.track({
+      customer_id: "customer_123",
+      feature_id: feature.id,
+      value: 1  // Increment by 1 API call
+    });
+    ```
+
+    <Info>Learn more about the [Track API](/api/billing/track)</Info>
+  </Step>
+</Steps>
+
+## Usage Models
+
+### Pay Per Use (Postpaid)
+
+Charge customers for usage at the end of each billing period:
+
+```typescript
+{
+  type: "priced_feature",
+  feature_id: "api_calls",
+  price: 10,                  // $0.10 per 1,000 calls
+  billing_units: 1000,
+  usage_model: "pay_per_use", // Bill in arrears
+  interval: "month"
+}
+```
+
+Usage accumulates throughout the month and is billed when the subscription renews.
+
+**When to use:**
+- Unpredictable usage patterns
+- Customers prefer paying only for what they use
+- High-volume usage
+
+### Prepaid Credits
+
+Customers buy credits upfront, usage depletes the balance:
+
+```typescript
+{
+  type: "priced_feature",
+  feature_id: "api_calls",
+  included_usage: 10000,      // 10,000 calls included
+  price: 10,                  // $0.10 per 1,000 overages
+  billing_units: 1000,
+  usage_model: "prepaid",     // Prepaid credits
+  interval: "month"
+}
+```
+
+<Info>Learn more about [Credits Pricing](/pricing-models/credits)</Info>
+
+## Billing Units
+
+Billing units let you charge per group of usage instead of per individual event:
+
+```typescript
+// Charge $1 per 1,000 API calls
+{
+  price: 100,              // 100 cents = $1.00
+  billing_units: 1000      // Per 1,000 units
+}
+
+// Usage: 5,432 calls
+// Billable units: 5,432 / 1,000 = 5.432
+// Charge: 5.432 × $1.00 = $5.43
+```
+
+### Common Billing Unit Patterns
+
+```typescript
+// Per individual unit
+{ price: 5, billing_units: 1 }        // $0.05 per call
+
+// Per 100 units
+{ price: 10, billing_units: 100 }     // $0.10 per 100 calls
+
+// Per 1,000 units
+{ price: 100, billing_units: 1000 }   // $1.00 per 1,000 calls
+
+// Per 10,000 units
+{ price: 1000, billing_units: 10000 } // $10.00 per 10k calls
+```
+
+<Tip>
+Use larger billing units (1,000 or 10,000) for high-frequency events to simplify pricing and reduce decimal places.
+</Tip>
+
+## Tiered Pricing
+
+Offer volume discounts with graduated tiers:
+
+```typescript
+{
+  type: "priced_feature",
+  feature_id: "api_calls",
+  usage_model: "pay_per_use",
+  interval: "month",
+  billing_units: 1000,
+  tiers: [
+    {
+      to: 10,           // First 10k calls
+      amount: 100       // $1.00 per 1k
+    },
+    {
+      to: 100,          // Next 90k calls (10k-100k)
+      amount: 80        // $0.80 per 1k
+    },
+    {
+      to: "inf",        // Beyond 100k
+      amount: 50        // $0.50 per 1k
+    }
+  ]
+}
+```
+
+**Billing calculation:**
+- Customer uses 125,000 calls
+- First 10,000: 10 × $1.00 = $10.00
+- Next 90,000: 90 × $0.80 = $72.00
+- Last 25,000: 25 × $0.50 = $12.50
+- **Total: $94.50**
+
+<Note>
+Autumn uses **graduated (tiered) pricing** by default, where each tier applies only to usage within that range.
+</Note>
+
+## Tracking Usage
+
+### Incrementing Usage
+
+Add to the customer's usage counter:
+
+```typescript
+// Track each API call
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1
+});
+
+// Track batch of calls
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 50  // 50 calls at once
+});
+```
+
+### Setting Absolute Values
+
+For gauge metrics like storage, set the current total:
+
+```typescript
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "storage_gb",
+  value: 150,           // Customer now using 150 GB
+  set_usage: true       // Set absolute value
+});
+```
+
+### Idempotent Tracking
+
+Prevent duplicate charges with idempotency keys:
+
+```typescript
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1,
+  idempotency_key: `api_call_${requestId}`
+});
+```
+
+If you retry with the same idempotency key, usage is only recorded once.
+
+### Batch Tracking
+
+For high-volume scenarios, batch your tracking calls:
+
+```typescript
+// Aggregate locally, then track in batches
+const usageBuffer = {};
+
+function recordUsage(customerId: string, featureId: string) {
+  const key = `${customerId}:${featureId}`;
+  usageBuffer[key] = (usageBuffer[key] || 0) + 1;
+}
+
+// Flush every 10 seconds
+setInterval(async () => {
+  for (const [key, value] of Object.entries(usageBuffer)) {
+    const [customerId, featureId] = key.split(':');
+    await autumn.track({
+      customer_id: customerId,
+      feature_id: featureId,
+      value
+    });
+  }
+  usageBuffer = {};
+}, 10000);
+```
+
+<Warning>
+For very high-frequency tracking (>100 requests/second per customer), use local aggregation to avoid rate limits.
+</Warning>
+
+## Monitoring Usage
+
+Check current usage before billing:
+
+```typescript
+const customer = await autumn.customers.retrieve({
+  customer_id: "customer_123"
+});
+
+const apiCallsBalance = customer.balances?.find(
+  b => b.feature_id === "api_calls"
+);
+
+console.log({
+  used: apiCallsBalance.used,
+  period_start: apiCallsBalance.period_start,
+  period_end: apiCallsBalance.period_end,
+  estimated_cost: calculateCost(apiCallsBalance.used)
+});
+```
+
+## Included Allowances
+
+Combine fixed base prices with included usage:
+
+```typescript
+const product = await autumn.products.create({
+  name: "Pro Plan",
+  items: [
+    {
+      type: "price",
+      price: 2900,            // $29/month base
+      interval: "month"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 10000,  // 10k calls included
+      price: 10,              // $0.10 per 1k overage
+      billing_units: 1000,
+      usage_model: "pay_per_use",
+      interval: "month"
+    }
+  ]
+});
+```
+
+Customers pay $29/month and get 10,000 API calls. Usage beyond 10,000 costs $0.10 per 1,000 calls.
+
+## Overage Handling
+
+### Allow Overages (Default)
+
+Continue tracking usage beyond the allowance:
+
+```typescript
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1
+  // Tracks even if allowance is exceeded
+});
+```
+
+Overages are automatically billed at the end of the period.
+
+### Block Overages
+
+Reject usage when the allowance is exhausted:
+
+```typescript
+try {
+  await autumn.track({
+    customer_id: "customer_123",
+    feature_id: "api_calls",
+    value: 1,
+    overage_behavior: "reject"
+  });
+} catch (error) {
+  if (error.code === "insufficient_balance") {
+    // Customer has no remaining allowance
+    return { error: "API limit exceeded" };
+  }
+}
+```
+
+### Check Before Usage
+
+Verify balance before expensive operations:
+
+```typescript
+const check = await autumn.check({
+  customer_id: "customer_123",
+  feature_id: "api_calls"
+});
+
+if (!check.has_access) {
+  return { error: "API limit exceeded" };
+}
+
+// Proceed with API call
+await processApiRequest();
+
+// Track usage
+await autumn.track({
+  customer_id: "customer_123",
+  feature_id: "api_calls",
+  value: 1
+});
+```
+
+<Info>Learn more about the [Check API](/api/billing/check)</Info>
+
+## Dashboard Configuration
+
+1. Navigate to **Products** → **Create Product**
+2. Click **Add Item** → **Priced Feature**
+3. Select or create a metered feature
+4. Choose **Usage Model**:
+   - **Pay Per Use** - Bill at period end
+   - **Prepaid** - Deduct from prepaid balance
+5. Set **Price** (in cents)
+6. Set **Billing Units** (e.g., 1000 for per-1k pricing)
+7. Optionally add **Included Usage**
+8. For tiered pricing, click **Add Tier**
+9. Save the product
+
+## Best Practices
+
+<Card title="Track usage in real-time" icon="clock">
+  Report usage as it happens, not in end-of-day batches. This ensures accurate billing and better customer visibility.
+</Card>
+
+<Card title="Use consistent feature keys" icon="key">
+  Always use the same `feature_id` for a given metric. Inconsistent tracking causes billing errors.
+</Card>
+
+<Card title="Implement usage alerts" icon="bell">
+  Notify customers when they approach limits to avoid surprise bills or service interruptions.
+</Card>
+
+<Card title="Provide usage dashboards" icon="chart-line">
+  Show customers real-time usage so they can monitor consumption and control costs.
+</Card>
+
+<Card title="Test with small volumes" icon="flask">
+  Start with low-volume testing to verify tracking works correctly before production traffic.
+</Card>
+
+<Card title="Use idempotency keys" icon="shield">
+  Always include idempotency keys for retryable operations to prevent duplicate charges.
+</Card>
+
+## Common Patterns
+
+### Pure Pay-As-You-Go
+
+```typescript
+const payg = await autumn.products.create({
+  name: "Pay As You Go",
+  items: [
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      price: 5,
+      billing_units: 100,
+      usage_model: "pay_per_use",
+      interval: "month"
+    }
+  ]
+});
+```
+
+### Base + Overage
+
+```typescript
+const baseOverage = await autumn.products.create({
+  name: "Starter Plan",
+  items: [
+    { type: "price", price: 900, interval: "month" },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 5000,
+      price: 10,
+      billing_units: 1000,
+      usage_model: "pay_per_use",
+      interval: "month"
+    }
+  ]
+});
+```
+
+### Multiple Metered Features
+
+```typescript
+const multiMetered = await autumn.products.create({
+  name: "Platform Plan",
+  items: [
+    { type: "price", price: 4900, interval: "month" },
+    {
+      type: "priced_feature",
+      feature_id: "api_calls",
+      included_usage: 100000,
+      price: 10,
+      billing_units: 1000,
+      usage_model: "pay_per_use",
+      interval: "month"
+    },
+    {
+      type: "priced_feature",
+      feature_id: "storage_gb",
+      included_usage: 100,
+      price: 50,  // $0.50 per GB overage
+      usage_model: "pay_per_use",
+      interval: "month"
+    }
+  ]
+});
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Track API" icon="activity" href="/api/billing/track">
+    Send usage events for billing
+  </Card>
+  <Card title="Check API" icon="shield-check" href="/api/billing/check">
+    Verify customer access and balance
+  </Card>
+  <Card title="Features" icon="puzzle-piece" href="/concepts/features">
+    Learn about metered features
+  </Card>
+  <Card title="Credits Pricing" icon="coins" href="/pricing-models/credits">
+    Prepaid credits and balances
+  </Card>
+</CardGroup>

@@ -1,0 +1,655 @@
+---
+title: "Installation"
+description: "Deploy Autumn to the cloud or self-host on your own infrastructure"
+---
+
+## Overview
+
+Autumn can be deployed in two ways:
+
+1. **Cloud**: Use our managed service at [app.useautumn.com](https://app.useautumn.com) (recommended for getting started)
+2. **Self-Hosted**: Deploy Autumn on your own infrastructure for full control
+
+This guide covers both options.
+
+## Cloud Setup
+
+The quickest way to start using Autumn is through our cloud service.
+
+<Steps>
+  <Step title="Create an account">
+    Sign up at [app.useautumn.com](https://app.useautumn.com) using your email or Google account.
+  </Step>
+  
+  <Step title="Connect Stripe">
+    Navigate to **Settings** → **Integrations** and connect your Stripe account.
+    
+    <Warning>
+      Make sure to use test mode during development. Switch to live mode when you're ready for production.
+    </Warning>
+  </Step>
+  
+  <Step title="Get your API keys">
+    Go to **Settings** → **API Keys** to get your Secret Key and Public Key.
+    
+    - **Secret Key**: Use for server-side API calls
+    - **Public Key**: Use for client-side SDK initialization
+  </Step>
+  
+  <Step title="Install the SDK">
+    <CodeGroup>
+    ```bash npm
+    npm install autumn-js
+    ```
+    
+    ```bash yarn
+    yarn add autumn-js
+    ```
+    
+    ```bash python
+    pip install autumn-python
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Initialize the client">
+    ```typescript
+    import Autumn from 'autumn-js';
+    
+    const autumn = new Autumn({
+      apiKey: process.env.AUTUMN_SECRET_KEY
+    });
+    ```
+  </Step>
+</Steps>
+
+<Check>
+  You're all set! Head to the [Quickstart guide](/quickstart) to build your first integration.
+</Check>
+
+## Self-Hosted Setup
+
+Self-hosting Autumn gives you complete control over your billing infrastructure. Follow this guide to deploy Autumn on your own servers.
+
+### Requirements
+
+Before you begin, ensure you have:
+
+- **Node.js** 18+ (or Bun runtime)
+- **Bun** package manager ([install here](https://bun.sh))
+- **PostgreSQL** database (Supabase, AWS RDS, or self-hosted)
+- **Redis** instance (Upstash, AWS ElastiCache, or self-hosted)
+- **Docker** and **Docker Compose** (recommended)
+- **Stripe** account with API keys
+
+### Quick Start (Recommended)
+
+The fastest way to get Autumn running locally:
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/useautumn/autumn.git
+    cd autumn
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    ```bash
+    bun install
+    ```
+  </Step>
+  
+  <Step title="Run the setup script">
+    ```bash
+    bun setup
+    ```
+    
+    This interactive script will:
+    - Generate encryption keys and secrets
+    - Optionally create a Supabase database
+    - Configure a localtunnel for Stripe webhooks
+    - Create your `.env` files
+  </Step>
+  
+  <Step title="Initialize the database">
+    ```bash
+    bun db:generate && bun db:migrate
+    ```
+    
+    This creates all required database tables and indexes.
+  </Step>
+  
+  <Step title="Start Autumn">
+    <Tabs>
+      <Tab title="macOS / Linux">
+        ```bash
+        docker compose -f docker-compose.unix.yml up
+        ```
+      </Tab>
+      <Tab title="Windows">
+        ```bash
+        docker compose -f docker-compose.dev.yml up
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Access the dashboard">
+    Open [http://localhost:3000](http://localhost:3000) in your browser.
+    
+    <Info>
+      When you sign in, an OTP will appear in your terminal. In production, configure Resend for email OTPs or Google OAuth.
+    </Info>
+  </Step>
+</Steps>
+
+<Check>
+  Autumn is now running! The API is available at `http://localhost:8080` and the dashboard at `http://localhost:3000`.
+</Check>
+
+### Manual Setup
+
+For production deployments or custom configurations:
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/useautumn/autumn.git
+    cd autumn
+    ```
+  </Step>
+  
+  <Step title="Configure environment variables">
+    Copy the example environment file:
+    
+    ```bash
+    cp server/.env.example server/.env
+    cp vite/.env.example vite/.env
+    ```
+    
+    Edit `server/.env` with your configuration. See [Environment Variables](#environment-variables) below.
+  </Step>
+  
+  <Step title="Set up your database">
+    Create a PostgreSQL database and add the connection string to `server/.env`:
+    
+    ```bash
+    DATABASE_URL=postgresql://user:password@host:5432/autumn
+    ```
+    
+    Then generate and run migrations:
+    
+    ```bash
+    bun db:generate
+    bun db:migrate
+    ```
+  </Step>
+  
+  <Step title="Configure Redis">
+    Add your Redis connection string to `server/.env`:
+    
+    ```bash
+    REDIS_URL=redis://localhost:6379
+    # or for Upstash:
+    REDIS_URL=rediss://:password@host.upstash.io:6379
+    ```
+  </Step>
+  
+  <Step title="Set up Stripe webhooks">
+    Configure a public URL for receiving webhooks:
+    
+    - **Development**: Use localtunnel, ngrok, or cloudflared
+    - **Production**: Use your domain
+    
+    Add to `server/.env`:
+    ```bash
+    STRIPE_WEBHOOK_URL=https://your-domain.com
+    ```
+  </Step>
+  
+  <Step title="Start the services">
+    Using Docker Compose:
+    ```bash
+    docker compose -f docker-compose.unix.yml up
+    ```
+    
+    Or start services individually:
+    ```bash
+    # Terminal 1: Server
+    cd server
+    bun run dev
+    
+    # Terminal 2: Frontend
+    cd vite
+    bun run dev
+    
+    # Terminal 3: Workers
+    cd server
+    bun run workers
+    ```
+  </Step>
+</Steps>
+
+### Environment Variables
+
+Here are the key environment variables you need to configure in `server/.env`:
+
+<Accordion title="Required Variables">
+  <ParamField path="BETTER_AUTH_SECRET" type="string" required>
+    Secret key for authentication. Generate with: `openssl rand -base64 64`
+  </ParamField>
+  
+  <ParamField path="BETTER_AUTH_URL" type="string" required default="http://localhost:8080">
+    Base URL for the Autumn API server.
+  </ParamField>
+  
+  <ParamField path="CLIENT_URL" type="string" required default="http://localhost:3000">
+    URL where the Autumn dashboard is hosted.
+  </ParamField>
+  
+  <ParamField path="DATABASE_URL" type="string" required>
+    PostgreSQL connection string.
+    
+    Example: `postgresql://user:password@host:5432/autumn`
+  </ParamField>
+  
+  <ParamField path="ENCRYPTION_IV" type="string" required>
+    Initialization vector for encrypting Stripe API keys. Generate with: `openssl rand -base64 16`
+  </ParamField>
+  
+  <ParamField path="ENCRYPTION_PASSWORD" type="string" required>
+    Password for encrypting Stripe API keys. Generate with: `openssl rand -base64 64`
+  </ParamField>
+  
+  <ParamField path="STRIPE_WEBHOOK_URL" type="string" required>
+    Public URL for receiving Stripe webhooks. In development, use localtunnel or ngrok.
+  </ParamField>
+</Accordion>
+
+<Accordion title="Optional Variables">
+  <ParamField path="REDIS_URL" type="string" default="redis://localhost:6379">
+    Redis connection string. Required for production.
+  </ParamField>
+  
+  <ParamField path="GOOGLE_CLIENT_ID" type="string">
+    Google OAuth client ID for dashboard authentication.
+  </ParamField>
+  
+  <ParamField path="GOOGLE_CLIENT_SECRET" type="string">
+    Google OAuth client secret.
+  </ParamField>
+  
+  <ParamField path="RESEND_API_KEY" type="string">
+    Resend API key for sending email OTPs.
+  </ParamField>
+  
+  <ParamField path="RESEND_DOMAIN" type="string">
+    Domain verified in Resend for sending emails.
+  </ParamField>
+  
+  <ParamField path="SVIX_API_KEY" type="string">
+    Svix API key for webhook management.
+  </ParamField>
+  
+  <ParamField path="ANTHROPIC_API_KEY" type="string">
+    Anthropic API key for generating feature names.
+  </ParamField>
+  
+  <ParamField path="CLICKHOUSE_URL" type="string">
+    ClickHouse database URL for analytics.
+  </ParamField>
+  
+  <ParamField path="CLICKHOUSE_USERNAME" type="string">
+    ClickHouse username.
+  </ParamField>
+  
+  <ParamField path="CLICKHOUSE_PASSWORD" type="string">
+    ClickHouse password.
+  </ParamField>
+  
+  <ParamField path="AXIOM_TOKEN" type="string">
+    Axiom token for logging and telemetry.
+  </ParamField>
+</Accordion>
+
+### Docker Deployment
+
+For production deployment with Docker:
+
+#### Using Docker Compose
+
+The repository includes production-ready Docker Compose files:
+
+```yaml docker-compose.yml
+services:
+  valkey:
+    image: docker.io/valkey/valkey:8.0
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - valkey-data:/valkey/valkey/data
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/prod.dockerfile
+      target: server
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://valkey:6379
+    env_file:
+      - server/.env
+    depends_on:
+      - valkey
+    restart: unless-stopped
+
+  vite:
+    build:
+      context: .
+      dockerfile: docker/prod.dockerfile
+      target: vite
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - vite/.env
+    restart: unless-stopped
+
+  workers:
+    build:
+      context: .
+      dockerfile: docker/prod.dockerfile
+      target: workers
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://valkey:6379
+    env_file:
+      - server/.env
+    depends_on:
+      - valkey
+    restart: unless-stopped
+
+volumes:
+  valkey-data:
+```
+
+Deploy with:
+
+```bash
+docker compose up -d
+```
+
+#### Custom Dockerfile
+
+For more control, create a custom Dockerfile:
+
+```dockerfile
+FROM oven/bun:1 AS base
+WORKDIR /app
+
+# Install dependencies
+COPY package.json bun.lock ./
+COPY server/package.json ./server/
+COPY shared/package.json ./shared/
+COPY vite/package.json ./vite/
+RUN bun install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build shared package
+WORKDIR /app/shared
+RUN bun run build
+
+# Build server
+WORKDIR /app/server
+RUN bun run build
+
+EXPOSE 8080
+CMD ["bun", "run", "start"]
+```
+
+### Database Setup
+
+Autumn uses PostgreSQL with Drizzle ORM for database management.
+
+#### Using Supabase (Recommended)
+
+The setup script can automatically provision a Supabase database:
+
+```bash
+bun setup
+# Choose "Set up Supabase (Cloud) for Autumn"
+```
+
+Or manually:
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Copy the connection string from Settings → Database
+3. Add to `server/.env`:
+   ```bash
+   DATABASE_URL=postgresql://postgres.[PROJECT]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres
+   ```
+
+#### Using Your Own PostgreSQL
+
+You can use any PostgreSQL 14+ database:
+
+```bash
+DATABASE_URL=postgresql://user:password@host:5432/autumn
+```
+
+#### Running Migrations
+
+<Steps>
+  <Step title="Generate migration files">
+    When you make schema changes:
+    ```bash
+    bun db:generate
+    ```
+  </Step>
+  
+  <Step title="Apply migrations">
+    Deploy the migrations to your database:
+    ```bash
+    bun db:migrate
+    ```
+  </Step>
+  
+  <Step title="Push schema (development only)">
+    For local development, you can push schema changes directly:
+    ```bash
+    bun db:push
+    ```
+    
+    <Warning>
+      Never use `db:push` in production. Always use migrations.
+    </Warning>
+  </Step>
+</Steps>
+
+### Redis Setup
+
+Redis is required for real-time balance tracking and caching.
+
+#### Using Upstash (Recommended)
+
+1. Create a database at [upstash.com](https://upstash.com)
+2. Copy the connection string
+3. Add to `server/.env`:
+   ```bash
+   REDIS_URL=rediss://:password@host.upstash.io:6379
+   ```
+
+#### Self-Hosted Redis
+
+Using Docker:
+
+```bash
+docker run -d -p 6379:6379 redis:7-alpine
+```
+
+Then configure:
+
+```bash
+REDIS_URL=redis://localhost:6379
+```
+
+### Webhook Setup
+
+Autumn needs to receive webhooks from Stripe for payment events.
+
+#### Development
+
+The setup script configures localtunnel automatically. Alternatively:
+
+<Tabs>
+  <Tab title="Localtunnel (Default)">
+    Included in Docker Compose:
+    ```bash
+    LOCALTUNNEL_RESERVED_KEY=your-subdomain
+    STRIPE_WEBHOOK_URL=https://your-subdomain.loca.lt
+    ```
+  </Tab>
+  
+  <Tab title="ngrok">
+    Start ngrok:
+    ```bash
+    ngrok http 8080
+    ```
+    
+    Update `.env`:
+    ```bash
+    STRIPE_WEBHOOK_URL=https://abc123.ngrok.io
+    ```
+  </Tab>
+  
+  <Tab title="Cloudflare Tunnel">
+    Install cloudflared:
+    ```bash
+    cloudflared tunnel --url http://localhost:8080
+    ```
+    
+    Update `.env`:
+    ```bash
+    STRIPE_WEBHOOK_URL=https://abc.trycloudflare.com
+    ```
+  </Tab>
+</Tabs>
+
+#### Production
+
+In production, use your domain:
+
+```bash
+STRIPE_WEBHOOK_URL=https://api.yourdomain.com
+```
+
+Autumn will automatically register webhook endpoints with Stripe when you connect your account.
+
+### Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Database connection issues">
+    If you see `SyntaxError: Unexpected end of JSON input` when running `bun setup` again:
+    
+    This is a [known Drizzle issue](https://github.com/drizzle-team/drizzle-orm/issues/4529) when running migrations multiple times.
+    
+    **Solution**: Drop all database tables and re-run the setup:
+    ```bash
+    bun db:push
+    ```
+  </Accordion>
+  
+  <Accordion title="Redis connection errors">
+    Verify Redis is running:
+    ```bash
+    redis-cli ping
+    # Should return PONG
+    ```
+    
+    Check connection string format:
+    - Local: `redis://localhost:6379`
+    - Upstash: `rediss://:password@host.upstash.io:6379` (note `rediss://` with SSL)
+  </Accordion>
+  
+  <Accordion title="Stripe webhook signature verification failed">
+    Ensure your `STRIPE_WEBHOOK_URL` is publicly accessible and matches the URL Stripe is sending webhooks to.
+    
+    Check the webhook endpoint in your Stripe Dashboard → Developers → Webhooks.
+  </Accordion>
+  
+  <Accordion title="Port conflicts">
+    If ports 3000 or 8080 are in use:
+    ```bash
+    lsof -ti:8080 -ti:3000 | xargs kill -9
+    ```
+  </Accordion>
+  
+  <Accordion title="OTP not appearing in terminal">
+    If you don't see the OTP when signing in:
+    
+    1. Check server logs: `docker compose logs server`
+    2. Configure Resend for email OTPs (see [Environment Variables](#environment-variables))
+    3. Set up Google OAuth as an alternative
+  </Accordion>
+</AccordionGroup>
+
+## Health Checks
+
+Verify your installation is working:
+
+```bash
+# Check server health
+curl http://localhost:8080/health
+
+# Check database connection
+curl http://localhost:8080/health/db
+
+# Check Redis connection
+curl http://localhost:8080/health/redis
+```
+
+All endpoints should return `{"status": "ok"}`.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start Guide"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Build your first billing integration
+  </Card>
+  <Card
+    title="Environment Variables"
+    icon="gear"
+    href="/self-hosting/environment-variables"
+  >
+    Complete reference for all configuration options
+  </Card>
+  <Card
+    title="Docker Deployment"
+    icon="docker"
+    href="/self-hosting/docker-deployment"
+  >
+    Advanced Docker deployment strategies
+  </Card>
+  <Card
+    title="Database Setup"
+    icon="database"
+    href="/self-hosting/database-setup"
+  >
+    Database configuration and migration guide
+  </Card>
+</CardGroup>
+
+<Note>
+  Need help with deployment? Join our [Discord community](https://discord.gg/53emPtY9tA) or reach out at hey@useautumn.com.
+</Note>

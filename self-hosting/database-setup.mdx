@@ -1,0 +1,328 @@
+---
+title: 'Database Setup'
+description: 'Configure PostgreSQL and run database migrations'
+---
+
+## Overview
+
+Autumn uses PostgreSQL as its primary database. This guide covers setting up your database, running migrations, and managing schema changes.
+
+## Database Requirements
+
+- **PostgreSQL** 14 or higher
+- At least **1GB RAM** allocated
+- Support for standard PostgreSQL extensions
+
+<Note>
+  We recommend [Supabase](https://supabase.com) for managed PostgreSQL, but any PostgreSQL instance will work (RDS, Cloud SQL, self-hosted, etc.).
+</Note>
+
+## Setup Options
+
+### Option 1: Automated Setup (Recommended)
+
+The `bun setup` script can provision a Supabase database automatically:
+
+```bash
+bun setup
+```
+
+The script will:
+1. Check for existing Supabase organizations
+2. Create a new organization if needed
+3. Provision a PostgreSQL instance
+4. Generate the `DATABASE_URL` connection string
+5. Save credentials to `server/.env`
+
+### Option 2: Manual Setup
+
+If you're using an existing PostgreSQL instance:
+
+#### 1. Create Database
+
+```sql
+CREATE DATABASE autumn;
+```
+
+#### 2. Create User (Optional)
+
+```sql
+CREATE USER autumn_user WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE autumn TO autumn_user;
+```
+
+#### 3. Configure Connection
+
+Add your connection string to `server/.env`:
+
+```bash server/.env
+DATABASE_URL=postgresql://autumn_user:secure_password@localhost:5432/autumn
+```
+
+## Connection String Format
+
+PostgreSQL connection strings follow this format:
+
+```
+postgresql://[user]:[password]@[host]:[port]/[database]?[options]
+```
+
+### Examples
+
+```bash
+# Local PostgreSQL
+DATABASE_URL=postgresql://postgres:password@localhost:5432/autumn
+
+# Supabase
+DATABASE_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+
+# AWS RDS
+DATABASE_URL=postgresql://admin:password@autumn.abc123.us-east-1.rds.amazonaws.com:5432/autumn
+
+# With SSL (production)
+DATABASE_URL=postgresql://user:pass@host:5432/autumn?sslmode=require
+```
+
+<Warning>
+  Always use SSL/TLS for production databases. Add `?sslmode=require` to your connection string.
+</Warning>
+
+## Running Migrations
+
+Autumn uses [Drizzle ORM](https://orm.drizzle.team) for database migrations.
+
+### Initial Migration
+
+Generate and run migrations for a new database:
+
+```bash
+# Generate migration files from schema
+bun db:generate
+
+# Apply migrations to database
+bun db:migrate
+```
+
+<Tip>
+  The `db:generate` command reads `shared/db/schema.ts` and creates SQL migration files in `shared/drizzle/`.
+</Tip>
+
+### What Gets Created
+
+The initial migration creates tables for:
+
+- **Organizations**: Multi-tenant organization management
+- **Customers**: End users and their billing details
+- **Products**: Your pricing tiers and plans
+- **Features**: Individual features within products
+- **Entitlements**: Customer access and limits
+- **Invoices**: Billing history and payment records
+- **Events**: Usage tracking and audit logs
+- **Entities**: Seat-based or unit-based resources
+- **Balances**: Credit and prepaid balance tracking
+- **Webhooks**: Event subscription management
+
+### Schema Location
+
+The database schema is defined in TypeScript:
+
+```bash
+shared/db/schema.ts
+```
+
+You can view the full schema definition there to understand all tables and relationships.
+
+## Drizzle Configuration
+
+Drizzle is configured in `shared/drizzle.config.ts`:
+
+```typescript shared/drizzle.config.ts
+import { config } from "dotenv";
+import { defineConfig } from "drizzle-kit";
+
+config({ path: "../server/.env" });
+
+export default defineConfig({
+  dialect: "postgresql",
+  out: "./drizzle",
+  schema: "./db/schema.ts",
+  dbCredentials: {
+    url: process.env.DATABASE_URL!,
+  },
+});
+```
+
+## Migration Commands
+
+### Generate Migrations
+
+Create migration files when you change the schema:
+
+```bash
+bun db:generate
+```
+
+This analyzes `shared/db/schema.ts` and generates SQL migration files in `shared/drizzle/`.
+
+### Apply Migrations
+
+Apply pending migrations to your database:
+
+```bash
+bun db:migrate
+```
+
+This runs all migration files that haven't been applied yet.
+
+### Push Schema (Development)
+
+For rapid development, push schema changes directly without creating migration files:
+
+```bash
+bun db:push
+```
+
+<Warning>
+  `db:push` is destructive and should only be used in development. Always use `db:generate` and `db:migrate` for production.
+</Warning>
+
+### Pull Schema
+
+Introspect an existing database and generate TypeScript schema:
+
+```bash
+bun db:pull
+```
+
+## Common Issues
+
+### Connection Refused
+
+```
+Error: connect ECONNREFUSED 127.0.0.1:5432
+```
+
+**Solution**: Verify PostgreSQL is running and the connection string is correct.
+
+```bash
+# Check PostgreSQL status (Linux/Mac)
+sudo systemctl status postgresql
+
+# Or with Docker
+docker ps | grep postgres
+```
+
+### Authentication Failed
+
+```
+Error: password authentication failed for user "postgres"
+```
+
+**Solution**: Check username and password in `DATABASE_URL`. For Supabase, ensure you're using the correct service role password.
+
+### Database Does Not Exist
+
+```
+Error: database "autumn" does not exist
+```
+
+**Solution**: Create the database first:
+
+```sql
+CREATE DATABASE autumn;
+```
+
+### Migration Conflicts
+
+If you encounter `SyntaxError: Unexpected end of JSON input`:
+
+This is a [known issue](https://github.com/drizzle-team/drizzle-orm/issues/4529) when running migrations multiple times.
+
+**Solution**: Drop all tables and re-run migrations:
+
+```sql
+-- Connect to your database
+psql $DATABASE_URL
+
+-- Drop all tables (careful!)
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+```
+
+Then run migrations again:
+
+```bash
+bun db:migrate
+```
+
+## Production Considerations
+
+### Connection Pooling
+
+For production deployments, use connection pooling:
+
+- **Built-in**: PostgreSQL supports connection pooling natively
+- **PgBouncer**: External connection pooler for better resource management
+- **Supabase**: Connection pooling enabled by default (port 6543)
+
+Example with Supabase pooler:
+
+```bash
+DATABASE_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:6543/postgres?pgbouncer=true
+```
+
+### Backup Strategy
+
+Implement regular backups:
+
+```bash
+# Manual backup
+pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
+
+# Restore from backup
+psql $DATABASE_URL < backup_20260217.sql
+```
+
+For Supabase, daily backups are included automatically.
+
+### Monitoring
+
+Monitor database performance:
+
+- Connection pool utilization
+- Query execution times
+- Table sizes and index usage
+- Replication lag (if using read replicas)
+
+### Security
+
+<CardGroup cols={2}>
+  <Card title="Use Strong Passwords" icon="lock">
+    Generate passwords with `openssl rand -base64 32`
+  </Card>
+  <Card title="Restrict Access" icon="shield">
+    Limit database access by IP address
+  </Card>
+  <Card title="Enable SSL/TLS" icon="key">
+    Always use encrypted connections
+  </Card>
+  <Card title="Rotate Credentials" icon="rotate">
+    Change passwords regularly
+  </Card>
+</CardGroup>
+
+## Testing Database
+
+For running tests with a separate database:
+
+```bash
+bun setup:test
+```
+
+This creates a test-specific `.env` with an isolated database instance.
+
+## Next Steps
+
+<Card title="Docker Deployment" icon="docker" href="/self-hosting/docker-deployment">
+  Deploy Autumn with Docker Compose
+</Card>

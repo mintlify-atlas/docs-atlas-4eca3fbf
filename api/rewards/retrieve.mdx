@@ -1,0 +1,173 @@
+---
+title: "Get Reward"
+api: "GET /rewards/{id}"
+description: "Retrieve a specific reward by ID"
+---
+
+Retrieve detailed information about a specific reward (coupon) using its unique identifier.
+
+## Request
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the reward.
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  Your unique identifier for the reward.
+</ResponseField>
+
+<ResponseField name="internal_id" type="string">
+  System-generated internal identifier.
+</ResponseField>
+
+<ResponseField name="name" type="string | null">
+  Display name for the reward.
+</ResponseField>
+
+<ResponseField name="type" type="enum">
+  The type of reward: `discount` or `free_product`.
+</ResponseField>
+
+<ResponseField name="promo_codes" type="array">
+  Array of promotional code objects.
+
+  <Expandable title="Promo Code Object">
+    <ResponseField name="code" type="string">
+      The promotional code string.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="discount_config" type="object | null">
+  Discount configuration if the reward type is discount.
+
+  <Expandable title="Discount Config">
+    <ResponseField name="discount_value" type="number">
+      The discount amount.
+    </ResponseField>
+
+    <ResponseField name="duration_type" type="enum">
+      Duration type: `once`, `forever`, or `repeating`.
+    </ResponseField>
+
+    <ResponseField name="duration_value" type="number">
+      Number of billing cycles (for repeating discounts).
+    </ResponseField>
+
+    <ResponseField name="should_rollover" type="boolean">
+      Whether unused discount rolls over.
+    </ResponseField>
+
+    <ResponseField name="apply_to_all" type="boolean">
+      Whether discount applies to all products.
+    </ResponseField>
+
+    <ResponseField name="price_ids" type="array">
+      Specific price IDs the discount applies to.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="free_product_id" type="string | null">
+  The product ID granted for free (if reward type is free_product).
+</ResponseField>
+
+<ResponseField name="free_product_config" type="object | null">
+  Free product configuration if the reward type is free_product.
+
+  <Expandable title="Free Product Config">
+    <ResponseField name="duration_type" type="enum">
+      Duration type: `once`, `forever`, or `repeating`.
+    </ResponseField>
+
+    <ResponseField name="duration_value" type="number">
+      Number of billing cycles.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="org_id" type="string">
+  Organization ID.
+</ResponseField>
+
+<ResponseField name="env" type="string">
+  Environment: `production` or `development`.
+</ResponseField>
+
+<ResponseField name="created_at" type="number">
+  Unix timestamp (milliseconds) when the reward was created.
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+```typescript TypeScript
+const rewardId = 'summer-discount';
+
+const response = await fetch(
+  `https://api.autumn.com/v1/rewards/${rewardId}`,
+  {
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY',
+      'Content-Type': 'application/json'
+    }
+  }
+);
+
+const reward = await response.json();
+console.log(`Reward: ${reward.name}`);
+console.log(`Type: ${reward.type}`);
+console.log(`Promo codes:`, reward.promo_codes);
+```
+
+```python Python
+import requests
+
+reward_id = 'summer-discount'
+
+response = requests.get(
+    f'https://api.autumn.com/v1/rewards/{reward_id}',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    }
+)
+
+reward = response.json()
+print(f"Reward: {reward['name']}")
+print(f"Type: {reward['type']}")
+print(f"Promo codes: {reward['promo_codes']}")
+```
+
+```bash cURL
+curl -X GET "https://api.autumn.com/v1/rewards/summer-discount" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json"
+```
+</CodeGroup>
+
+## Error Handling
+
+<ResponseField name="400" type="error">
+  **Bad Request** - Invalid reward ID format.
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  **Unauthorized** - Invalid or missing API key.
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  **Not Found** - Reward with the specified ID does not exist.
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  **Internal Server Error** - An unexpected error occurred on the server.
+</ResponseField>
+
+## Related Endpoints
+
+- [Create Reward](/api/rewards/create) - Create a new reward
+- [Create Referral](/api/referrals/create) - Create a referral code

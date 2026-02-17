@@ -1,118 +1,131 @@
 ---
-title: 'List Features'
-description: 'Retrieve all features in your organization'
-api: 'GET /v1/features'
+title: "List Features"
+description: "Retrieve all features in your account"
 ---
 
-Returns a list of all features configured in your organization. Features define the capabilities and limits of your products.
+## Overview
+
+Retrieve a list of all features in your account. This includes metered features, credit systems, and boolean features. By default, archived features are excluded from the results.
+
+## Endpoint
+
+```
+GET /features
+```
+
+## Authentication
+
+This endpoint requires authentication. Include your API key in the `Authorization` header:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request
+
+No parameters required. This endpoint returns all active (non-archived) features.
 
 ## Response
 
-<ResponseField name="list" type="array" required>
-  Array of feature objects
+### Success Response (200)
+
+Returns an object containing an array of features.
+
+<ResponseField name="list" type="array">
+  Array of feature objects.
   
   <Expandable title="Feature Object">
-    <ResponseField name="id" type="string" required>
-      The unique identifier for the feature. Used to reference the feature in other API calls like `/track` or `/check`.
+    <ResponseField name="id" type="string">
+      The unique identifier for the feature.
     </ResponseField>
     
-    <ResponseField name="name" type="string" required>
+    <ResponseField name="name" type="string">
       The human-readable name of the feature.
     </ResponseField>
     
-    <ResponseField name="type" type="enum" required>
-      The type of the feature. Possible values:
-      - `boolean` - Simple on/off feature flag
-      - `metered` - Usage-based feature with consumption tracking
-      - `credit_system` - Credit-based feature that unifies multiple metered features
+    <ResponseField name="type" type="enum">
+      The feature type: `metered`, `credit_system`, or `boolean`.
     </ResponseField>
     
-    <ResponseField name="consumable" type="boolean" required>
-      Whether the feature is consumable. Consumable features are depleted with usage (e.g., API calls, tokens). Non-consumable features are allocated (e.g., seats, projects).
-    </ResponseField>
-    
-    <ResponseField name="display" type="object">
-      Display names for the feature in your user interface.
-      
-      <Expandable title="Display">
-        <ResponseField name="singular" type="string">
-          Singular form of the feature name (e.g., "credit", "seat").
-        </ResponseField>
-        
-        <ResponseField name="plural" type="string">
-          Plural form of the feature name (e.g., "credits", "seats").
-        </ResponseField>
-      </Expandable>
-    </ResponseField>
-    
-    <ResponseField name="event_names" type="array">
-      Array of event names that trigger usage tracking for this feature.
+    <ResponseField name="consumable" type="boolean">
+      Whether the feature is consumable. Only present for metered features.
     </ResponseField>
     
     <ResponseField name="credit_schema" type="array">
-      Credit conversion schema. Only applicable for `credit_system` type features.
-      
-      <Expandable title="Credit Schema Item">
-        <ResponseField name="metered_feature_id" type="string" required>
-          The ID of the metered feature that consumes credits.
-        </ResponseField>
-        
-        <ResponseField name="credit_cost" type="number" required>
-          The number of credits consumed per unit of the metered feature.
-        </ResponseField>
-      </Expandable>
+      Credit conversion schema. Only present for credit_system features.
     </ResponseField>
     
-    <ResponseField name="archived" type="boolean" required>
-      Whether the feature is archived. Archived features are hidden from the dashboard and list endpoints.
+    <ResponseField name="display" type="object">
+      Display names for the feature (singular and plural).
+    </ResponseField>
+    
+    <ResponseField name="event_names" type="array">
+      Array of event names that trigger usage tracking.
+    </ResponseField>
+    
+    <ResponseField name="archived" type="boolean">
+      Whether the feature is archived.
     </ResponseField>
   </Expandable>
 </ResponseField>
 
-<RequestExample>
+## Examples
+
+### List All Features
+
+<CodeGroup>
+
 ```bash cURL
-curl https://api.useautumn.com/v1/features \
-  -H "Authorization: Bearer YOUR_SECRET_KEY"
+curl -X GET https://api.autumnhq.com/v1/features \
+  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-```javascript JavaScript
-const response = await fetch('https://api.useautumn.com/v1/features', {
-  headers: {
-    'Authorization': 'Bearer YOUR_SECRET_KEY'
-  }
+```typescript TypeScript
+import { AutumnClient } from '@useautumn/autumn-js';
+
+const autumn = new AutumnClient({
+  apiKey: 'YOUR_API_KEY'
 });
 
-const data = await response.json();
-console.log(data.list);
+const response = await autumn.features.list();
+
+console.log(`Found ${response.list.length} features`);
+
+response.list.forEach(feature => {
+  console.log(`- ${feature.name} (${feature.type})`);
+});
 ```
 
 ```python Python
-import requests
+from autumn import AutumnClient
 
-response = requests.get(
-    'https://api.useautumn.com/v1/features',
-    headers={'Authorization': 'Bearer YOUR_SECRET_KEY'}
-)
+autumn = AutumnClient(api_key='YOUR_API_KEY')
 
-features = response.json()['list']
-print(features)
+response = autumn.features.list()
+
+print(f"Found {len(response['list'])} features")
+
+for feature in response['list']:
+    print(f"- {feature['name']} ({feature['type']})")
 ```
-</RequestExample>
 
-<ResponseExample>
-```json 200 - Success
+</CodeGroup>
+
+### Response
+
+```json
 {
   "list": [
     {
-      "id": "api_calls",
+      "id": "api-calls",
       "name": "API Calls",
       "type": "metered",
       "consumable": true,
       "display": {
-        "singular": "API call",
-        "plural": "API calls"
+        "singular": "API Call",
+        "plural": "API Calls"
       },
-      "event_names": ["api.call"],
+      "event_names": ["api_call"],
       "archived": false
     },
     {
@@ -121,47 +134,280 @@ print(features)
       "type": "metered",
       "consumable": false,
       "display": {
-        "singular": "seat",
-        "plural": "seats"
+        "singular": "Seat",
+        "plural": "Seats"
       },
-      "event_names": [],
       "archived": false
     },
     {
       "id": "credits",
-      "name": "AI Credits",
+      "name": "Platform Credits",
       "type": "credit_system",
       "consumable": true,
       "credit_schema": [
         {
-          "metered_feature_id": "gpt4_tokens",
-          "credit_cost": 10
+          "metered_feature_id": "api-calls",
+          "credit_cost": 1
         },
         {
-          "metered_feature_id": "gpt3_tokens",
-          "credit_cost": 1
+          "metered_feature_id": "storage-gb",
+          "credit_cost": 100
         }
       ],
+      "display": {
+        "singular": "Credit",
+        "plural": "Credits"
+      },
+      "archived": false
+    },
+    {
+      "id": "advanced-analytics",
+      "name": "Advanced Analytics",
+      "type": "boolean",
       "archived": false
     }
   ]
 }
 ```
 
-```json 401 - Unauthorized
-{
-  "error": {
-    "message": "Invalid API key",
-    "code": "unauthorized"
-  }
+## Error Handling
+
+### Common Errors
+
+- **401 Unauthorized**: Invalid or missing API key
+- **500 Internal Server Error**: Something went wrong on the server
+
+## Use Cases
+
+### Display Available Features
+
+List all features in your dashboard or admin interface:
+
+```typescript
+const { list } = await autumn.features.list();
+
+// Group features by type
+const metered = list.filter(f => f.type === 'metered');
+const credits = list.filter(f => f.type === 'credit_system');
+const boolean = list.filter(f => f.type === 'boolean');
+
+console.log('Metered Features:', metered.map(f => f.name));
+console.log('Credit Systems:', credits.map(f => f.name));
+console.log('Boolean Features:', boolean.map(f => f.name));
+```
+
+### Filter by Feature Type
+
+Get only specific types of features:
+
+```typescript
+const { list } = await autumn.features.list();
+
+// Get only consumable metered features
+const consumableFeatures = list.filter(f => 
+  f.type === 'metered' && f.consumable === true
+);
+
+console.log('Consumable features:', consumableFeatures);
+```
+
+### Validate Credit System Dependencies
+
+Check which metered features are used in credit systems:
+
+```typescript
+const { list } = await autumn.features.list();
+
+const creditSystems = list.filter(f => f.type === 'credit_system');
+
+for (const creditSystem of creditSystems) {
+  console.log(`\nCredit system: ${creditSystem.name}`);
+  console.log('Uses these metered features:');
+  
+  creditSystem.credit_schema.forEach(item => {
+    const feature = list.find(f => f.id === item.metered_feature_id);
+    console.log(`  - ${feature?.name} (${item.credit_cost} credits)`);
+  });
 }
 ```
-</ResponseExample>
 
-## Error Codes
+### Build Feature Selector
 
-| Status Code | Error Code | Description |
-|------------|------------|-------------|
-| 401 | `unauthorized` | Invalid or missing API key |
-| 403 | `forbidden` | Insufficient permissions |
-| 500 | `internal_error` | An unexpected error occurred |
+Create a UI component for selecting features:
+
+```typescript
+interface FeatureOption {
+  value: string;
+  label: string;
+  type: string;
+}
+
+const { list } = await autumn.features.list();
+
+const featureOptions: FeatureOption[] = list.map(feature => ({
+  value: feature.id,
+  label: feature.name,
+  type: feature.type
+}));
+
+// Use in a select dropdown
+console.log('Feature options:', featureOptions);
+```
+
+### Find Features by Event Name
+
+Discover which features are triggered by specific events:
+
+```typescript
+const { list } = await autumn.features.list();
+const eventName = 'api_call';
+
+const featuresForEvent = list.filter(f => 
+  f.event_names?.includes(eventName)
+);
+
+console.log(`Features tracking "${eventName}":`, 
+  featuresForEvent.map(f => f.name)
+);
+```
+
+### Audit Feature Configuration
+
+Review all features for completeness:
+
+```typescript
+const { list } = await autumn.features.list();
+
+// Check for features without display names
+const missingDisplay = list.filter(f => 
+  !f.display?.singular || !f.display?.plural
+);
+
+if (missingDisplay.length > 0) {
+  console.log('⚠️ Features missing display names:');
+  missingDisplay.forEach(f => console.log(`  - ${f.id}`));
+}
+
+// Check for metered features without event names
+const missingEvents = list.filter(f => 
+  f.type === 'metered' && (!f.event_names || f.event_names.length === 0)
+);
+
+if (missingEvents.length > 0) {
+  console.log('⚠️ Metered features without event names:');
+  missingEvents.forEach(f => console.log(`  - ${f.id}`));
+}
+```
+
+### Generate Feature Documentation
+
+Create documentation from your feature configuration:
+
+```typescript
+const { list } = await autumn.features.list();
+
+console.log('# Features\n');
+
+list.forEach(feature => {
+  console.log(`## ${feature.name}`);
+  console.log(`**ID:** \`${feature.id}\``);
+  console.log(`**Type:** ${feature.type}`);
+  
+  if (feature.type === 'metered') {
+    console.log(`**Consumable:** ${feature.consumable ? 'Yes' : 'No'}`);
+  }
+  
+  if (feature.display) {
+    console.log(`**Display:** ${feature.display.singular} / ${feature.display.plural}`);
+  }
+  
+  if (feature.event_names && feature.event_names.length > 0) {
+    console.log(`**Events:** ${feature.event_names.join(', ')}`);
+  }
+  
+  if (feature.type === 'credit_system' && feature.credit_schema) {
+    console.log('**Credit Schema:**');
+    feature.credit_schema.forEach(item => {
+      console.log(`  - ${item.metered_feature_id}: ${item.credit_cost} credits`);
+    });
+  }
+  
+  console.log('');
+});
+```
+
+## Filtering and Sorting
+
+### Filter Archived Features
+
+By default, archived features are excluded. If you need to see them, you'll need to check the `archived` field after retrieving:
+
+```typescript
+const { list } = await autumn.features.list();
+
+// Explicitly filter archived features
+const active = list.filter(f => !f.archived);
+const archived = list.filter(f => f.archived);
+
+console.log(`Active: ${active.length}, Archived: ${archived.length}`);
+```
+
+### Sort Features
+
+Sort features by various criteria:
+
+```typescript
+const { list } = await autumn.features.list();
+
+// Sort alphabetically by name
+const byName = [...list].sort((a, b) => 
+  a.name.localeCompare(b.name)
+);
+
+// Sort by type
+const byType = [...list].sort((a, b) => 
+  a.type.localeCompare(b.type)
+);
+
+// Sort consumable features first
+const byConsumable = [...list].sort((a, b) => {
+  if (a.consumable === b.consumable) return 0;
+  return a.consumable ? -1 : 1;
+});
+```
+
+## Performance Considerations
+
+The list endpoint returns all features in a single response. For accounts with many features:
+
+- **Caching**: Cache the response on the client side if features don't change frequently
+- **Pagination**: Not currently supported, but all features are returned in one call
+- **Filtering**: Filter and sort on the client side after retrieval
+
+```typescript Example: Client-side caching
+let cachedFeatures = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+async function getFeatures() {
+  const now = Date.now();
+  
+  if (cachedFeatures && (now - cacheTimestamp) < CACHE_DURATION) {
+    return cachedFeatures;
+  }
+  
+  const response = await autumn.features.list();
+  cachedFeatures = response.list;
+  cacheTimestamp = now;
+  
+  return cachedFeatures;
+}
+```
+
+## Related Resources
+
+- [Features Concept](/concepts/features) - Learn about feature types and configuration
+- [Create Feature](/api/features/create) - Create a new feature
+- [Get Feature](/api/features/retrieve) - Retrieve a specific feature
+- [Update Feature](/api/features/update) - Modify feature configuration
+- [Delete Feature](/api/features/delete) - Remove a feature

@@ -1,141 +1,341 @@
 ---
-title: 'Delete Feature'
-description: 'Permanently delete a feature'
-api: 'DELETE /v1/features/{feature_id}'
+title: "Delete Feature"
+description: "Permanently remove a feature from your account"
 ---
 
-Permanently deletes a feature from your organization. This action cannot be undone.
+## Overview
+
+Permanently delete a feature from your account. This action cannot be undone and will remove all feature configuration.
 
 <Warning>
-  You cannot delete a feature that is:
-  - Currently attached to any product
-  - Referenced by a credit system feature
-  
-  You must either delete the products using this feature or remove the feature from those products before deletion. Alternatively, consider archiving the feature instead.
+  **Deletion is permanent and irreversible.** Consider archiving the feature instead if you want to preserve historical data.
 </Warning>
 
-## Path Parameters
+## Endpoint
+
+```
+DELETE /features/:feature_id
+```
+
+## Authentication
+
+This endpoint requires authentication. Include your API key in the `Authorization` header:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request
+
+### Path Parameters
 
 <ParamField path="feature_id" type="string" required>
   The unique identifier of the feature to delete.
-  
-  Example: `api_calls`
 </ParamField>
 
 ## Response
 
-<ResponseField name="success" type="boolean" required>
-  Returns `true` if the feature was successfully deleted.
+### Success Response (200)
+
+Returns a success confirmation.
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the deletion was successful. Always `true` for successful deletions.
 </ResponseField>
 
-<RequestExample>
+## Examples
+
+### Delete a Feature
+
+<CodeGroup>
+
 ```bash cURL
-curl -X DELETE https://api.useautumn.com/v1/features/api_calls \
-  -H "Authorization: Bearer YOUR_SECRET_KEY"
+curl -X DELETE https://api.autumnhq.com/v1/features/old-feature \
+  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-```javascript JavaScript
-const response = await fetch('https://api.useautumn.com/v1/features/api_calls', {
-  method: 'DELETE',
-  headers: {
-    'Authorization': 'Bearer YOUR_SECRET_KEY'
-  }
+```typescript TypeScript
+import { AutumnClient } from '@useautumn/autumn-js';
+
+const autumn = new AutumnClient({
+  apiKey: 'YOUR_API_KEY'
 });
 
-const result = await response.json();
-console.log(result.success);
+const result = await autumn.features.delete('old-feature');
+
+if (result.success) {
+  console.log('Feature deleted successfully');
+}
 ```
 
 ```python Python
-import requests
+from autumn import AutumnClient
 
-response = requests.delete(
-    'https://api.useautumn.com/v1/features/api_calls',
-    headers={'Authorization': 'Bearer YOUR_SECRET_KEY'}
-)
+autumn = AutumnClient(api_key='YOUR_API_KEY')
 
-result = response.json()
-print(result['success'])
+result = autumn.features.delete('old-feature')
+
+if result['success']:
+    print('Feature deleted successfully')
 ```
-</RequestExample>
 
-<ResponseExample>
-```json 200 - Success
+</CodeGroup>
+
+### Response
+
+```json
 {
   "success": true
 }
 ```
 
-```json 400 - Feature In Use (Product)
+## Error Handling
+
+### Common Errors
+
+- **400 Bad Request**: Feature cannot be deleted due to dependencies
+  - Feature is used in a credit system
+  - Feature is attached to active products
+- **401 Unauthorized**: Invalid or missing API key
+- **404 Not Found**: Feature with the specified ID does not exist
+- **500 Internal Server Error**: Something went wrong on the server
+
+### Error Response Examples
+
+**Feature used in credit system:**
+
+```json
 {
   "error": {
-    "message": "Feature 'api_calls' is used in a product. You must delete the product first, or archive it instead.",
+    "message": "Feature api-calls is used by credit system credits",
     "code": "feature_in_use"
   }
 }
 ```
 
-```json 400 - Feature In Use (Credit System)
+**Feature used in product:**
+
+```json
 {
   "error": {
-    "message": "Feature 'gpt4_tokens' is used by credit system 'credits'",
+    "message": "Feature api-calls is used in a product. You must delete the product first, or archive it instead.",
     "code": "feature_in_use"
   }
 }
 ```
 
-```json 404 - Not Found
+**Feature not found:**
+
+```json
 {
   "error": {
-    "message": "Feature with id 'api_calls' not found",
+    "message": "Feature with id unknown-feature not found",
     "code": "feature_not_found"
   }
 }
 ```
 
-```json 401 - Unauthorized
-{
-  "error": {
-    "message": "Invalid API key",
-    "code": "unauthorized"
-  }
+## Deletion Safety Checks
+
+Autumn performs several safety checks before allowing a feature to be deleted:
+
+### Credit System Dependencies
+
+If the feature is referenced in any credit system's schema, deletion is blocked:
+
+```typescript Example
+// This feature is used in a credit system
+const credits = {
+  id: 'credits',
+  type: 'credit_system',
+  credit_schema: [
+    {
+      metered_feature_id: 'api-calls', // ← Cannot delete this feature
+      credit_cost: 1
+    }
+  ]
+};
+
+// Attempting to delete will fail
+try {
+  await autumn.features.delete('api-calls');
+} catch (error) {
+  console.error('Cannot delete: Feature is used by credit system');
 }
 ```
-</ResponseExample>
 
-## Error Codes
+**Solution:** Remove the feature from the credit schema first, or delete the credit system.
 
-| Status Code | Error Code | Description |
-|------------|------------|-------------|
-| 400 | `feature_in_use` | The feature is used in a product or credit system |
-| 401 | `unauthorized` | Invalid or missing API key |
-| 403 | `forbidden` | Insufficient permissions |
-| 404 | `feature_not_found` | The feature does not exist |
-| 500 | `internal_error` | An unexpected error occurred |
+### Product Entitlements
 
-## Before You Delete
+If the feature is attached to any product entitlements, deletion is blocked:
 
-Before deleting a feature, consider the following:
+```typescript Example
+// This feature is used in a product
+const product = {
+  id: 'pro',
+  entitlements: [
+    {
+      feature_id: 'api-calls', // ← Cannot delete this feature
+      allowance: 10000
+    }
+  ]
+};
 
-1. **Archive Instead**: If you want to hide the feature from the dashboard and list endpoints but preserve historical data, use the [Update Feature](/api/features/update) endpoint to set `archived: true`.
-
-2. **Check Dependencies**: Verify that no products reference this feature and that no credit systems depend on it.
-
-3. **Impact on Existing Subscriptions**: Deleting a feature does not affect existing customer subscriptions, but it prevents new subscriptions from including this feature.
-
-## Alternative: Archive a Feature
-
-Instead of deleting, you can archive a feature:
-
-```bash
-curl -X POST https://api.useautumn.com/v1/features/api_calls \
-  -H "Authorization: Bearer YOUR_SECRET_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"archived": true}'
+// Attempting to delete will fail
+try {
+  await autumn.features.delete('api-calls');
+} catch (error) {
+  console.error('Cannot delete: Feature is used in a product');
+}
 ```
 
-Archived features:
-- Are hidden from the dashboard
-- Are excluded from list endpoints by default
-- Preserve all historical usage data
-- Can be unarchived later if needed
+**Solution:** Remove the entitlement from the product, or archive the feature instead.
+
+## Archive vs Delete
+
+<Warning>
+  In most cases, **archiving** is safer than deletion. Archive preserves historical data and can be reversed.
+</Warning>
+
+### When to Archive
+
+Use archiving when:
+- You want to hide the feature from the dashboard
+- You need to preserve historical usage data
+- The feature is attached to products or entitlements
+- You might want to restore the feature later
+
+```typescript Archive a feature
+const feature = await autumn.features.update('old-feature', {
+  archived: true
+});
+
+console.log('Feature archived (can be restored later)');
+```
+
+### When to Delete
+
+Use deletion only when:
+- The feature was created by mistake
+- You're absolutely certain you won't need the data
+- The feature has no dependencies (products, credit systems)
+- You understand that deletion is permanent
+
+```typescript Delete a feature
+// Only do this if you're absolutely sure!
+const result = await autumn.features.delete('test-feature');
+console.log('Feature permanently deleted');
+```
+
+## Safe Deletion Workflow
+
+Follow this workflow to safely delete a feature:
+
+### Step 1: Check Dependencies
+
+```typescript
+// Get the feature to check its configuration
+const feature = await autumn.features.retrieve('feature-to-delete');
+
+// List all features to check for credit system references
+const allFeatures = await autumn.features.list();
+
+const creditSystems = allFeatures.list.filter(f => 
+  f.type === 'credit_system' && 
+  f.credit_schema?.some(item => 
+    item.metered_feature_id === 'feature-to-delete'
+  )
+);
+
+if (creditSystems.length > 0) {
+  console.log('⚠️ Feature is used in credit systems:', creditSystems.map(c => c.id));
+}
+```
+
+### Step 2: Check Product Usage
+
+```typescript
+// List products to check for entitlements
+const products = await autumn.products.list();
+
+const productsUsingFeature = products.list.filter(p =>
+  p.entitlements.some(e => e.feature_id === 'feature-to-delete')
+);
+
+if (productsUsingFeature.length > 0) {
+  console.log('⚠️ Feature is used in products:', productsUsingFeature.map(p => p.id));
+}
+```
+
+### Step 3: Remove Dependencies
+
+```typescript
+// Remove from credit systems
+for (const creditSystem of creditSystems) {
+  const newSchema = creditSystem.credit_schema.filter(
+    item => item.metered_feature_id !== 'feature-to-delete'
+  );
+  
+  await autumn.features.update(creditSystem.id, {
+    credit_schema: newSchema
+  });
+}
+
+// Update products to remove entitlements
+for (const product of productsUsingFeature) {
+  // You'll need to update or remove the product
+  console.log(`Update product ${product.id} to remove the feature`);
+}
+```
+
+### Step 4: Delete the Feature
+
+```typescript
+// Now safe to delete
+try {
+  const result = await autumn.features.delete('feature-to-delete');
+  console.log('✅ Feature deleted successfully');
+} catch (error) {
+  console.error('❌ Deletion failed:', error.message);
+}
+```
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="What happens to historical usage data when I delete a feature?">
+    All historical usage data for the feature is permanently deleted. If you need to preserve historical data, use archiving instead.
+  </Accordion>
+
+  <Accordion title="Can I restore a deleted feature?">
+    No, feature deletion is permanent and cannot be undone. You would need to recreate the feature from scratch. This is why archiving is recommended in most cases.
+  </Accordion>
+
+  <Accordion title="Will deleting a feature affect customer balances?">
+    Yes, deleting a feature will remove all associated customer balances. Customers will lose access to any remaining balance for that feature.
+  </Accordion>
+
+  <Accordion title="How do I delete a feature that's used in a credit system?">
+    First, update the credit system to remove the feature from its schema, then delete the feature. Alternatively, delete the entire credit system first.
+  </Accordion>
+
+  <Accordion title="Can I delete a feature that customers are actively using?">
+    Technically yes, but it's not recommended. The feature must not be attached to any active products. If customers have balances, those will be lost. Consider archiving instead.
+  </Accordion>
+
+  <Accordion title="What's the difference between archiving and deleting?">
+    - **Archive**: Hides the feature, preserves data, can be restored, safer
+    - **Delete**: Permanently removes everything, cannot be undone, riskier
+    
+    Always prefer archiving unless you're absolutely certain you want permanent deletion.
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Features Concept](/concepts/features) - Learn about feature types and configuration
+- [Create Feature](/api/features/create) - Create a new feature
+- [Get Feature](/api/features/retrieve) - Retrieve a specific feature
+- [Update Feature](/api/features/update) - Modify or archive a feature
+- [List Features](/api/features/list) - Retrieve all features

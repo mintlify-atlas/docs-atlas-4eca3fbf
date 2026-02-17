@@ -1,0 +1,550 @@
+---
+title: 'Docker Deployment'
+description: 'Deploy Autumn using Docker and Docker Compose'
+---
+
+## Overview
+
+Autumn provides Docker configurations for both development and production deployments. This guide covers running Autumn with Docker Compose.
+
+## Prerequisites
+
+- **Docker** 20.10 or higher
+- **Docker Compose** v2.0 or higher
+- **Bun** installed locally (for setup and migrations)
+- Completed [environment configuration](/self-hosting/environment-variables)
+- Completed [database setup](/self-hosting/database-setup)
+
+## Architecture
+
+The Docker deployment consists of these services:
+
+```
+autumn/
+├── valkey        # Redis-compatible cache (port 6379)
+├── shared        # Shared TypeScript package
+├── vite          # Frontend dashboard (port 3000)
+├── server        # API server (port 8080)
+├── workers       # Background job workers
+└── localtunnel   # Webhook proxy (development only)
+```
+
+## Development Deployment
+
+For local development with hot reload:
+
+### Mac/Linux
+
+```bash
+docker compose -f docker-compose.unix.yml up
+```
+
+### Windows
+
+```bash
+docker compose -f docker-compose.dev.yml up
+```
+
+<Tip>
+  Windows users need special file watching configuration (polling) which is included in `docker-compose.dev.yml`.
+</Tip>
+
+### What's Included
+
+Development compose files include:
+
+- **Hot reload**: Source code mounted as volumes
+- **Valkey**: Redis-compatible cache for BullMQ
+- **Localtunnel**: Exposes local server for Stripe webhooks
+- **Volume management**: Separate node_modules per service
+
+### Development Services
+
+#### Valkey (Redis)
+
+```yaml
+valkey:
+  image: docker.io/valkey/valkey:8.0
+  ports:
+    - "6379:6379"
+  environment:
+    - ALLOW_EMPTY_PASSWORD=yes
+    - VALKEY_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+```
+
+Redis-compatible cache used by BullMQ for job queues.
+
+#### Frontend (Vite)
+
+```yaml
+vite:
+  build:
+    dockerfile: docker/dev.dockerfile
+    target: vite
+  ports:
+    - "3000:3000"
+  environment:
+    - NODE_ENV=development
+```
+
+React dashboard accessible at `http://localhost:3000`.
+
+#### Backend (Server)
+
+```yaml
+server:
+  build:
+    dockerfile: docker/dev.dockerfile
+    target: server
+  ports:
+    - "8080:8080"
+  environment:
+    - NODE_ENV=development
+    - REDIS_URL=redis://valkey:6379
+```
+
+Express API server accessible at `http://localhost:8080`.
+
+#### Workers
+
+```yaml
+workers:
+  build:
+    dockerfile: docker/dev.dockerfile
+    target: workers
+  environment:
+    - NODE_ENV=development
+    - REDIS_URL=redis://valkey:6379
+```
+
+BullMQ workers for async jobs (webhooks, billing calculations, etc.).
+
+#### Localtunnel
+
+```yaml
+localtunnel:
+  build:
+    dockerfile: docker/dev.dockerfile
+    target: localtunnel
+  depends_on:
+    - server
+```
+
+Exposes local server to the internet for Stripe webhook testing.
+
+## Production Deployment
+
+For production, use the optimized Dockerfile:
+
+### Build Production Image
+
+```bash
+docker build -f docker/Dockerfile -t autumn:latest .
+```
+
+The production Dockerfile:
+
+```dockerfile docker/Dockerfile
+FROM oven/bun:1.3.2
+WORKDIR /app
+
+# Copy package files
+COPY package.json .
+COPY bun.lock .
+COPY server/package.json ./server/package.json
+COPY shared/package.json ./shared/package.json
+COPY vite/package.json ./vite/package.json
+
+# Install dependencies
+RUN bun install --ignore-scripts
+
+# Copy source code
+COPY . .
+
+ENV NODE_ENV=production
+EXPOSE 8080
+
+WORKDIR /app/server
+CMD ["bun", "start"]
+```
+
+### Run Production Container
+
+```bash
+docker run -d \
+  --name autumn-server \
+  -p 8080:8080 \
+  -e DATABASE_URL="postgresql://..." \
+  -e REDIS_URL="redis://..." \
+  -e BETTER_AUTH_SECRET="..." \
+  -e ENCRYPTION_IV="..." \
+  -e ENCRYPTION_PASSWORD="..." \
+  autumn:latest
+```
+
+<Warning>
+  Never include sensitive environment variables in the Docker image. Always pass them at runtime using `-e` flags or a secrets manager.
+</Warning>
+
+### Production Compose File
+
+Create a `docker-compose.prod.yml`:
+
+```yaml docker-compose.prod.yml
+services:
+  server:
+    image: autumn:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL}
+      - CLIENT_URL=${CLIENT_URL}
+      - ENCRYPTION_IV=${ENCRYPTION_IV}
+      - ENCRYPTION_PASSWORD=${ENCRYPTION_PASSWORD}
+    restart: unless-stopped
+    depends_on:
+      - workers
+
+  workers:
+    image: autumn:latest
+    command: ["bun", "workers:start"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - ENCRYPTION_IV=${ENCRYPTION_IV}
+      - ENCRYPTION_PASSWORD=${ENCRYPTION_PASSWORD}
+    restart: unless-stopped
+
+  vite:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.vite
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_BACKEND_URL=${BETTER_AUTH_URL}
+      - VITE_FRONTEND_URL=${CLIENT_URL}
+    restart: unless-stopped
+```
+
+Run with:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+## Docker Compose Commands
+
+### Start Services
+
+```bash
+# Start all services
+docker compose up
+
+# Start in background
+docker compose up -d
+
+# Start specific service
+docker compose up server
+```
+
+### Stop Services
+
+```bash
+# Stop all services
+docker compose down
+
+# Stop and remove volumes
+docker compose down -v
+```
+
+### View Logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f server
+
+# Last 100 lines
+docker compose logs --tail=100 server
+```
+
+### Rebuild Services
+
+```bash
+# Rebuild all services
+docker compose build
+
+# Rebuild and start
+docker compose up --build
+
+# Rebuild specific service
+docker compose build server
+```
+
+### Execute Commands
+
+```bash
+# Run command in running container
+docker compose exec server bun db:migrate
+
+# Open shell in container
+docker compose exec server sh
+```
+
+## Volumes
+
+Development volumes for hot reload:
+
+```yaml
+volumes:
+  # Source code (mounted for hot reload)
+  - ./server:/app/server
+  - ./vite:/app/vite
+  - ./shared:/app/shared
+  
+  # Built shared package
+  - shared-dist:/app/shared/dist
+  
+  # Node modules (isolated per service)
+  - server-node-modules:/app/server/node_modules
+  - vite-node-modules:/app/vite/node_modules
+  - shared-node-modules:/app/shared/node_modules
+  - root-node-modules:/app/node_modules
+  
+  # Valkey data persistence
+  - valkey-data:/valkey/valkey/data
+```
+
+<Note>
+  Separate `node_modules` volumes prevent conflicts between host and container dependencies.
+</Note>
+
+## Environment Variables in Docker
+
+Pass environment variables to containers:
+
+### Method 1: .env File
+
+Docker Compose automatically loads `.env` in the project root:
+
+```bash .env
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://valkey:6379
+BETTER_AUTH_SECRET=...
+```
+
+### Method 2: env_file
+
+Reference env files in compose:
+
+```yaml
+services:
+  server:
+    env_file:
+      - ./server/.env
+```
+
+### Method 3: Direct Environment
+
+Define in compose file:
+
+```yaml
+services:
+  server:
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://valkey:6379
+```
+
+## Health Checks
+
+Valkey includes a health check:
+
+```yaml
+healthcheck:
+  test: ["CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping"]
+  interval: 10s
+  timeout: 5s
+  retries: 5
+```
+
+Add health checks for other services:
+
+```yaml
+server:
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 40s
+```
+
+## Networking
+
+Docker Compose creates a default network for service communication:
+
+- Services reference each other by service name
+- Example: `REDIS_URL=redis://valkey:6379`
+- External access via published ports
+
+### Custom Network
+
+```yaml
+networks:
+  autumn-net:
+    driver: bridge
+
+services:
+  server:
+    networks:
+      - autumn-net
+  valkey:
+    networks:
+      - autumn-net
+```
+
+## Troubleshooting
+
+### Port Already in Use
+
+```
+Error: bind: address already in use
+```
+
+**Solution**: Change port mapping or stop conflicting service:
+
+```bash
+# Find process using port
+lsof -ti:8080 | xargs kill -9
+
+# Or change port in docker-compose.yml
+ports:
+  - "8081:8080"  # Host:Container
+```
+
+### Volume Permission Issues
+
+```
+Error: EACCES: permission denied
+```
+
+**Solution**: Fix volume permissions:
+
+```bash
+# Fix permissions
+sudo chown -R $USER:$USER ./server ./vite ./shared
+
+# Or run as root (not recommended)
+docker compose exec -u root server sh
+```
+
+### Out of Memory
+
+```
+JavaScript heap out of memory
+```
+
+**Solution**: Increase Node memory limit:
+
+```yaml
+server:
+  environment:
+    - NODE_OPTIONS="--max-old-space-size=4096"
+```
+
+### Cannot Connect to Database
+
+```
+Error: connect ECONNREFUSED
+```
+
+**Solution**: Verify `DATABASE_URL` uses correct hostname:
+
+```bash
+# ❌ Wrong (localhost refers to container itself)
+DATABASE_URL=postgresql://localhost:5432/autumn
+
+# ✅ Correct (use external hostname)
+DATABASE_URL=postgresql://db.project.supabase.co:5432/autumn
+```
+
+## Production Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Multi-Stage Builds" icon="layer-group">
+    Reduce image size by separating build and runtime stages
+  </Card>
+  <Card title="Don't Run as Root" icon="user-shield">
+    Create a non-root user in Dockerfile for security
+  </Card>
+  <Card title="Use Health Checks" icon="heartbeat">
+    Implement health endpoints for orchestration
+  </Card>
+  <Card title="Limit Resources" icon="gauge">
+    Set memory and CPU limits in production
+  </Card>
+</CardGroup>
+
+### Resource Limits
+
+```yaml
+services:
+  server:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 1024M
+```
+
+### Logging
+
+Configure logging driver:
+
+```yaml
+services:
+  server:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+## Orchestration
+
+For production at scale, consider:
+
+- **Kubernetes**: Use Helm charts for complex deployments
+- **Docker Swarm**: Built-in orchestration for simpler setups
+- **AWS ECS**: Managed container orchestration
+- **Cloud Run**: Serverless container platform
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Overview" icon="code" href="/api/overview">
+    Integrate Autumn into your application
+  </Card>
+  <Card title="Environment Variables" icon="gear" href="/self-hosting/environment-variables">
+    Review configuration options
+  </Card>
+  <Card title="Handling Webhooks" icon="webhook" href="/guides/handling-webhooks">
+    Set up webhook processing
+  </Card>
+  <Card title="Monitoring" icon="chart-line" href="/self-hosting/environment-variables#observability">
+    Configure observability tools
+  </Card>
+</CardGroup>

@@ -1,107 +1,136 @@
 ---
-title: 'Update Feature'
-description: 'Update an existing feature'
-api: 'POST /v1/features/{feature_id}'
+title: "Update Feature"
+description: "Modify an existing feature's configuration"
 ---
 
-Updates an existing feature. You can modify the feature's properties, including its name, type, and configuration.
+## Overview
 
-## Path Parameters
+Update an existing feature's configuration. You can change the feature's name, type, credit schema, display settings, event names, and archive status. This endpoint allows partial updates - only include the fields you want to change.
+
+<Warning>
+  Changing a feature's type or ID can affect existing entitlements and customer balances. Use caution when modifying features that are actively in use.
+</Warning>
+
+## Endpoint
+
+```
+POST /features/:feature_id
+```
+
+## Authentication
+
+This endpoint requires authentication. Include your API key in the `Authorization` header:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Request
+
+### Path Parameters
 
 <ParamField path="feature_id" type="string" required>
-  The unique identifier of the feature to update.
-  
-  Example: `api_calls`
+  The current unique identifier of the feature to update.
 </ParamField>
 
-## Request Body
+### Body Parameters
 
-All fields are optional. Only include the fields you want to update.
+All parameters are optional. Only include the fields you want to update.
 
 <ParamField body="id" type="string">
-  The new unique identifier for the feature. Use this to rename the feature's ID.
+  Change the feature's unique identifier. This will update all references to the feature.
   
-  **Note:** Changing the ID will require updating all references to this feature in your codebase.
+  <Warning>
+    Changing the ID requires updating any code that references the old ID in `/track` or `/check` calls.
+  </Warning>
 </ParamField>
 
 <ParamField body="name" type="string">
-  The new human-readable name of the feature.
+  Update the human-readable name of the feature.
 </ParamField>
 
 <ParamField body="type" type="enum">
-  The new type of the feature:
-  - `boolean` - Simple on/off feature flag
-  - `metered` - Usage-based feature with consumption tracking
-  - `credit_system` - Credit-based feature that unifies multiple metered features
+  Change the feature type: `metered`, `credit_system`, or `boolean`.
   
-  **Note:** When changing the type to `metered`, you must also provide the `consumable` field.
+  <Warning>
+    Changing the feature type may invalidate existing configuration and affect customer balances.
+  </Warning>
 </ParamField>
 
 <ParamField body="consumable" type="boolean">
-  Whether the feature is consumable.
+  **Required when changing type to metered.** Specifies whether the feature is consumable or allocated:
   
-  - `true` - Consumable features are depleted with usage (e.g., API calls, tokens)
-  - `false` - Non-consumable features are allocated (e.g., seats, workspaces)
+  - `true` - Consumable (usage accumulates)
+  - `false` - Allocated (usage is a snapshot)
+</ParamField>
+
+<ParamField body="credit_schema" type="array">
+  Update the credit conversion schema. Only applicable for credit_system features.
   
-  **Required when changing `type` to `metered`.**
+  <Expandable title="Credit Schema Item">
+    <ParamField body="metered_feature_id" type="string" required>
+      ID of the metered feature.
+    </ParamField>
+    
+    <ParamField body="credit_cost" type="number" required>
+      Number of credits required per unit.
+    </ParamField>
+  </Expandable>
+  
+  Set to `null` to remove the credit schema.
 </ParamField>
 
 <ParamField body="display" type="object">
-  Display names for the feature in your user interface.
+  Update display names for proper pluralization.
   
-  <Expandable title="Display Object">
+  <Expandable title="properties">
     <ParamField body="singular" type="string">
-      Singular form of the feature name.
+      Singular form.
     </ParamField>
     
     <ParamField body="plural" type="string">
-      Plural form of the feature name.
+      Plural form.
     </ParamField>
   </Expandable>
 </ParamField>
 
 <ParamField body="event_names" type="array">
-  Array of event names that trigger usage tracking for this feature.
-</ParamField>
-
-<ParamField body="credit_schema" type="array">
-  Credit conversion schema for `credit_system` type features.
-  
-  <Expandable title="Credit Schema Item">
-    <ParamField body="metered_feature_id" type="string" required>
-      The ID of the metered feature that consumes credits.
-    </ParamField>
-    
-    <ParamField body="credit_cost" type="number" required>
-      The number of credits consumed per unit of the metered feature.
-    </ParamField>
-  </Expandable>
+  Update the array of event names that trigger usage tracking.
 </ParamField>
 
 <ParamField body="archived" type="boolean">
-  Whether to archive the feature. Archived features are hidden from the dashboard and list endpoints but remain accessible via direct API calls.
+  Archive or unarchive the feature:
   
-  Set to `true` to archive, `false` to unarchive.
+  - `true` - Archive the feature (hides from dashboard and list endpoint)
+  - `false` - Unarchive the feature
+  
+  Archived features preserve historical data but stop accepting new usage events.
 </ParamField>
 
 ## Response
 
+### Success Response (200)
+
 Returns the updated feature object.
 
-<ResponseField name="id" type="string" required>
-  The unique identifier for the feature.
+<ResponseField name="id" type="string">
+  The unique identifier for the feature (updated if changed).
 </ResponseField>
 
-<ResponseField name="name" type="string" required>
+<ResponseField name="name" type="string">
   The human-readable name of the feature.
 </ResponseField>
 
-<ResponseField name="type" type="enum" required>
-  The type of the feature.
+<ResponseField name="type" type="enum">
+  The feature type: `metered`, `credit_system`, or `boolean`.
 </ResponseField>
 
-<ResponseField name="consumable" type="boolean" required>
-  Whether the feature is consumable.
+<ResponseField name="consumable" type="boolean">
+  Whether the feature is consumable. Only present for metered features.
+</ResponseField>
+
+<ResponseField name="credit_schema" type="array">
+  Credit conversion schema. Only present for credit_system features.
 </ResponseField>
 
 <ResponseField name="display" type="object">
@@ -112,102 +141,343 @@ Returns the updated feature object.
   Array of event names that trigger usage tracking.
 </ResponseField>
 
-<ResponseField name="credit_schema" type="array">
-  Credit conversion schema (only for credit_system features).
-</ResponseField>
-
-<ResponseField name="archived" type="boolean" required>
+<ResponseField name="archived" type="boolean">
   Whether the feature is archived.
 </ResponseField>
 
-<RequestExample>
-```bash cURL - Update Name
-curl -X POST https://api.useautumn.com/v1/features/api_calls \
-  -H "Authorization: Bearer YOUR_SECRET_KEY" \
+## Examples
+
+### Update Display Names
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/features/api-calls \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "API Requests"
+    "display": {
+      "singular": "API Request",
+      "plural": "API Requests"
+    }
   }'
 ```
 
-```bash cURL - Archive Feature
-curl -X POST https://api.useautumn.com/v1/features/api_calls \
-  -H "Authorization: Bearer YOUR_SECRET_KEY" \
+```typescript TypeScript
+import { AutumnClient } from '@useautumn/autumn-js';
+
+const autumn = new AutumnClient({
+  apiKey: 'YOUR_API_KEY'
+});
+
+const feature = await autumn.features.update('api-calls', {
+  display: {
+    singular: 'API Request',
+    plural: 'API Requests'
+  }
+});
+
+console.log(`Updated display: ${feature.display.plural}`);
+```
+
+```python Python
+from autumn import AutumnClient
+
+autumn = AutumnClient(api_key='YOUR_API_KEY')
+
+feature = autumn.features.update(
+    'api-calls',
+    display={
+        'singular': 'API Request',
+        'plural': 'API Requests'
+    }
+)
+
+print(f"Updated display: {feature['display']['plural']}")
+```
+
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "id": "api-calls",
+  "name": "API Calls",
+  "type": "metered",
+  "consumable": true,
+  "display": {
+    "singular": "API Request",
+    "plural": "API Requests"
+  },
+  "event_names": ["api_call"],
+  "archived": false
+}
+```
+
+### Update Credit Schema
+
+Add or modify conversion rates in a credit system:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/features/credits \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "credit_schema": [
+      {
+        "metered_feature_id": "api-calls",
+        "credit_cost": 1
+      },
+      {
+        "metered_feature_id": "storage-gb",
+        "credit_cost": 100
+      },
+      {
+        "metered_feature_id": "ai-tokens",
+        "credit_cost": 0.01
+      }
+    ]
+  }'
+```
+
+```typescript TypeScript
+const feature = await autumn.features.update('credits', {
+  credit_schema: [
+    {
+      metered_feature_id: 'api-calls',
+      credit_cost: 1
+    },
+    {
+      metered_feature_id: 'storage-gb',
+      credit_cost: 100
+    },
+    {
+      metered_feature_id: 'ai-tokens',
+      credit_cost: 0.01
+    }
+  ]
+});
+
+console.log('Credit schema updated');
+```
+
+```python Python
+feature = autumn.features.update(
+    'credits',
+    credit_schema=[
+        {
+            'metered_feature_id': 'api-calls',
+            'credit_cost': 1
+        },
+        {
+            'metered_feature_id': 'storage-gb',
+            'credit_cost': 100
+        },
+        {
+            'metered_feature_id': 'ai-tokens',
+            'credit_cost': 0.01
+        }
+    ]
+)
+
+print('Credit schema updated')
+```
+
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "id": "credits",
+  "name": "Platform Credits",
+  "type": "credit_system",
+  "consumable": true,
+  "credit_schema": [
+    {
+      "metered_feature_id": "api-calls",
+      "credit_cost": 1
+    },
+    {
+      "metered_feature_id": "storage-gb",
+      "credit_cost": 100
+    },
+    {
+      "metered_feature_id": "ai-tokens",
+      "credit_cost": 0.01
+    }
+  ],
+  "display": {
+    "singular": "Credit",
+    "plural": "Credits"
+  },
+  "archived": false
+}
+```
+
+### Archive a Feature
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/features/old-feature \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "archived": true
   }'
 ```
 
-```bash cURL - Update Display Names
-curl -X POST https://api.useautumn.com/v1/features/api_calls \
-  -H "Authorization: Bearer YOUR_SECRET_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "display": {
-      "singular": "request",
-      "plural": "requests"
-    }
-  }'
-```
-
-```javascript JavaScript
-const response = await fetch('https://api.useautumn.com/v1/features/api_calls', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer YOUR_SECRET_KEY',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    name: 'API Requests',
-    display: {
-      singular: 'request',
-      plural: 'requests'
-    }
-  })
+```typescript TypeScript
+const feature = await autumn.features.update('old-feature', {
+  archived: true
 });
 
-const feature = await response.json();
-console.log(feature);
+console.log(`Feature ${feature.id} has been archived`);
 ```
 
 ```python Python
-import requests
-
-response = requests.post(
-    'https://api.useautumn.com/v1/features/api_calls',
-    headers={'Authorization': 'Bearer YOUR_SECRET_KEY'},
-    json={
-        'name': 'API Requests',
-        'display': {
-            'singular': 'request',
-            'plural': 'requests'
-        }
-    }
+feature = autumn.features.update(
+    'old-feature',
+    archived=True
 )
 
-feature = response.json()
-print(feature)
+print(f"Feature {feature['id']} has been archived")
 ```
-</RequestExample>
 
-<ResponseExample>
-```json 200 - Success
+</CodeGroup>
+
+### Response
+
+```json
 {
-  "id": "api_calls",
-  "name": "API Requests",
+  "id": "old-feature",
+  "name": "Old Feature",
+  "type": "metered",
+  "consumable": true,
+  "archived": true
+}
+```
+
+### Change Feature ID
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/features/api-calls \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "api-requests"
+  }'
+```
+
+```typescript TypeScript
+const feature = await autumn.features.update('api-calls', {
+  id: 'api-requests'
+});
+
+console.log(`Feature ID changed to: ${feature.id}`);
+// Remember to update your code to use the new ID!
+```
+
+```python Python
+feature = autumn.features.update(
+    'api-calls',
+    id='api-requests'
+)
+
+print(f"Feature ID changed to: {feature['id']}")
+# Remember to update your code to use the new ID!
+```
+
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "id": "api-requests",
+  "name": "API Calls",
   "type": "metered",
   "consumable": true,
   "display": {
-    "singular": "request",
-    "plural": "requests"
+    "singular": "API Call",
+    "plural": "API Calls"
   },
-  "event_names": ["api.call"],
   "archived": false
 }
 ```
 
-```json 400 - Missing Consumable
+### Update Event Names
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.autumnhq.com/v1/features/api-calls \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_names": ["api_call", "api_request", "endpoint_hit"]
+  }'
+```
+
+```typescript TypeScript
+const feature = await autumn.features.update('api-calls', {
+  event_names: ['api_call', 'api_request', 'endpoint_hit']
+});
+
+console.log(`Now tracking events: ${feature.event_names.join(', ')}`);
+```
+
+```python Python
+feature = autumn.features.update(
+    'api-calls',
+    event_names=['api_call', 'api_request', 'endpoint_hit']
+)
+
+print(f"Now tracking events: {', '.join(feature['event_names'])}")
+```
+
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "id": "api-calls",
+  "name": "API Calls",
+  "type": "metered",
+  "consumable": true,
+  "display": {
+    "singular": "API Call",
+    "plural": "API Calls"
+  },
+  "event_names": ["api_call", "api_request", "endpoint_hit"],
+  "archived": false
+}
+```
+
+## Error Handling
+
+### Common Errors
+
+- **400 Bad Request**: Invalid request parameters
+  - Missing `consumable` when changing type to metered
+  - Invalid field values
+- **401 Unauthorized**: Invalid or missing API key
+- **404 Not Found**: Feature with the specified ID does not exist
+- **409 Conflict**: New ID already exists as another feature
+- **500 Internal Server Error**: Something went wrong on the server
+
+### Error Response Examples
+
+**Missing consumable when changing type:**
+
+```json
 {
   "error": {
     "message": "Consumable is required when changing type to metered",
@@ -216,39 +486,62 @@ print(feature)
 }
 ```
 
-```json 404 - Not Found
+**Feature not found:**
+
+```json
 {
   "error": {
-    "message": "Feature with id 'api_calls' not found",
+    "message": "Feature with id unknown-feature not found",
     "code": "feature_not_found"
   }
 }
 ```
 
-```json 409 - ID Already Exists
-{
-  "error": {
-    "message": "Feature with id 'new_id' already exists",
-    "code": "already_exists"
-  }
-}
-```
-</ResponseExample>
+## Update Safety Guidelines
 
-## Error Codes
+### Safe Updates
 
-| Status Code | Error Code | Description |
-|------------|------------|-------------|
-| 400 | `validation_error` | Invalid field values or missing required fields |
-| 401 | `unauthorized` | Invalid or missing API key |
-| 403 | `forbidden` | Insufficient permissions |
-| 404 | `feature_not_found` | The feature does not exist |
-| 409 | `already_exists` | The new ID already exists |
-| 500 | `internal_error` | An unexpected error occurred |
+These changes are safe and won't affect existing functionality:
 
-## Important Notes
+- **Display names** - UI only, no functional impact
+- **Feature name** - Descriptive text only
+- **Event names** - Affects future events only
+- **Archive status** - Reversible, preserves data
 
-- When changing `type` to `metered`, you must provide the `consumable` field
-- Archiving a feature does not delete it - it only hides it from list endpoints and the dashboard
-- Updating a feature's ID will require updating all references in your codebase
-- You cannot modify features that are actively used in products without first removing them from those products
+### Caution Required
+
+These changes can affect existing functionality:
+
+- **Feature ID** - Requires updating all code references
+- **Feature type** - May invalidate configuration and affect balances
+- **Credit schema** - Changes conversion rates for future usage
+- **Consumable flag** - Changes how usage is tracked
+
+### Best Practices
+
+<Warning>
+  Always test updates in development environment before applying to production.
+</Warning>
+
+**When changing IDs:**
+1. Update all code that references the old ID
+2. Update any documentation or configuration
+3. Notify your team of the change
+
+**When modifying credit schemas:**
+1. Understand the impact on customer balances
+2. Consider creating a new feature version instead
+3. Communicate rate changes to customers
+
+**When archiving features:**
+1. Ensure no active products depend on the feature
+2. Consider the impact on customer access
+3. Use archive instead of delete to preserve history
+
+## Related Resources
+
+- [Features Concept](/concepts/features) - Learn about feature types and configuration
+- [Create Feature](/api/features/create) - Create a new feature
+- [Get Feature](/api/features/retrieve) - Retrieve a specific feature
+- [Delete Feature](/api/features/delete) - Remove a feature
+- [List Features](/api/features/list) - Retrieve all features

@@ -1,0 +1,369 @@
+---
+title: "Checking Feature Access"
+description: "Learn how to verify customer access to features and implement feature gates in your application"
+---
+
+## Overview
+
+The `/check` endpoint verifies whether a customer has access to a specific feature. Use this to implement feature gates, display usage limits, and control access to premium functionality.
+
+## When to Use Check
+
+Use the check endpoint when you need to:
+
+- **Gate features** - Control access to premium features based on the customer's plan
+- **Display limits** - Show customers their current usage and remaining balance
+- **Validate access** - Verify a customer can perform an action before processing it
+- **Build paywalls** - Show upgrade prompts when customers hit limits
+
+## Basic Feature Check
+
+<Steps>
+  <Step title="Check feature access">
+    Call the `/check` endpoint with the customer ID and feature ID:
+
+    ```typescript
+    import { Autumn } from '@useautumn/sdk';
+
+    const autumn = new Autumn({ apiKey: process.env.AUTUMN_API_KEY });
+
+    const result = await autumn.check({
+      customer_id: 'customer_123',
+      feature_id: 'api_calls'
+    });
+
+    if (result.allowed) {
+      console.log('Access granted');
+      console.log(`Remaining: ${result.balance.current_balance}`);
+    } else {
+      console.log('Access denied');
+    }
+    ```
+  </Step>
+
+  <Step title="Handle the response">
+    The response includes an `allowed` field and detailed balance information:
+
+    ```typescript
+    {
+      allowed: true,
+      customer_id: 'customer_123',
+      balance: {
+        feature_id: 'api_calls',
+        unlimited: false,
+        granted_balance: 10000,
+        purchased_balance: 0,
+        current_balance: 7500,
+        usage: 2500,
+        overage_allowed: true,
+        reset: {
+          interval: 'month',
+          resets_at: 1717200000000
+        }
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Implement the feature gate">
+    Use the `allowed` field to control access in your application:
+
+    ```typescript
+    async function processApiRequest(customerId: string) {
+      const accessCheck = await autumn.check({
+        customer_id: customerId,
+        feature_id: 'api_calls'
+      });
+
+      if (!accessCheck.allowed) {
+        throw new Error('Feature not available on your current plan');
+      }
+
+      // Proceed with the API request
+      return await performApiCall();
+    }
+    ```
+  </Step>
+</Steps>
+
+## Checking with Required Balance
+
+When you know the amount needed in advance, specify `required_balance`:
+
+```typescript
+// Check if customer has at least 100 credits
+const result = await autumn.check({
+  customer_id: 'customer_123',
+  feature_id: 'credits',
+  required_balance: 100
+});
+
+if (result.allowed) {
+  // Customer has at least 100 credits available
+  await processLargeJob();
+} else {
+  return {
+    error: 'Insufficient credits',
+    required: 100,
+    available: result.balance.current_balance
+  };
+}
+```
+
+## Check and Track Combined
+
+Use `send_event: true` to check access and record usage in a single request:
+
+```typescript
+// Check access and immediately track usage
+const result = await autumn.check({
+  customer_id: 'customer_123',
+  feature_id: 'api_calls',
+  required_balance: 1,
+  send_event: true  // Records usage if allowed
+});
+
+if (result.allowed) {
+  // Access granted and usage recorded
+  return await performApiCall();
+} else {
+  // Access denied, no usage recorded
+  return { error: 'API limit reached' };
+}
+```
+
+<Tip>
+Combining check and track reduces API calls and ensures usage is only recorded when access is granted.
+</Tip>
+
+## Entity-Scoped Checks
+
+For features scoped to entities (like projects or workspaces):
+
+```typescript
+// Check access for a specific project
+const result = await autumn.check({
+  customer_id: 'customer_123',
+  feature_id: 'project_seats',
+  entity_id: 'project_456'
+});
+
+if (!result.allowed) {
+  return {
+    error: 'Project seat limit reached',
+    message: 'Upgrade your plan to add more team members'
+  };
+}
+```
+
+## Building Paywalls
+
+Use the `with_preview` option to get upgrade information:
+
+```typescript
+const result = await autumn.check({
+  customer_id: 'customer_123',
+  feature_id: 'advanced_analytics',
+  with_preview: true
+});
+
+if (!result.allowed && result.preview) {
+  // Show upgrade modal with preview information
+  return {
+    blocked: true,
+    upgrade_url: result.preview.checkout_url,
+    available_plans: result.preview.options
+  };
+}
+```
+
+## Displaying Usage Information
+
+Show customers their current usage and limits:
+
+```typescript
+const result = await autumn.check({
+  customer_id: 'customer_123',
+  feature_id: 'api_calls'
+});
+
+const { balance } = result;
+
+return {
+  feature: 'API Calls',
+  used: balance.usage,
+  limit: balance.granted_balance,
+  remaining: balance.current_balance,
+  unlimited: balance.unlimited,
+  resets_at: balance.reset?.resets_at
+};
+```
+
+## Handling Unlimited Access
+
+Check if a customer has unlimited access to a feature:
+
+```typescript
+const result = await autumn.check({
+  customer_id: 'customer_123',
+  feature_id: 'storage'
+});
+
+if (result.balance.unlimited) {
+  // Customer has unlimited access
+  return { limit: 'Unlimited', usage: result.balance.usage };
+} else {
+  // Customer has limited access
+  return {
+    limit: result.balance.granted_balance,
+    usage: result.balance.usage,
+    remaining: result.balance.current_balance
+  };
+}
+```
+
+## Middleware Pattern
+
+Implement access checks as middleware in your API:
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+
+async function requireFeature(featureId: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const customerId = req.user.autumnCustomerId;
+
+    try {
+      const result = await autumn.check({
+        customer_id: customerId,
+        feature_id: featureId
+      });
+
+      if (!result.allowed) {
+        return res.status(403).json({
+          error: 'Feature not available',
+          feature: featureId,
+          upgrade_required: true
+        });
+      }
+
+      // Store balance info for use in handler
+      req.featureBalance = result.balance;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+// Use in routes
+app.get('/api/analytics', 
+  requireFeature('advanced_analytics'),
+  async (req, res) => {
+    // Access granted, proceed with analytics
+    const data = await getAnalytics();
+    res.json(data);
+  }
+);
+```
+
+## Caching Strategies
+
+Cache check results to reduce API calls:
+
+```typescript
+import { Redis } from 'ioredis';
+
+const redis = new Redis(process.env.REDIS_URL);
+
+async function checkWithCache(
+  customerId: string,
+  featureId: string
+) {
+  const cacheKey = `access:${customerId}:${featureId}`;
+  
+  // Check cache first
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
+  // Fetch from Autumn
+  const result = await autumn.check({
+    customer_id: customerId,
+    feature_id: featureId
+  });
+
+  // Cache for 30 seconds
+  await redis.setex(cacheKey, 30, JSON.stringify(result));
+
+  return result;
+}
+```
+
+<Warning>
+Be careful with caching - stale data can allow access after limits are reached or deny access after upgrades.
+</Warning>
+
+## Error Handling
+
+Handle common errors gracefully:
+
+```typescript
+try {
+  const result = await autumn.check({
+    customer_id: 'customer_123',
+    feature_id: 'api_calls'
+  });
+
+  return result.allowed;
+} catch (error) {
+  if (error.code === 'customer_not_found') {
+    // Customer doesn't exist - may need to create
+    return false;
+  }
+  
+  if (error.code === 'feature_not_found') {
+    // Feature doesn't exist - may be a typo
+    console.error('Invalid feature ID:', error);
+    return false;
+  }
+
+  // Unknown error - log and deny access
+  console.error('Access check failed:', error);
+  return false;
+}
+```
+
+## Best Practices
+
+<Card title="Check before expensive operations" icon="shield">
+  Always verify access before performing costly operations like AI inference or data processing.
+</Card>
+
+<Card title="Show clear upgrade paths" icon="arrow-up">
+  When access is denied, provide clear information about which plan includes the feature.
+</Card>
+
+<Card title="Cache strategically" icon="database">
+  Cache check results for read-heavy operations, but keep TTL short to avoid stale data.
+</Card>
+
+<Card title="Handle errors gracefully" icon="circle-xmark">
+  Default to denying access when checks fail to prevent unauthorized usage.
+</Card>
+
+<Card title="Combine with tracking" icon="bolt">
+  Use `send_event: true` to atomically check and track usage in a single request.
+</Card>
+
+<Card title="Monitor denied requests" icon="chart-line">
+  Track how often customers hit limits to identify upsell opportunities.
+</Card>
+
+## Related Resources
+
+- [Track Usage Guide](/guides/tracking-usage)
+- [Check API Reference](/api/check)
+- [Features Concept](/concepts/features)
+- [Customers API](/api/customers/retrieve)

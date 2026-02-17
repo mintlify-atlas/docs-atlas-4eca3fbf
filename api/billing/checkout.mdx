@@ -6,7 +6,7 @@ description: 'Create a checkout session for customers to purchase products with 
 
 ## Overview
 
-The checkout endpoint creates a Stripe Checkout session where customers can purchase products and enter payment information. Use this for new customers or when payment collection is required. For customers with existing payment methods, use [attach](/api/attach) instead.
+The checkout endpoint creates a Stripe Checkout session where customers can purchase products and enter payment information. Use this for new customers or when payment collection is required. For customers with existing payment methods, use [attach](/api/billing/attach) instead.
 
 ## Authentication
 
@@ -60,19 +60,45 @@ Authorization: Bearer YOUR_API_KEY
     <ParamField body="email" type="string">
       Customer's email address
     </ParamField>
+    <ParamField body="fingerprint" type="string">
+      Unique device identifier to detect duplicate accounts
+    </ParamField>
+    <ParamField body="metadata" type="object">
+      Custom metadata to attach to the customer
+    </ParamField>
   </Expandable>
 </ParamField>
 
 <ParamField body="options" type="array">
   Feature-specific options for configurable features (e.g., quantity for seat-based features).
+
+  <Expandable title="Feature Options">
+    <ParamField body="feature_id" type="string" required>
+      The ID of the feature to configure
+    </ParamField>
+    <ParamField body="quantity" type="number">
+      Quantity for this feature (e.g., number of seats)
+    </ParamField>
+    <ParamField body="reset_after_trial_end" type="boolean">
+      Whether to reset the feature quantity after trial ends. Defaults to `false`.
+    </ParamField>
+  </Expandable>
 </ParamField>
 
-<ParamField body="free_trial" type="boolean">
-  Whether to enable a free trial for this product. Defaults to the product's trial configuration.
+<ParamField body="free_trial" type="object">
+  Free trial configuration for this product.
 
-  ```json
-  true
-  ```
+  <Expandable title="Free Trial Configuration">
+    <ParamField body="length" type="number" required>
+      Length of the trial period
+    </ParamField>
+    <ParamField body="duration" type="string" required>
+      Duration unit: `day`, `week`, `month`, or `year`
+    </ParamField>
+    <ParamField body="card_required" type="boolean">
+      Whether a payment method is required to start the trial. Defaults to `true`.
+    </ParamField>
+  </Expandable>
 </ParamField>
 
 <ParamField body="success_url" type="string">
@@ -92,7 +118,7 @@ Authorization: Bearer YOUR_API_KEY
 </ParamField>
 
 <ParamField body="checkout_session_params" type="object">
-  Additional parameters to pass to the Stripe Checkout session.
+  Additional parameters to pass to the Stripe Checkout session (for advanced use cases).
 </ParamField>
 
 ## Response
@@ -167,7 +193,13 @@ curl -X POST https://api.useautumn.com/checkout \
   -d '{
     "customer_id": "cus_123",
     "product_id": "pro_plan",
-    "success_url": "https://example.com/success"
+    "success_url": "https://example.com/success",
+    "options": [
+      {
+        "feature_id": "seats",
+        "quantity": 3
+      }
+    ]
   }'
 ```
 
@@ -179,7 +211,13 @@ const autumn = new Autumn({ apiKey: 'YOUR_API_KEY' });
 const result = await autumn.checkout({
   customer_id: 'cus_123',
   product_id: 'pro_plan',
-  success_url: 'https://example.com/success'
+  success_url: 'https://example.com/success',
+  options: [
+    {
+      feature_id: 'seats',
+      quantity: 3
+    }
+  ]
 });
 
 // Redirect the user to the checkout URL
@@ -194,7 +232,13 @@ autumn = Autumn(api_key='YOUR_API_KEY')
 result = autumn.checkout(
   customer_id='cus_123',
   product_id='pro_plan',
-  success_url='https://example.com/success'
+  success_url='https://example.com/success',
+  options=[
+    {
+      'feature_id': 'seats',
+      'quantity': 3
+    }
+  ]
 )
 
 # Redirect the user to the checkout URL
@@ -216,14 +260,22 @@ print(f"Checkout URL: {result['url']}")
         "id": "item_pro_monthly",
         "name": "Pro Plan"
       }
+    },
+    {
+      "description": "Seats (3 × $5.00)",
+      "amount": 1500,
+      "item": {
+        "id": "item_seats",
+        "name": "Additional Seats"
+      }
     }
   ],
-  "total": 4900,
+  "total": 6400,
   "currency": "usd",
   "has_prorations": false,
   "next_cycle": {
     "starts_at": 1719792000000,
-    "total": 4900
+    "total": 6400
   }
 }
 ```
@@ -238,6 +290,23 @@ After the customer completes payment, they will be redirected to your `success_u
 
 See the [Webhooks guide](/guides/webhooks) for more details on handling checkout completion.
 
+## Setup Payment Mode
+
+Set `setup_payment: true` to collect payment information without immediate charge. This is useful for:
+
+- Setting up subscription billing for future charges
+- Collecting payment method for free trials
+- Pre-authorizing payment method before service delivery
+
+```json
+{
+  "customer_id": "cus_123",
+  "product_id": "pro_plan",
+  "setup_payment": true,
+  "success_url": "https://example.com/success"
+}
+```
+
 ## Error Responses
 
 <ResponseField name="error" type="object">
@@ -250,6 +319,7 @@ See the [Webhooks guide](/guides/webhooks) for more details on handling checkout
       - `product_not_found` - The specified product does not exist
       - `invalid_success_url` - The success URL is invalid or missing
       - `stripe_error` - Error creating Stripe Checkout session
+      - `already_subscribed` - Customer already has this product
     </ResponseField>
     <ResponseField name="message" type="string">
       Human-readable error message.
@@ -259,6 +329,6 @@ See the [Webhooks guide](/guides/webhooks) for more details on handling checkout
 
 ## Related Endpoints
 
-- [Attach](/api/attach) - Attach product without checkout (for customers with payment methods)
+- [Attach](/api/billing/attach) - Attach product without checkout (for customers with payment methods)
 - [Cancel](/api/cancel) - Cancel a product subscription
 - [Customer Billing Portal](/api/customers/billing-portal) - Create self-service portal session
